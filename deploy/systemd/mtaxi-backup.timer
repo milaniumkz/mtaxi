@@ -1,0 +1,11 @@
+[Unit]
+Description=Run MTaxi backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=10min
+Unit=mtaxi-backup.service
+
+[Install]
+WantedBy=timers.target

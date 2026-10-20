@@ -1,0 +1,16 @@
+[Unit]
+Description=MTaxi backend stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mtaxi
+ExecStart=/usr/bin/env docker compose -f /opt/mtaxi/docker-compose.production.yml up -d --build
+ExecStop=/usr/bin/env docker compose -f /opt/mtaxi/docker-compose.production.yml down
+RemainAfterExit=yes
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

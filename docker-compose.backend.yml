@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mtaxi
+      POSTGRES_USER: mtaxi
+      POSTGRES_PASSWORD: mtaxi_local_compose_secret
+    volumes:
+      - mtaxi_postgres_data:/var/lib/postgresql/data
+      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mtaxi -d mtaxi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: "development"
+      PORT: "8080"
+      MTAXI_PUBLIC_BASE_URL: "http://localhost:8080"
+      MTAXI_ALLOW_LOCAL_PUBLIC_BASE_URL: "true"
+      MTAXI_CORS_ORIGINS: "http://localhost:3000,http://localhost:5000,http://localhost:8080,https://mtaxi-user-vzqw6a.web.app,https://mtaxi-controls.web.app"
+      MTAXI_JSON_BODY_LIMIT: "25mb"
+      MTAXI_TRUST_PROXY: "false"
+      MTAXI_ACCESS_LOGS: "true"
+      MTAXI_MAINTENANCE_INTERVAL_SEC: "30"
+      MTAXI_PENDING_ORDER_TTL_MIN: "15"
+      MTAXI_MAINTENANCE_ORDER_LIMIT: "100"
+      MTAXI_MAINTENANCE_PUSH_LIMIT: "100"
+      MTAXI_TOKEN_SECRET: "local-compose-token-secret-32-bytes"
+      MTAXI_SEED_ADMIN_ON_START: "true"
+      MTAXI_ADMIN_PHONE: "+77000000000"
+      MTAXI_ADMIN_PASSWORD: "local-compose-admin-password"
+      MTAXI_ADMIN_NAME: "Администратор"
+      MTAXI_ADMIN_CITY: "Белоусовка"
+      MTAXI_STORE: "postgres"
+      DATABASE_URL: "postgres://mtaxi:mtaxi_local_compose_secret@postgres:5432/mtaxi"
+      MTAXI_UPLOAD_DIR: "/var/lib/mtaxi/uploads"
+      MTAXI_MAX_UPLOAD_BYTES: "10485760"
+      MTAXI_SMS_PROVIDER: "local"
+      MTAXI_ALLOW_LOCAL_SMS: "true"
+      MTAXI_GEOCODING_USER_AGENT: "MTaxiBackend/1.0"
+      MTAXI_PAYMENT_PROVIDER: "local"
+      MTAXI_ALLOW_LOCAL_PAYMENT: "true"
+      MTAXI_PAYMENT_CALLBACK_SECRET: "local-compose-payment-callback-secret"
+      MTAXI_FCM_ENABLED: "false"
+      MTAXI_ALLOW_SIMULATED_PUSH: "true"
+    volumes:
+      - mtaxi_uploads:/var/lib/mtaxi/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mtaxi_postgres_data:
+  mtaxi_uploads:

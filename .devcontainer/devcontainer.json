@@ -1,0 +1,7 @@
+{
+  "name": "MTaxi",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "forwardPorts": [8080, 3000],
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "remoteEnv": { "PATH": "/home/node/flutter/bin:${containerEnv:PATH}" }
+}

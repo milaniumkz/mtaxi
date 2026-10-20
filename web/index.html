@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    Alternatively, build your application passing the --base-href parameter
+    specifying the new root path of your web app.
+
+    Fore more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="MTaxi">
+
+  
+
+  <meta name="robots" content="noindex" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <!-- Open Graph & SEO tags -->
+  <meta property="og:title" content="MTaxi" />
+  <meta property="og:description" content="Built with FlutterFlow." />
+  <meta property="og:image" content="https://storage.googleapis.com/flutterflow-prod-hosting/og_splash_gradient.png" /> 
+  <meta name="twitter:title" content="MTaxi" />
+  <meta name="twitter:description" content="Built with FlutterFlow." />
+  <meta name="twitter:image" content="https://storage.googleapis.com/flutterflow-prod-hosting/og_splash_gradient.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <title> MTaxi </title>
+  <meta name="description" content="Built with FlutterFlow." />
+    
+
+  <!-- Status Bar color in Safari browser (iOS) and PWA -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#12051B">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#12051B">
+
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: #12051b;
+    }
+
+    #mtaxi-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 32%, rgba(40, 216, 198, 0.30), rgba(39, 19, 52, 0.12) 42%, #12051b 78%),
+        #12051b;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #mtaxi-splash::before,
+    #mtaxi-splash::after {
+      content: "";
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      filter: blur(34px);
+      opacity: 0.55;
+    }
+
+    #mtaxi-splash::before {
+      left: -86px;
+      top: -70px;
+      background: rgba(91, 44, 131, 0.45);
+    }
+
+    #mtaxi-splash::after {
+      right: -80px;
+      bottom: -68px;
+      background: rgba(40, 216, 198, 0.34);
+    }
+
+    .mtaxi-splash-card {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      text-align: center;
+    }
+
+    .mtaxi-splash-logo {
+      width: 124px;
+      height: 124px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 34px;
+      background: #1b0b25;
+      box-shadow: 0 28px 72px rgba(40, 216, 198, 0.25);
+      box-sizing: border-box;
+      object-fit: contain;
+    }
+
+    .mtaxi-splash-title {
+      margin-top: 22px;
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .mtaxi-splash-subtitle {
+      margin-top: 9px;
+      color: rgba(255, 255, 255, 0.66);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .mtaxi-splash-progress {
+      position: relative;
+      width: 156px;
+      height: 4px;
+      margin-top: 26px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(40, 216, 198, 0.20);
+    }
+
+    .mtaxi-splash-progress::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: 46%;
+      border-radius: inherit;
+      background: #28d8c6;
+      animation: mtaxi-loading 1.15s ease-in-out infinite;
+    }
+
+    @keyframes mtaxi-loading {
+      0% { transform: translateX(-110%); }
+      55% { transform: translateX(92%); }
+      100% { transform: translateX(250%); }
+    }
+
+    body.flutter-loaded #mtaxi-splash {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease;
+    }
+  </style>
+  
+</head>
+<body>
+  <div id="mtaxi-splash" aria-label="MTaxi загружается">
+    <div class="mtaxi-splash-card">
+      <img class="mtaxi-splash-logo" src="icons/app_launcher_icon.png" alt="MTaxi">
+      <div class="mtaxi-splash-title">MTaxi</div>
+      <div class="mtaxi-splash-subtitle">Подготавливаем поездку</div>
+      <div class="mtaxi-splash-progress"></div>
+    </div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      document.body.classList.add('flutter-loaded');
+      window.setTimeout(function () {
+        var splash = document.getElementById('mtaxi-splash');
+        if (splash) splash.remove();
+      }, 320);
+    });
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => Promise.all(
+          registrations.map((registration) => registration.unregister())
+        ))
+        .catch(() => {});
+    }
+    if ('caches' in window) {
+      caches.keys()
+        .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+        .catch(() => {});
+    }
+  </script>
+  
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&loading=async"></script>
+  
+  
+  
+  <script>
+    {{flutter_bootstrap_js}}
+  </script>
+</body>
+</html>

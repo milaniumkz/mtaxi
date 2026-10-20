@@ -1,0 +1,11 @@
+[Unit]
+Description=MTaxi backend monitor
+After=mtaxi-backend.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mtaxi/server
+EnvironmentFile=-/opt/mtaxi/server/.env
+Environment=MTAXI_MONITOR_EXPECT_STORE=postgres
+ExecStart=/bin/sh -c 'MTAXI_MONITOR_BASE_URL="${MTAXI_MONITOR_BASE_URL:-$MTAXI_PUBLIC_BASE_URL}" npm run monitor'

@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - ./server/.env
+    environment:
+      POSTGRES_DB: mtaxi
+      POSTGRES_USER: mtaxi
+    volumes:
+      - mtaxi_postgres_data:/var/lib/postgresql/data
+      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mtaxi -d mtaxi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./server/.env
+    environment:
+      NODE_ENV: "production"
+      PORT: "8080"
+      MTAXI_STORE: "postgres"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - mtaxi_uploads:/var/lib/mtaxi/uploads
+      - /var/backups/mtaxi:/var/backups/mtaxi
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mtaxi_postgres_data:
+  mtaxi_uploads:

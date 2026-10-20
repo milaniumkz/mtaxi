@@ -1,0 +1,12 @@
+[Unit]
+Description=MTaxi PostgreSQL and uploads backup
+Requires=mtaxi-backend.service
+After=mtaxi-backend.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mtaxi
+EnvironmentFile=/opt/mtaxi/server/.env
+Environment=MTAXI_BACKUP_DIR=/var/backups/mtaxi
+Environment=MTAXI_BACKUP_RETENTION_DAYS=30
+ExecStart=/bin/sh -c 'docker compose -f /opt/mtaxi/docker-compose.production.yml exec -T -e MTAXI_BACKUP_DIR="$MTAXI_BACKUP_DIR" -e MTAXI_BACKUP_RETENTION_DAYS="$MTAXI_BACKUP_RETENTION_DAYS" backend npm run db:backup'

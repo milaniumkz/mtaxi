@@ -1,0 +1,37 @@
+{
+  "name": "mtaxi-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "preflight": "node scripts/preflight.js",
+    "preflight:production": "NODE_ENV=production node scripts/preflight.js",
+    "validate:production-deploy": "node scripts/validate_production_deploy.js",
+    "status": "node scripts/backend_status.js",
+    "smoke": "node scripts/smoke_backend.js",
+    "smoke:functional:local": "node scripts/local_functional_smoke.js",
+    "contract:api": "node scripts/export_api_contract.js",
+    "contract:env": "node scripts/export_env_contract.js",
+    "monitor": "node scripts/monitor_backend.js",
+    "test": "node --test",
+    "db:schema": "psql \"$DATABASE_URL\" -f db/schema.sql",
+    "db:apply-schema": "node scripts/apply_schema.js",
+    "db:migrate-json": "node scripts/migrate_json_to_postgres.js",
+    "db:backup": "node scripts/backup_backend.js",
+    "db:verify-backup": "node scripts/verify_backup_manifest.js",
+    "db:restore": "node scripts/restore_backend.js",
+    "seed:admin": "node scripts/seed_admin.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.7.0",
+    "pg": "^8.13.1"
+  }
+}
