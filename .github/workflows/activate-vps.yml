@@ -54,6 +54,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
         run: |
+          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'install -d -m 700 /opt/mtaxi-incoming'
           sshpass -e scp -o StrictHostKeyChecking=yes "$RUNNER_TEMP/web.tar.gz" "root@$VPS_HOST:/opt/mtaxi-incoming/web.tar.gz"
           sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'tar -xzf /opt/mtaxi-incoming/web.tar.gz -C /var/www/mtaxi && find /var/www/mtaxi -type d -exec chmod 755 {} + && find /var/www/mtaxi -type f -exec chmod 644 {} +'
           curl --fail --silent --output /dev/null "$APP_URL/"

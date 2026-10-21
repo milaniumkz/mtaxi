@@ -677,7 +677,16 @@ async function writeStoreWithClient(client, store = {}) {
       [ledger.map((entry) => String(entry.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const entry of ledger) {
+  const currentUserIds = new Set(users.map(user => user.id));
+  const currentOrderIds = new Set((store.orders || []).map(order => order.id));
+  for (const originalEntry of ledger) {
+    // Account deletion may remove orders owned by another ledger user's passenger.
+    // Preserve that ledger history without restoring references cleared by SQL.
+    const entry = {
+      ...originalEntry,
+      userId: currentUserIds.has(originalEntry.userId) ? originalEntry.userId : null,
+      orderId: currentOrderIds.has(originalEntry.orderId) ? originalEntry.orderId : null,
+    };
     await client.query(
       `INSERT INTO ledger (
         id, user_id, order_id, payment_id, type, source, amount,
@@ -1018,7 +1027,7 @@ async function writeStoreWithClient(client, store = {}) {
         String(item.id || "").trim(),
         String(item.action || "").trim(),
         String(item.target || "").trim(),
-        item.adminId || null,
+        currentUserIds.has(item.adminId) ? item.adminId : null,
         String(item.adminPhone || "").trim(),
         JSON.stringify(item.before ?? null),
         JSON.stringify(item.after ?? null),
