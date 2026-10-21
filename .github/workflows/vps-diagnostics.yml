@@ -22,14 +22,17 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /opt/mtaxi
+          git fetch origin codex/free-staging-20261021
+          git merge --ff-only origin/codex/free-staging-20261021
+          bash deploy/activate_vps.sh </dev/null
           docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml ps
-          systemctl is-active docker nginx certbot.timer mtaxi-compose-backup.timer
+          for unit in docker nginx certbot.timer mtaxi-compose-backup.timer; do systemctl is-active "$unit"; done
           test ! -e /etc/mtaxi/bootstrap-token
           if systemctl is-active --quiet mtaxi-bootstrap.service; then echo 'Bootstrap receiver must be stopped'; exit 1; fi
           ss -lnt
           manifest="$(find /var/backups/mtaxi -maxdepth 1 -name 'mtaxi-backup-*.json' | sort | tail -1)"
           test -n "$manifest"
-          docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T backend npm run db:verify-backup -- "$manifest"
+          docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T backend npm run db:verify-backup -- "$manifest" </dev/null
           certbot renew --dry-run --non-interactive --no-random-sleep-on-renew
           curl --fail --silent https://mtaxi.89.126.192.185.sslip.io/readyz
           REMOTE

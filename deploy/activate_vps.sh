@@ -21,7 +21,7 @@ compose=(docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.
  process.exit(0);
 })().catch(()=>{console.error('Administrator bootstrap failed');process.exit(1)});
 JS
-"${compose[@]}" exec -T backend node scripts/check_firebase_fcm.js
+"${compose[@]}" exec -T backend node scripts/check_firebase_fcm.js </dev/null
 curl --fail --silent http://127.0.0.1:8080/readyz
 host=mtaxi.89.126.192.185.sslip.io
 sed "s/mtaxi.app.kz/$host/g" deploy/nginx/mtaxi-web.conf > /etc/nginx/sites-available/mtaxi-test
@@ -52,4 +52,5 @@ WantedBy=timers.target
 UNIT
 systemctl daemon-reload
 systemctl enable --now mtaxi-compose-backup.timer
-"${compose[@]}" exec -T backend npm run db:backup
+install -d -m 700 /var/backups/mtaxi
+"${compose[@]}" exec -T backend npm run db:backup </dev/null

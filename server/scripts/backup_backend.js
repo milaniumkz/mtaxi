@@ -63,6 +63,7 @@ async function pruneOldBackups(outputDir, retentionDays) {
 }
 
 async function main() {
+  process.umask(0o077);
   const databaseUrl = normalize(process.env.DATABASE_URL);
   if (!databaseUrl) {
     fail("DATABASE_URL is required");
