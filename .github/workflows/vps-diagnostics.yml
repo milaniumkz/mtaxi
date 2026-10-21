@@ -19,4 +19,17 @@ jobs:
           umask 077
           mkdir -p ~/.ssh
           printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
-          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'cd /opt/mtaxi && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml ps && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml logs --tail=500 backend'
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/mtaxi
+          docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml ps
+          systemctl is-active docker nginx certbot.timer mtaxi-compose-backup.timer
+          test ! -e /etc/mtaxi/bootstrap-token
+          if systemctl is-active --quiet mtaxi-bootstrap.service; then echo 'Bootstrap receiver must be stopped'; exit 1; fi
+          ss -lnt
+          manifest="$(find /var/backups/mtaxi -maxdepth 1 -name 'mtaxi-backup-*.json' | sort | tail -1)"
+          test -n "$manifest"
+          docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T backend npm run db:verify-backup -- "$manifest"
+          certbot renew --dry-run --non-interactive --no-random-sleep-on-renew
+          curl --fail --silent https://mtaxi.89.126.192.185.sslip.io/readyz
+          REMOTE
