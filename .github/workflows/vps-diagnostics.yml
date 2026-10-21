@@ -2,7 +2,7 @@ name: MTaxi VPS service diagnostics
 on:
   push:
     branches: [codex/free-staging-20261021]
-    paths: [.github/workflows/vps-diagnostics.yml]
+    paths: [.github/workflows/vps-diagnostics.yml, server/Dockerfile]
 permissions:
   contents: read
 jobs:
