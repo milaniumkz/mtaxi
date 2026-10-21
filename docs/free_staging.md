@@ -23,7 +23,9 @@ GitHub-репозиторий доступен, Firebase FCM credentials уже 
    незакоммиченные изменения не попадают на Render автоматически.
 2. Создать Blueprint из этой ветки с `render.yaml`. Все instance plans — `free`.
 3. Передать backend `FIREBASE_SERVICE_ACCOUNT_JSON` через Render secret env,
-   указать реальный `MTAXI_ADMIN_PHONE`. Пароль первого администратора и секреты
+   тестовый логин администратора — `+77009990000` (номер используется только
+   как логин, SMS/звонки не отправляются). При необходимости задайте свой
+   `MTAXI_ADMIN_PHONE`. Пароль первого администратора и секреты
    сгенерирует Render; не публиковать их в логах или исходниках.
 4. `start_render_staging.js` получает фактический `RENDER_EXTERNAL_URL`, применяет
    схему PostgreSQL, выполняет production preflight и создаёт администратора

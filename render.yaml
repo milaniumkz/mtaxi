@@ -42,8 +42,9 @@ services:
         value: mtaxi-52990
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
+      # Test login identifier only; no SMS/calls are sent to this number.
       - key: MTAXI_ADMIN_PHONE
-        sync: false
+        value: "+77009990000"
       - key: MTAXI_ADMIN_PASSWORD
         generateValue: true
       - key: MTAXI_ADMIN_NAME
