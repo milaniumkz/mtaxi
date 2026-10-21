@@ -3,6 +3,7 @@
 set -euo pipefail
 incoming=/opt/mtaxi-incoming
 root=/opt/mtaxi
+trap 'rm -f "$incoming/production.env"' EXIT
 for cmd in docker nginx certbot curl tar; do
   command -v "$cmd" >/dev/null || { echo "Install prerequisite on VPS: $cmd" >&2; exit 1; }
 done
@@ -49,6 +50,12 @@ tar -xzf "$incoming/web.tar.gz" -C /var/www/mtaxi
 find /var/www/mtaxi -type d -exec chmod 755 {} +
 find /var/www/mtaxi -type f -exec chmod 644 {} +
 systemctl reload nginx
+install -d -m 755 /etc/letsencrypt/renewal-hooks/deploy
+cat > /etc/letsencrypt/renewal-hooks/deploy/mtaxi-nginx <<'HOOK'
+#!/bin/sh
+nginx -t && systemctl reload nginx
+HOOK
+chmod 755 /etc/letsencrypt/renewal-hooks/deploy/mtaxi-nginx
 systemctl enable --now certbot.timer
 curl --fail --silent https://mtaxi.app.kz/readyz
 curl --fail --silent --output /dev/null https://mtaxi.app.kz/admin

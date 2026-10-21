@@ -1,6 +1,6 @@
 # Deployment from GitHub to the VPS
 
-Workflow: `.github/workflows/deploy-vps.yml`, manually started with **Actions → Deploy MTaxi VPS → Run workflow** on the branch containing this workflow. It runs backend/Flutter checks, builds web, uploads source and web over verified SSH, updates Docker Compose, obtains a Let's Encrypt certificate if missing, checks public HTTPS, builds a profile APK against that server and publishes it under `/downloads/mtaxi-staging.apk`. The APK uses test signing and is for testing, not Play Store publication.
+Workflow: `.github/workflows/deploy-vps.yml`, merge the reviewed branch into the default branch first, then manually start with **Actions → Deploy MTaxi VPS → Run workflow** on the branch containing this workflow. It runs backend/Flutter checks, builds web, uploads source and web over verified SSH, updates Docker Compose, obtains a Let's Encrypt certificate if missing, checks public HTTPS, builds a profile APK against that server and publishes it under `/downloads/mtaxi-staging.apk`. The APK uses test signing and is for testing, not Play Store publication.
 
 ## One-time prerequisites
 
@@ -15,7 +15,7 @@ Workflow: `.github/workflows/deploy-vps.yml`, manually started with **Actions �
 5. Provision the first administrator separately with the existing `seed:admin` command and a strong password. Keep `MTAXI_SEED_ADMIN_ON_START=false` for repeated deploys: automatic seeding would overwrite the administrator password. Configure and verify off-server backups using existing backup scripts before real customer data.
 6. Grant this GitHub integration permission to update workflow files and dispatch/read Actions. Current integration returned HTTP 403 for Actions permissions and secrets management; it cannot populate secrets on your behalf.
 
-On subsequent runs, existing PostgreSQL/upload volumes persist. No database volume is deleted. Failed migrations or builds stop the workflow; this is not a zero-downtime or automatically rolled-back deployment. Inspect the failed run before retrying. Certificate renewal uses `certbot.timer`; nginx must reload after renewal (install the hook below). GitHub logs and artifacts must never contain the private env file.
+On subsequent runs, existing PostgreSQL/upload volumes persist. No database volume is deleted. Failed migrations or builds stop the workflow; this is not a zero-downtime or automatically rolled-back deployment. Inspect the failed run before retrying. Certificate renewal uses `certbot.timer`; the deployment script installs an nginx reload hook after renewal (verify it using the commands below). GitHub logs and artifacts must never contain the private env file.
 
 ```sh
 sudo install -d /etc/letsencrypt/renewal-hooks/deploy
