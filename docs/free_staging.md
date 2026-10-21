@@ -38,12 +38,11 @@ GitHub-репозиторий доступен, Firebase FCM credentials уже 
 8. С фактическим HTTPS URL API собрать тестовый APK:
 
    ```bash
-   flutter build apk --debug \
-     --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true \
-     --dart-define=MTAXI_BACKEND_URL=https://ACTUAL-API-HOST
+   bash scripts/build_test_apk.sh https://ACTUAL-API-HOST
    ```
 
-   Это тестовая debug-подпись, не релиз для магазина. Проверить APK на устройстве
+   Скрипт сначала проверяет настоящий `/readyz` и PostgreSQL, затем создаёт
+   `output/mtaxi-staging.apk` и SHA-256. Это тестовая debug-подпись, не релиз для магазина. Проверить APK на устройстве
    и дать ссылку на фактически созданный файл вместе с SHA-256. Не раздавать
    сборку с localhost, LAN или выдуманным адресом как рабочую удалённую версию.
 
