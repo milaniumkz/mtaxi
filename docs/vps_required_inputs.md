@@ -13,11 +13,7 @@
 3. DNS доступ, чтобы направить домен на VPS.
 4. HTTPS способ: nginx + сертификат или другой reverse proxy.
 5. Node.js 20+ и `npm` для predeploy/validate/ops tooling.
-6. SMS provider:
-   - HTTPS URL отправки SMS;
-   - method;
-   - headers/token;
-   - body template.
+6. Проверка входа по паролю и порядок ручного восстановления через администратора. SMS-провайдер не нужен.
 7. Payment provider:
    - HTTPS redirect URL template с `{{paymentId}}` и `{{amount}}`;
    - callback secret;

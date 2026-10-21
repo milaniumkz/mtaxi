@@ -181,6 +181,31 @@ Future<Map<String, dynamic>> backendPasswordLogin({
   return result;
 }
 
+Future<Map<String, dynamic>> backendRegisterWithPassword({
+  required String phone,
+  required String password,
+}) async {
+  final result = await mtaxiBackendCall(
+    'registerWithPassword',
+    {
+      'phone': phone,
+      'password': password,
+    },
+  );
+  if (result['success'] == true) {
+    final token = result['token']?.toString() ?? '';
+    final user = result['user'];
+    if (token.isNotEmpty && user is Map) {
+      await saveBackendSession(
+        token: token,
+        user: Map<String, dynamic>.from(user),
+      );
+    }
+  }
+  await saveBackendUserFromResponse(result);
+  return result;
+}
+
 Future<Map<String, dynamic>> backendLookupUserByPhone({
   required String phone,
 }) async {

@@ -46,3 +46,5 @@ backups/
 
 /android/app/google-services.json
 /ios/Runner/GoogleService-Info.plist
+/web/firebase-config.js
+/.firebase-web-config.local.json

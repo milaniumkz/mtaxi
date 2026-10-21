@@ -52,6 +52,7 @@ function normalizeDeviceAudience(value) {
 
 function normalizeRole(value) {
   const text = normalizeString(value).toLowerCase();
+  if (text === 'admin') return 'admin';
   if (text === "driver" || text === "drivers") return "driver";
   if (text === "passenger" || text === "passengers" || text === "user") return "passenger";
   return "all";
@@ -172,6 +173,7 @@ function tokenMatchesTarget(store, token, notification) {
   if (notification.orderAlert === true && token.orderAlertsEnabled === false) return false;
 
   const role = normalizeRole(notification.targetRole);
+  if (role === 'admin' && user.role !== 'admin' && user.roleState !== 'ADMIN') return false;
   if (role === "driver" && user.isDriver !== true) return false;
   if (role === "passenger" && user.isDriver === true && user.roleState !== "PASSENGER") return false;
 
@@ -413,9 +415,10 @@ async function flushQueuedPushDeliveriesForStore(store, limit, persistStore) {
   for (const delivery of queued) {
     const notification = store.notifications.find((item) => item.id === delivery.notificationId);
     const token = store.fcmTokens.find((item) => item.id === delivery.tokenId);
-    if (!notification || !token || token.disabled) {
+    if (!notification || !token || token.disabled || token.userId !== delivery.userId ||
+        !tokenMatchesTarget(store, token, notification)) {
       delivery.status = "failed";
-      delivery.error = "Notification or token not found";
+      delivery.error = "Notification or token unavailable for recipient";
       delivery.updatedAt = new Date().toISOString();
       numFailed += 1;
       continue;

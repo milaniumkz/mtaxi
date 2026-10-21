@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'kaspi_payment_actions.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -288,6 +289,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     'dateCreate',
   };
   static const Set<String> _adminEditableUserFields = {
+    'password',
     'firstName',
     'lastName',
     'display_name',
@@ -331,7 +333,6 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
   static const Set<String> _driverOnlyUserFields = {
     'iin',
     'dataRoj',
-    'password',
     'avtoImage',
     'autoImage',
     'vehiclePhotoDeleteRequestStatus',
@@ -1539,6 +1540,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
       for (final spec in schema)
         spec.key: TextEditingController(text: (data[spec.key] ?? '').toString())
     };
+    bool intercityEnabled = data['intercityEnabled'] == true;
+    bool bonusEnabled = data['driverBonusEnabled'] == true;
     String? errorText;
     bool isSaving = false;
 
@@ -1551,9 +1554,28 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
               title: const Text('Настройки'),
               content: SizedBox(
                 width: 420,
-                child: Column(
+                child: SingleChildScrollView(
+                    child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    SwitchListTile(
+                      title: const Text('Межгород'),
+                      subtitle:
+                          const Text('Разрешить новые междугородние заказы'),
+                      value: intercityEnabled,
+                      onChanged: isSaving
+                          ? null
+                          : (value) =>
+                              setModalState(() => intercityEnabled = value),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Суточная акция для водителей'),
+                      value: bonusEnabled,
+                      onChanged: isSaving
+                          ? null
+                          : (value) =>
+                              setModalState(() => bonusEnabled = value),
+                    ),
                     for (final spec in schema) ...[
                       TextField(
                         controller: controllers[spec.key],
@@ -1575,7 +1597,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                         ),
                       ),
                   ],
-                ),
+                )),
               ),
               actions: [
                 TextButton(
@@ -1591,7 +1613,10 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                             errorText = null;
                           });
                           try {
-                            final converted = <String, dynamic>{};
+                            final converted = <String, dynamic>{
+                              'driverBonusEnabled': bonusEnabled,
+                              'intercityEnabled': intercityEnabled,
+                            };
                             for (final spec in schema) {
                               final text =
                                   controllers[spec.key]?.text.trim() ?? '';
@@ -2095,6 +2120,9 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                           )
                         else
                           TextField(
+                            obscureText: spec.key == 'password',
+                            autocorrect: spec.key != 'password',
+                            enableSuggestions: spec.key != 'password',
                             controller: controllers[spec.key],
                             minLines: spec.type == _FieldType.json ? 4 : 1,
                             maxLines: spec.type == _FieldType.json ? 10 : 1,
@@ -2477,6 +2505,10 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                       ),
                   ],
                 ),
+                if (payment['provider'] == 'kaspi_manual' &&
+                    status == 'pending')
+                  KaspiPaymentActions(
+                      payment: payment, onChanged: () => safeSetState(() {})),
                 const SizedBox(height: 8),
                 Text(
                   [
@@ -4924,7 +4956,10 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
       _FieldSpec(key: 'iin', label: 'ИИН', type: _FieldType.intType),
       _FieldSpec(
           key: 'dataRoj', label: 'Дата рождения', type: _FieldType.dateTime),
-      _FieldSpec(key: 'password', label: 'Пароль', type: _FieldType.string),
+      _FieldSpec(
+          key: 'password',
+          label: 'Новый пароль (от 8 символов)',
+          type: _FieldType.string),
       _FieldSpec(
           key: 'avtoImage', label: 'Фото авто (URL)', type: _FieldType.string),
       _FieldSpec(
@@ -5120,6 +5155,14 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           type: _FieldType.doubleType),
     ],
     'appSettings': [
+      _FieldSpec(
+          key: 'driverBonusTargetOrders',
+          label: 'Заказов за сутки для бонуса',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'driverBonusReward',
+          label: 'Награда за сутки (бонусные ₸)',
+          type: _FieldType.doubleType),
       _FieldSpec(
           key: 'orderCommissionPercent',
           label: 'Комиссия (%)',
@@ -6998,6 +7041,9 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
 
                             return TextField(
                               controller: controller,
+                              obscureText: spec.key == 'password',
+                              autocorrect: spec.key != 'password',
+                              enableSuggestions: spec.key != 'password',
                               readOnly: spec.readOnly,
                               decoration: InputDecoration(
                                 labelText: spec.label,

@@ -3,6 +3,9 @@
 Локальный backend для постепенного переноса приложения на отдельный сервер.
 Firebase в новой архитектуре используется только как FCM transport для push-уведомлений.
 
+**Авторизация обновлена:** номер телефона + пароль, SMS отключены. Регистрация,
+переход старых аккаунтов и ручное восстановление: [password_auth.md](../docs/password_auth.md).
+
 ## Запуск
 
 ```bash
@@ -17,7 +20,7 @@ npm run start
 ./scripts/start_local_json_backend.sh
 ```
 
-Скрипт включает только local-dev режимы: JSON-store, local SMS, local payment page и simulated push без Firebase. Он ждет `/readyz`, запускает `npm run smoke` и печатает команды Flutter для Web/Desktop (`127.0.0.1`) и Android emulator (`10.0.2.2`). Остановить процесс можно через `Ctrl+C`.
+Скрипт включает только local-dev режимы: JSON-store, парольный вход, local payment page и simulated push без Firebase. Он ждет `/readyz`, запускает `npm run smoke` и печатает команды Flutter для Web/Desktop (`127.0.0.1`) и Android emulator (`10.0.2.2`). Остановить процесс можно через `Ctrl+C`.
 
 Одноразовая проверка без ручной остановки:
 
@@ -218,7 +221,7 @@ JWT и SMS hash подписываются текущим `MTAXI_TOKEN_SECRET`. 
 
 Публичные auth endpoint-ы (`passwordLogin`, `requestSmsCode`, `verifySmsCode`, `createSmsSession`) защищены in-memory rate limit по IP и телефону. Настройки: `MTAXI_AUTH_RATE_LIMIT_WINDOW_SEC` и `MTAXI_AUTH_RATE_LIMIT_MAX`; `npm run preflight` проверяет, что оба значения положительные.
 
-SMS-код отправляется и проверяется на backend через `requestSmsCode`/`verifySmsCode`; `createSmsSession` выдает токен только после verified SMS-кода и помечает код как `consumed`. Клиент больше не обязан знать правильный код для backend-режима. Новые коды в store/PostgreSQL сохраняются как `smsCodeHash`, открытый код возвращается только в локальном dev-режиме. `MTAXI_SMS_CODE_TTL_SEC` задает срок кода, `MTAXI_SMS_RESEND_COOLDOWN_SEC` ограничивает повторную отправку. `MTAXI_SMS_PROVIDER=local`, `MTAXI_ALLOW_LOCAL_SMS=true` и `MTAXI_SMS_DEV_RETURN_CODE=true` разрешены только для локальной разработки. Для production использовать `MTAXI_SMS_PROVIDER=http`, `MTAXI_SMS_DEV_RETURN_CODE=false` и реальные env SMS-провайдера. `npm run preflight` проверяет, что SMS URL внешний `https://` и не localhost/LAN, метод `POST/PUT/PATCH`, JSON headers, JSON body template с `{{phone}}` и `{{message}}` или `{{code}}`, а также запрещает возврат SMS-кода клиенту без local-dev флага.
+Регистрация выполняется через `registerWithPassword`, вход — через `passwordLogin`. SMS-эндпоинты отключены. Пароль хешируется scrypt, SMS-провайдер не требуется. Подробности: `docs/password_auth.md`.
 
 Пользовательские операции тоже переведены на async-контракт: регистрация пассажира и водителя, настройки профиля, установка пароля и глубокое удаление аккаунта имеют async-версии, а `call_router` вызывает именно их.
 
@@ -291,7 +294,7 @@ Firebase используется только для FCM push. Если `MTAXI_
 
 Flutter `makeCloudCall()` отправляет все callable-запросы только в backend REST `POST /call/:name`. Wrapper находится в `lib/backend/backend_calls/backend_calls.dart`; пакет `cloud_functions` и старый путь `backend/cloud_functions` из клиента удалены.
 
-Firebase Auth, Cloud Functions, Storage, Firestore, Crashlytics и Performance SDK из клиента удалены. Неиспользуемые platform-auth SDK `google_sign_in`/`sign_in_with_apple` тоже удалены, чтобы вход оставался только через backend SMS/password. Android Gradle больше не подключает Crashlytics plugin. В Firebase-клиенте остаются только `firebase_core` и `firebase_messaging` для FCM push. Старые FlutterFlow-типы `DocumentReference/Timestamp/GeoPoint` теперь приходят из локального compatibility layer `lib/backend/backend_refs_compat.dart` и не открывают сетевые Firestore операции.
+Firebase Auth, Cloud Functions, Storage, Firestore, Crashlytics и Performance SDK из клиента удалены. Неиспользуемые platform-auth SDK `google_sign_in`/`sign_in_with_apple` тоже удалены, чтобы вход оставался только через backend phone/password. Android Gradle больше не подключает Crashlytics plugin. В Firebase-клиенте остаются только `firebase_core` и `firebase_messaging` для FCM push. Старые FlutterFlow-типы `DocumentReference/Timestamp/GeoPoint` теперь приходят из локального compatibility layer `lib/backend/backend_refs_compat.dart` и не открывают сетевые Firestore операции.
 
 Старые имена совместимого слоя `FirestoreRecord`, `FFFirestorePage`, `FFFirebaseStruct`, `FirestoreUtilData`, `mapFromFirestore`, `mapToFirestore` и путь `firestore_util.dart` заменены backend-compat именами и запрещены guard-тестом.
 
@@ -316,7 +319,7 @@ cd ios && pod install
 
 Ролевая маршрутизация backend отдает явные состояния `PASSENGER`, `DRIVER_PENDING`, `DRIVER_ONLINE`/`DRIVER_OFFLINE`, `DRIVER_ON_TRIP` и `BLOCKED`. Legacy `DRIVER_PENDING_REVIEW` нормализуется в `DRIVER_PENDING`. Заблокированный пользователь может получить bootstrap для экрана блокировки, но рабочие операции через `call_router` возвращают `USER_BLOCKED`.
 
-Auth runtime полностью использует async-store: `passwordLogin`, `lookupUserByPhone`, SMS-сессия и bearer-token проверка не импортируют sync `readStore`.
+Auth runtime полностью использует async-store: `passwordLogin`, `lookupUserByPhone`, регистрация по паролю и bearer-token проверка не импортируют sync `readStore`.
 
 Runtime settings тоже работают только через async-store: публичные exports `getRuntimeSettingsAsync` и `updateRuntimeSettingsAsync`.
 
@@ -468,7 +471,7 @@ Flutter `SettingsWidget` сохраняет поселок через `updateUse
 
 Backend session возвращает публичного пользователя без поля пароля. Flutter получает только `hasPassword` и строит совместимый `UsersRecord` локально через `backend_user_adapter.dart`.
 
-Экраны входа и SMS ищут существующего пользователя через backend `lookupUserByPhone`. Firestore fallback поиска по номеру в этих экранах удален.
+Экран входа обращается к backend `passwordLogin` или `registerWithPassword`. Старый экран SMS показывает обычный вход по паролю. Публичный `lookupUserByPhone` не раскрывает профиль.
 
 Регистрация пассажира и водителя не пишет черновики в Firestore. Данные сохраняются только после явной отправки анкеты через `submitPassengerRegistration` или `submitDriverRegistration`.
 

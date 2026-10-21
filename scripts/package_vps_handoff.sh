@@ -31,7 +31,7 @@ archive_name="$(basename "$archive_path")"
 archive_sha="$(shasum -a 256 "$archive_path" | awk '{print $1}')"
 archive_size_bytes="$(wc -c <"$archive_path" | tr -d ' ')"
 cp "$root_dir/scripts/verify_vps_handoff.sh" "$handoff_dir/verify_vps_handoff.sh"
-chmod +x "$handoff_dir/verify_vps_handoff.sh"
+chmod a+x "$handoff_dir/verify_vps_handoff.sh"
 "$root_dir/scripts/backend_migration_status.sh" "$handoff_dir/READINESS_REPORT.json"
 (cd "$root_dir/server" && npm run contract:api -- "$handoff_dir/API_CONTRACT.json" >/dev/null)
 (cd "$root_dir/server" && npm run contract:env -- "$handoff_dir/ENV_CONTRACT.json" >/dev/null)
@@ -129,7 +129,7 @@ cat >"$handoff_dir/DEPLOY_NEXT_STEPS.md" <<'EOF'
    ```
 6. Create production env. Either copy `server/.env.example` to `server/.env`
    manually, or use `./scripts/generate_production_env.sh server/.env` with
-   real `MTAXI_PUBLIC_BASE_URL`, `MTAXI_SMS_HTTP_URL`,
+   real `MTAXI_PUBLIC_BASE_URL`,
    `MTAXI_PAYMENT_URL_TEMPLATE` and FCM credentials.
    To use the checked VPS inputs:
    ```bash
@@ -198,7 +198,7 @@ Still required for 100%:
 - VPS SSH access
 - API domain and DNS
 - Production \`server/.env\`
-- Real SMS provider
+- Password login and administrator recovery verification
 - Real payment provider
 - FCM service account for push only
 - Production smoke/monitor after deployment

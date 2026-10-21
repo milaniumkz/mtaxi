@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import '../../auth/backend_auth/auth_util.dart';
 import '../backend_calls/backend_calls.dart';
 import 'push_notifications_state.dart';
+import '../firebase/firebase_config.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:stream_transform/stream_transform.dart';
@@ -22,7 +23,12 @@ const _apnsTokenRetryAttempts = 20;
 const _apnsTokenRetryDelay = Duration(milliseconds: 500);
 
 Future<NotificationSettings?> _requestPushPermission() async {
-  if (kIsWeb || !(Platform.isIOS || Platform.isAndroid)) {
+  if (kIsWeb) {
+    return firebaseWebPushEnabled
+        ? FirebaseMessaging.instance.getNotificationSettings()
+        : null;
+  }
+  if (!(Platform.isIOS || Platform.isAndroid)) {
     return null;
   }
 
@@ -38,7 +44,12 @@ Future<NotificationSettings?> _requestPushPermission() async {
 }
 
 Future<String?> _getFcmTokenAfterNativeRegistration() async {
-  if (kIsWeb || !(Platform.isIOS || Platform.isAndroid)) {
+  if (kIsWeb) {
+    return firebaseWebPushEnabled
+        ? FirebaseMessaging.instance.getToken(vapidKey: firebaseWebVapidKey)
+        : null;
+  }
+  if (!(Platform.isIOS || Platform.isAndroid)) {
     return null;
   }
 
@@ -73,22 +84,23 @@ Future<String?> _getApnsTokenIfAvailable() async {
   return null;
 }
 
-Stream<UserTokenInfo> getFcmTokenStream(String userPath) =>
-    Stream.value(!kIsWeb && (Platform.isIOS || Platform.isAndroid))
-        .where((shouldGetToken) => shouldGetToken)
-        .asyncMap<String?>((_) => _requestPushPermission().then(
-              (settings) {
-                final status = settings?.authorizationStatus;
-                return status == AuthorizationStatus.authorized ||
-                        status == AuthorizationStatus.provisional
-                    ? _getFcmTokenAfterNativeRegistration()
-                    : null;
-              },
-            ))
-        .switchMap((fcmToken) => Stream.value(fcmToken)
-            .merge(FirebaseMessaging.instance.onTokenRefresh))
-        .where((fcmToken) => fcmToken != null && fcmToken.isNotEmpty)
-        .map((token) => UserTokenInfo(userPath, token!));
+Stream<UserTokenInfo> getFcmTokenStream(String userPath) => Stream.value(kIsWeb
+        ? firebaseWebPushEnabled
+        : (Platform.isIOS || Platform.isAndroid))
+    .where((shouldGetToken) => shouldGetToken)
+    .asyncMap<String?>((_) => _requestPushPermission().then(
+          (settings) {
+            final status = settings?.authorizationStatus;
+            return status == AuthorizationStatus.authorized ||
+                    status == AuthorizationStatus.provisional
+                ? _getFcmTokenAfterNativeRegistration()
+                : null;
+          },
+        ))
+    .switchMap((fcmToken) =>
+        Stream.value(fcmToken).merge(FirebaseMessaging.instance.onTokenRefresh))
+    .where((fcmToken) => fcmToken != null && fcmToken.isNotEmpty)
+    .map((token) => UserTokenInfo(userPath, token!));
 
 final fcmTokenUserStream = authenticatedUserStream
     .where((user) => user != null)
@@ -102,11 +114,35 @@ final fcmTokenUserStream = authenticatedUserStream
     {
       'userDocPath': userTokenInfo.userPath,
       'fcmToken': userTokenInfo.fcmToken,
-      'deviceType': Platform.isIOS ? 'iOS' : 'Android',
+      'deviceType': kIsWeb ? 'Web' : (Platform.isIOS ? 'iOS' : 'Android'),
       if (apnsToken != null && apnsToken.isNotEmpty) 'apnsToken': apnsToken,
     },
   );
 });
+
+Future<bool> enableBrowserPushForCurrentUser() async {
+  if (!kIsWeb || !firebaseWebPushEnabled) return false;
+  final userPath = currentUserDocument?.reference.path ?? '';
+  if (userPath.isEmpty || !await FirebaseMessaging.instance.isSupported())
+    return false;
+  final settings = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  if (settings.authorizationStatus != AuthorizationStatus.authorized)
+    return false;
+  final token =
+      await FirebaseMessaging.instance.getToken(vapidKey: firebaseWebVapidKey);
+  if (token == null || token.isEmpty) return false;
+  final response = await makeCloudCall('addFcmToken', {
+    'userDocPath': userPath,
+    'fcmToken': token,
+    'deviceType': 'Web',
+    'appState': kFcmAppStateForeground,
+  });
+  return response['success'] == true;
+}
 
 Future<void> syncCurrentFcmTokenState({
   String? appState,

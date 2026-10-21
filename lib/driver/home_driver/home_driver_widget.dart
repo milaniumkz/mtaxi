@@ -17,6 +17,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:webviewx_plus/webviewx_plus.dart';
 import 'home_driver_model.dart';
+import 'driver_bonus_card.dart';
 export 'home_driver_model.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
@@ -1316,6 +1317,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                       mainAxisSize: MainAxisSize.max,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        const DriverBonusCard(),
                         Container(
                           height: 58,
                           color: surface,
@@ -1371,7 +1373,8 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                               ?.snapshotData['vip'] as bool?) ??
                                           false;
                                       if (!isVip &&
-                                          (currentUserDocument?.balance ?? 0) <
+                                          ((currentUserDocument?.balance ?? 0) +
+                                              ((currentUserDocument?.snapshotData['bonusBalance'] as num?)?.toDouble() ?? 0)) <
                                               _driverMinBalanceToTakeOrder) {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(

@@ -44,7 +44,7 @@ render_report() {
     "VPS SSH access",
     "API domain and DNS",
     "Production server/.env",
-    "Real SMS provider",
+    "Password login and administrator recovery verification",
     "Real payment provider",
     "FCM service account for push only",
     "Production postdeploy smoke and monitor"

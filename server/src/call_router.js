@@ -1,5 +1,6 @@
 const {
   passwordLogin,
+  registerWithPassword,
   lookupUserByPhone,
   requestSmsCode,
   verifySmsCode,
@@ -22,6 +23,7 @@ const {
   advanceDriverOrderStatusAsync,
 } = require("./orders");
 const {
+  publicUser,
   submitPassengerRegistrationAsync,
   submitDriverRegistrationAsync,
   updateUserPreferencesAsync,
@@ -60,6 +62,7 @@ const {
   createDriverTopUpPaymentAsync,
   getDriverTopUpPaymentStatusAsync,
   confirmDriverTopUpPaymentAsync,
+  adminMarkKaspiInvoiceSentAsync,
   failDriverTopUpPaymentAsync,
   createDriverWithdrawalAsync,
   adminListWithdrawalsAsync,
@@ -115,6 +118,7 @@ const blockedUserAllowedCalls = new Set([
 ]);
 
 const handlers = {
+  registerWithPassword: async ({ data }) => registerWithPassword(data),
   passwordLogin: async ({ data }) => passwordLogin(data),
   lookupUserByPhone: async ({ data }) => lookupUserByPhone(data),
   requestSmsCode: async ({ data }) => requestSmsCode(data),
@@ -130,7 +134,7 @@ const handlers = {
     }
     return {
       success: true,
-      user: auth.user,
+      user: publicUser(auth.user),
       userDocPath: `users/${auth.user.id}`,
     };
   },
@@ -190,6 +194,7 @@ const handlers = {
   createDriverTopUpPayment: async ({ data, auth, req }) => createDriverTopUpPaymentAsync(data, auth, req),
   getDriverTopUpPaymentStatus: async ({ data, auth }) => getDriverTopUpPaymentStatusAsync(data, auth),
   confirmDriverTopUpPayment: async ({ data, auth }) => confirmDriverTopUpPaymentAsync(data, auth),
+  adminMarkKaspiInvoiceSent: async ({ data, auth }) => adminMarkKaspiInvoiceSentAsync(data, auth),
   failDriverTopUpPayment: async ({ data, auth }) => failDriverTopUpPaymentAsync(data, auth),
   createDriverWithdrawal: async ({ data, auth }) => createDriverWithdrawalAsync(data, auth),
   adminListWithdrawals: async ({ data, auth }) => adminListWithdrawalsAsync(data, auth),
@@ -224,6 +229,8 @@ const handlers = {
 
 const publicAuthRateLimitedCalls = new Set([
   "passwordLogin",
+  "registerWithPassword",
+  "lookupUserByPhone",
   "requestSmsCode",
   "verifySmsCode",
   "createSmsSession",
@@ -239,7 +246,8 @@ async function dispatchCall(name, data, req) {
     };
   }
   if (publicAuthRateLimitedCalls.has(name)) {
-    const rateLimit = checkRateLimit(name, data || {}, req);
+    const perIpLimit = checkRateLimit(`${name}:ip`, {}, req);
+    const rateLimit = perIpLimit.limited ? perIpLimit : checkRateLimit(name, data || {}, req);
     if (rateLimit.limited) {
       return {
         success: false,
@@ -255,7 +263,7 @@ async function dispatchCall(name, data, req) {
       success: false,
       code: "USER_BLOCKED",
       error: "Аккаунт заблокирован",
-      user: auth.user,
+      user: publicUser(auth.user),
       userDocPath: `users/${auth.user.id}`,
     };
   }

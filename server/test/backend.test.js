@@ -12,6 +12,7 @@ process.env.MTAXI_ACCESS_LOGS = "false";
 
 const {
   passwordLogin,
+  registerWithPassword,
   lookupUserByPhone,
   requestSmsCode,
   verifySmsCode,
@@ -537,7 +538,7 @@ test("backend env contract pins production backend-only settings", () => {
   assert.deepEqual(contract.unsafeDevDefaults, []);
   assert.equal(contract.productionValues.NODE_ENV, "production");
   assert.equal(contract.productionValues.MTAXI_STORE, "postgres");
-  assert.equal(contract.productionValues.MTAXI_SMS_PROVIDER, "http");
+  assert.equal(contract.productionValues.MTAXI_SMS_PROVIDER, "disabled");
   assert.equal(contract.productionValues.MTAXI_PAYMENT_PROVIDER, "redirect");
   assert.equal(contract.productionValues.MTAXI_FCM_ENABLED, "true");
   assert.ok(contract.requiredProduction.includes("DATABASE_URL"));
@@ -1987,10 +1988,7 @@ test("deployment checklist documents production backend cutover", () => {
   assert.match(checklist, /100\.64\.0\.0\/10/);
   assert.match(checklist, /169\.254\.\*/);
   assert.match(checklist, /fe80::\/10/);
-  assert.match(checklist, /MTAXI_SMS_PROVIDER=http/);
-  assert.match(checklist, /MTAXI_SMS_HTTP_URL=https:\/\/sms-provider\.example\/send/);
-  assert.match(checklist, /MTAXI_SMS_HTTP_METHOD/);
-  assert.match(checklist, /MTAXI_SMS_HTTP_BODY_TEMPLATE/);
+  assert.match(checklist, /MTAXI_SMS_PROVIDER=disabled/);
   assert.match(checklist, /MTAXI_ALLOW_LOCAL_SMS=false/);
   assert.match(checklist, /MTAXI_FCM_ENABLED=true/);
   assert.match(checklist, /MTAXI_ALLOW_SIMULATED_PUSH=false/);
@@ -2382,8 +2380,8 @@ test("deployment checklist documents production backend cutover", () => {
   assert.match(envExample, /DATABASE_URL=postgres:\/\/mtaxi:replace-with-postgres-password@postgres:5432\/mtaxi/);
   assert.match(envExample, /MTAXI_BACKUP_RETENTION_DAYS=30/);
   assert.match(envExample, /MTAXI_MAINTENANCE_INTERVAL_SEC=30/);
-  assert.match(envExample, /MTAXI_SMS_PROVIDER=http/);
-  assert.match(envExample, /MTAXI_SMS_HTTP_URL=https:\/\/sms-provider\.example\/send/);
+  assert.match(envExample, /MTAXI_SMS_PROVIDER=disabled/);
+  assert.match(envExample, /MTAXI_SMS_HTTP_URL=\n/);
   assert.match(envExample, /MTAXI_ALLOW_LOCAL_SMS=false/);
   assert.match(envExample, /MTAXI_PAYMENT_PROVIDER=redirect/);
   assert.match(envExample, /MTAXI_PAYMENT_URL_TEMPLATE=https:\/\/pay-provider\.example\/start\?invoice=\{\{paymentId\}\}&amount=\{\{amount\}\}/);
@@ -2984,6 +2982,7 @@ test("production env generator preserves external payment query templates", asyn
         MTAXI_ADMIN_PASSWORD: "strong-admin-password",
         MTAXI_ADMIN_NAME: "Admin",
         MTAXI_ADMIN_CITY: "Belousovka",
+        FIREBASE_PROJECT_ID: "mtaxi-test",
         FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
           project_id: "mtaxi-test",
           client_email: "firebase-admin@test.example",
@@ -2997,17 +2996,16 @@ test("production env generator preserves external payment query templates", asyn
   const generated = fs.readFileSync(envPath, "utf8");
   assert.match(generated, /NODE_ENV=production/);
   assert.match(generated, /MTAXI_PUBLIC_BASE_URL=https:\/\/api\.mtaxi\.example/);
-  assert.match(generated, /MTAXI_SMS_HTTP_URL=https:\/\/sms\.mtaxi\.example\/send/);
-  assert.match(generated, /MTAXI_SMS_HTTP_METHOD=PATCH/);
-  assert.match(generated, /MTAXI_SMS_HTTP_BEARER_TOKEN=sms-token/);
-  assert.match(generated, /MTAXI_SMS_HTTP_HEADERS=\{"X-Service":"mtaxi"\}/);
-  assert.match(generated, /MTAXI_SMS_HTTP_BODY_TEMPLATE=\{"to":"\{\{phone\}\}","text":"\{\{message\}\}"\}/);
+  assert.match(generated, /MTAXI_SMS_PROVIDER=disabled/);
+  assert.match(generated, /MTAXI_SMS_HTTP_URL=\n/);
+  assert.doesNotMatch(generated, /sms-token/);
   assert.match(generated, new RegExp(`MTAXI_PAYMENT_URL_TEMPLATE=${paymentUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   assert.match(generated, /MTAXI_SEED_ADMIN_ON_START=true/);
   assert.match(generated, /MTAXI_ADMIN_PHONE=\+77001112233/);
   assert.match(generated, /MTAXI_ADMIN_PASSWORD=strong-admin-password/);
   assert.match(generated, /MTAXI_ADMIN_NAME=Admin/);
   assert.match(generated, /MTAXI_ADMIN_CITY=Belousovka/);
+  assert.match(generated, /FIREBASE_PROJECT_ID=mtaxi-test/);
   assert.match(generated, /DATABASE_URL=postgres:\/\/mtaxi:[a-f0-9]+@postgres:5432\/mtaxi/);
   assert.match(generated, /FIREBASE_SERVICE_ACCOUNT_JSON=\{"project_id":"mtaxi-test"/);
   assert.doesNotMatch(generated, /GOOGLE_APPLICATION_CREDENTIALS=/);
@@ -4632,14 +4630,13 @@ test("lookupUserByPhone returns safe public user without password", async () => 
   const found = await lookupUserByPhone({ phone: "7086362153" });
   assert.equal(found.success, true);
   assert.equal(found.found, true);
-  assert.equal(found.user.id, "u_driver_7086362153");
-  assert.equal(found.user.password, undefined);
-  assert.equal(found.user.hasPassword, true);
+  assert.equal(found.user, undefined);
+  assert.equal(found.userId, undefined);
 
   const missing = await lookupUserByPhone({ phone: "70000000999" });
   assert.equal(missing.success, true);
   assert.equal(missing.found, false);
-  assert.equal(missing.user, null);
+  assert.equal(missing.user, undefined);
 });
 
 test("lookupUserByPhone normalizes legacy pending driver role state", async () => {
@@ -4660,127 +4657,39 @@ test("lookupUserByPhone normalizes legacy pending driver role state", async () =
   const found = await lookupUserByPhone({ phone: "7051234567" });
   assert.equal(found.success, true);
   assert.equal(found.found, true);
-  assert.equal(found.user.roleState, "DRIVER_PENDING");
+  assert.equal(found.user, undefined);
 });
 
-test("requestSmsCode creates local backend SMS code", async () => {
-  const result = await requestSmsCode({ phone: "7052597368" });
+test("legacy SMS authentication is disabled even with local SMS credentials", async () => {
+  for (const call of [requestSmsCode, verifySmsCode, createSmsSession]) {
+    const result = await call({ phone: "7011112233", smsCode: "1234" });
+    assert.equal(result.success, false);
+    assert.equal(result.code, "SMS_AUTH_DISABLED");
+    assert.equal(result.token, undefined);
+  }
+  assert.equal((readStore().smsCodes || []).length, 0);
+});
+
+test("phone and password registration creates a hashed account without SMS", async () => {
+  const result = await registerWithPassword({ phone: "7011112233", password: "strong-password", role: "admin", balance: 100000 });
   assert.equal(result.success, true);
-  assert.equal(result.phone, "+77052597368");
-  assert.match(result.smsCode, /^\d{4}$/);
-
-  const stored = readStore().smsCodes || [];
-  assert.equal(stored.length, 1);
-  assert.equal(stored[0].phone, "+77052597368");
-  assert.equal(stored[0].smsCode, undefined);
-  assert.equal(stored[0].smsCodeHash, hashSmsCode("+77052597368", result.smsCode));
-  assert.equal(stored[0].provider, "local");
-});
-
-test("verifySmsCode validates latest backend SMS code and marks it verified", async () => {
-  process.env.MTAXI_SMS_RESEND_COOLDOWN_SEC = "0";
-  const sent = await requestSmsCode({ phone: "7052597368" });
-  const invalid = await verifySmsCode({
-    phone: "7052597368",
-    smsCode: "0000",
-  });
-  assert.equal(invalid.success, false);
-  assert.equal(invalid.code, "SMS_CODE_INVALID");
-
-  const verified = await verifySmsCode({
-    phone: "7052597368",
-    smsCode: sent.smsCode,
-  });
-  assert.equal(verified.success, true);
-  assert.equal(verified.code, "SMS_CODE_VERIFIED");
-  const stored = readStore().smsCodes || [];
-  assert.equal(stored[0].status, "verified");
-  delete process.env.MTAXI_SMS_RESEND_COOLDOWN_SEC;
-});
-
-test("verifySmsCode survives backend memory reset by using stored SMS record", async () => {
-  const now = Date.now();
-  await withStoreAsync(async (store) => {
-    store.smsCodes = [{
-      id: "sms_restart_test",
-      phone: "+77051234567",
-      smsCodeHash: hashSmsCode("+77051234567", "4321"),
-      provider: "http",
-      status: "sent",
-      createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + 300000).toISOString(),
-    }];
-  });
-
-  const result = await verifySmsCode({
-    phone: "7051234567",
-    smsCode: "4321",
-  });
-  assert.equal(result.success, true);
-  assert.equal(result.code, "SMS_CODE_VERIFIED");
-
-  const stored = readStore().smsCodes || [];
-  assert.equal(stored[0].status, "verified");
-  assert.match(stored[0].verifiedAt, /^\d{4}-\d{2}-\d{2}T/);
-});
-
-test("requestSmsCode rate limits immediate repeats", async () => {
-  process.env.MTAXI_SMS_RESEND_COOLDOWN_SEC = "30";
-  const first = await requestSmsCode({ phone: "7050001122" });
-  const second = await requestSmsCode({ phone: "7050001122" });
-  assert.equal(first.success, true);
-  assert.equal(second.success, false);
-  assert.equal(second.code, "SMS_RATE_LIMITED");
-  assert.ok(second.retryAfterSec > 0);
-  delete process.env.MTAXI_SMS_RESEND_COOLDOWN_SEC;
-});
-
-test("createSmsSession requires verified SMS and creates backend session for new phone", async () => {
-  const blocked = await createSmsSession({ phone: "7011112233" });
-  assert.equal(blocked.success, false);
-  assert.equal(blocked.code, "SMS_CODE_NOT_VERIFIED");
-
-  process.env.MTAXI_SMS_RESEND_COOLDOWN_SEC = "0";
-  const sent = await requestSmsCode({ phone: "7011112233" });
-  const verified = await verifySmsCode({
-    phone: "7011112233",
-    smsCode: sent.smsCode,
-  });
-  assert.equal(verified.success, true);
-  const session = await createSmsSession({ phone: "7011112233" });
-  assert.equal(session.success, true);
-  assert.match(session.token, /^[^.]+\.[^.]+\.[^.]+$/);
-  assert.equal(session.user.phone, "+77011112233");
-  assert.equal(session.user.profileCompleted, false);
-  assert.equal(session.user.hasPassword, false);
-  assert.equal(
-    readStore().smsCodes.find((item) => item.phone === "+77011112233").status,
-    "consumed",
-  );
-
-  const reused = await createSmsSession({ phone: "7011112233" });
-  assert.equal(reused.success, false);
-  assert.equal(reused.code, "SMS_CODE_NOT_VERIFIED");
-
-  const auth = await verifyBearerToken({
-    get(name) {
-      return name.toLowerCase() === "authorization"
-        ? `Bearer ${session.token}`
-        : "";
-    },
-  });
-  const registered = await submitPassengerRegistrationAsync(
-    {
-      displayName: "Тест Пассажир",
-      city: "Белоусовка",
-      password: "123456",
-    },
-    auth,
-  );
+  assert.equal(result.user.phone, "+77011112233");
+  assert.equal(result.user.role, "passenger");
+  assert.equal(result.user.balance, 0);
+  assert.equal(result.user.phoneVerified, false);
+  assert.equal(result.user.registrationDraft, false);
+  assert.equal(result.user.hasPassword, true);
+  assert.equal(result.user.password, undefined);
+  assert.equal(result.user.passwordHash, undefined);
+  const stored = readStore().users.find(user => user.id === result.user.id);
+  assert.equal(verifyPassword("strong-password", stored.passwordHash), true);
+  const auth = await verifyBearerToken(bearerReq(result.token));
+  assert.equal(auth.user.id, result.user.id);
+  const registered = await submitPassengerRegistrationAsync({ displayName: "Тест Пассажир", city: "Белоусовка" }, auth);
   assert.equal(registered.success, true);
-  assert.equal(registered.user.hasPassword, true);
   assert.equal(registered.user.profileCompleted, true);
-  delete process.env.MTAXI_SMS_RESEND_COOLDOWN_SEC;
+  assert.equal((await passwordLogin({ phone: "7011112233", password: "strong-password" })).success, true);
+  assert.equal((readStore().smsCodes || []).length, 0);
 });
 
 test("verifyBearerToken resolves local user", async () => {
@@ -5423,6 +5332,7 @@ test("acceptOrder rejects low balance and prevents second driver claim", async (
     password: "123456",
   });
   const passengerAuth = { user: passengerLogin.user };
+  await withStoreAsync(async store => { store.settings.intercityEnabled = true; });
   const order = await createPassengerOrderAsync({
     type: "intercity",
     city: "Белоусовка",
@@ -5772,13 +5682,13 @@ test("setPassword updates password with validation", async () => {
   assert.equal(short.success, false);
   assert.equal(short.code, "PASSWORD_TOO_SHORT");
 
-  const saved = await setPasswordAsync({ password: "1234567" }, { user: passenger });
+  const saved = await setPasswordAsync({ password: "12345678" }, { user: passenger });
   assert.equal(saved.success, true);
   assert.equal(saved.user.password, undefined);
   const stored = readStore().users.find((user) => user.id === passenger.id);
   assert.equal(stored.password, undefined);
   assert.equal(isPasswordHash(stored.passwordHash), true);
-  assert.equal(verifyPassword("1234567", stored.passwordHash), true);
+  assert.equal(verifyPassword("12345678", stored.passwordHash), true);
 });
 
 test("deleteCurrentAccountDeep removes user-owned backend data", async () => {
@@ -5802,7 +5712,7 @@ test("deleteCurrentAccountDeep removes user-owned backend data", async () => {
     cardNumber: "4400430043004300",
   }, { user: driver });
   assert.equal(withdrawal.success, true);
-  await requestSmsCode({ phone: driver.phone });
+  await withStoreAsync(async store => { store.smsCodes ||= []; store.smsCodes.push({ id: "legacy-code", phone: driver.phone }); });
   await addFcmTokenAsync({
     userDocPath: `users/${driver.id}`,
     fcmToken: "token-delete-driver",

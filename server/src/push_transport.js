@@ -17,19 +17,29 @@ function stringifyDataPayload(payload = {}) {
 
 function ensureFirebaseApp() {
   if (firebaseAppInitialized) return;
+  const projectId = normalizeString(process.env.FIREBASE_PROJECT_ID) || 'mtaxi-52990';
+  const rawServiceAccount = normalizeString(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const serviceAccount = rawServiceAccount ? JSON.parse(rawServiceAccount) : null;
+  if (serviceAccount && projectId && serviceAccount.project_id !== projectId) {
+    throw new Error('FCM_SERVICE_ACCOUNT_PROJECT_MISMATCH');
+  }
   const { getApps, initializeApp, cert, applicationDefault } = require("firebase-admin/app");
   if (getApps().length > 0) {
+    if (projectId && getApps()[0].options.projectId !== projectId) {
+      throw new Error('FCM_INITIALIZED_PROJECT_MISMATCH');
+    }
     firebaseAppInitialized = true;
     return;
   }
-  const rawServiceAccount = normalizeString(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
   if (rawServiceAccount) {
     initializeApp({
-      credential: cert(JSON.parse(rawServiceAccount)),
+      credential: cert(serviceAccount),
+      ...(projectId ? { projectId } : {}),
     });
   } else {
     initializeApp({
       credential: applicationDefault(),
+      ...(projectId ? { projectId } : {}),
     });
   }
   firebaseAppInitialized = true;

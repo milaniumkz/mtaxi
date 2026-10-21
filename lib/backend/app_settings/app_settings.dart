@@ -5,6 +5,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 
 class AppRuntimeSettings {
   const AppRuntimeSettings({
+    this.intercityEnabled = false,
     this.orderRadiusKm = 10,
     this.orderPendingTtlMin = 20,
     this.driverMinBalanceToTakeOrder = 100,
@@ -28,6 +29,7 @@ class AppRuntimeSettings {
     this.cityFormulaPerKm = 60,
   });
 
+  final bool intercityEnabled;
   final double orderRadiusKm;
   final int orderPendingTtlMin;
   final double driverMinBalanceToTakeOrder;
@@ -84,6 +86,7 @@ class AppRuntimeSettings {
     }
 
     return AppRuntimeSettings(
+      intercityEnabled: data?['intercityEnabled'] == true,
       orderRadiusKm: asDouble(['orderRadiusKm'], defaults.orderRadiusKm),
       orderPendingTtlMin: asInt(
         ['orderPendingTtlMin', 'pendingOrderLifetimeMin'],

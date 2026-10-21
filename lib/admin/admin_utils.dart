@@ -2,7 +2,6 @@ import '/backend/schema/users_record.dart';
 
 const String adminPhoneNumber = '+7 000 000 00 00';
 const String adminPhoneDigits = '70000000000';
-const String adminPassword = 'Dimapuparev19!';
 
 const Set<String> protectedCollections = {
   // Add collection names here to полностью запретить удаление.
@@ -23,9 +22,6 @@ bool isAdminPhone(String? phone) {
 bool isAdminUser(UsersRecord? user) {
   if (user == null) {
     return false;
-  }
-  if (isAdminPhone(user.phoneNumber)) {
-    return true;
   }
   return user.role == 'admin';
 }

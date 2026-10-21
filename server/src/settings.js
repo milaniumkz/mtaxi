@@ -30,12 +30,18 @@ const NUMERIC_SETTING_FIELDS = new Set([
   "orderCommissionPercent",
   "commissionDay",
   "commissionNight",
+  "driverBonusTargetOrders",
+  "driverBonusReward",
 ]);
 
 function runtimeSettingsFromStore(store) {
   const settings = store.settings || {};
   const intercity = store.intercityTariff || {};
   return {
+    intercityEnabled: settings.intercityEnabled === true,
+    driverBonusEnabled: settings.driverBonusEnabled !== false,
+    driverBonusTargetOrders: asNumber(settings.driverBonusTargetOrders) ?? 10,
+    driverBonusReward: asNumber(settings.driverBonusReward) ?? 1000,
     orderRadiusKm: asNumber(settings.orderRadiusKm) ?? 10,
     orderPendingTtlMin:
       asNumber(settings.orderPendingTtlMin) ??
@@ -106,6 +112,13 @@ function updateRuntimeSettingsInStore(store, fields = {}) {
   store.settings ||= {};
   const updated = {};
 
+  for (const key of ['driverBonusEnabled', 'intercityEnabled']) {
+    if (fields[key] === undefined) continue;
+    if (typeof fields[key] !== 'boolean') throw new Error(`SETTING_INVALID:${key}`);
+    updated[key] = fields[key];
+    store.settings[key] = fields[key];
+  }
+
   Object.entries(fields || {}).forEach(([key, value]) => {
     if (!NUMERIC_SETTING_FIELDS.has(key)) return;
     if (value === null || value === undefined || value === "") return;
@@ -113,9 +126,20 @@ function updateRuntimeSettingsInStore(store, fields = {}) {
     if (parsed == null) {
       throw new Error(`SETTING_INVALID:${key}`);
     }
+    if (key === 'driverBonusTargetOrders' && (!Number.isSafeInteger(parsed) || parsed < 0)) {
+      throw new Error(`SETTING_INVALID:${key}`);
+    }
+    if (key === 'driverBonusReward' && (!Number.isFinite(parsed) || parsed < 0)) {
+      throw new Error(`SETTING_INVALID:${key}`);
+    }
     updated[key] = parsed;
     store.settings[key] = parsed;
   });
+
+  if (store.settings.driverBonusEnabled !== false &&
+      (!((store.settings.driverBonusTargetOrders ?? 10) >= 1) || !((store.settings.driverBonusReward ?? 1000) > 0))) {
+    throw new Error('SETTING_INVALID:driverBonusCampaign');
+  }
 
   if (updated.orderPendingTtlMin !== undefined) {
     store.settings.pendingOrderLifetimeMin = updated.orderPendingTtlMin;

@@ -3,8 +3,8 @@ const { asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { publicUser } = require("./users");
 const { addLedger } = require("./payments");
 const { setUserPassword } = require("./passwords");
+const { grantWelcomeBonus, refundCommission: refundDriverCommission } = require("./driver_bonuses");
 
-const ADMIN_PHONE = "+70000000000";
 const ACTIVE_ORDER_STATUSES = new Set([0, 1, 2, 3, 4]);
 const CONTENT_SCHEMAS = {
   politika: ["text"],
@@ -35,7 +35,7 @@ function userPath(user) {
 
 function isAdmin(auth) {
   const user = auth?.user;
-  return user?.role === "admin" || normalizePhone(user?.phone) === ADMIN_PHONE;
+  return user?.role === "admin";
 }
 
 function requireAdmin(auth) {
@@ -144,14 +144,15 @@ function clearOrderRefs(store, order, { refundCommission = false } = {}) {
     if (refundCommission) {
       const refund = asNumber(order.acceptedCommission) || 0;
       if (refund > 0 && order.adminCommissionRefunded !== true) {
-        driver.balance = (asNumber(driver.balance) || 0) + refund;
+        const cashBefore = asNumber(driver.balance) || 0;
+        refundDriverCommission(driver, order);
         addLedger(store, {
           type: "order_commission_refund",
           source: "admin",
           userId: driver.id,
           orderId: order.id,
           amount: refund,
-          balanceBefore: (asNumber(driver.balance) || 0) - refund,
+          balanceBefore: cashBefore,
           balanceAfter: driver.balance,
         });
         order.adminCommissionRefunded = true;
@@ -199,12 +200,24 @@ function adminUpdateUserDocumentInStore(store, data = {}, auth) {
   const user = findUser(store, data.userDocPath);
   if (!user) return { success: false, code: "USER_NOT_FOUND", error: "Пользователь не найден" };
   const before = { ...user };
-  const fields = data.fields || {};
+  const fields = { ...(data.fields || {}) };
+  const password = normalizeString(fields.password);
+  if (password && (password.length < 8 || password.length > 128)) {
+    return { success: false, code: "PASSWORD_LENGTH_INVALID", error: "Пароль должен содержать от 8 до 128 символов" };
+  }
+  delete fields.password;
+  delete fields.passwordHash;
+  delete fields.passwordUpdatedAt;
+  delete fields.authVersion;
   applyFields(user, fields);
+  if (password) {
+    setUserPassword(user, password);
+    user.authVersion = newId("auth");
+  }
   if (fields.vip === true) {
     user.orderDelaySeconds = 0;
   }
-  addAudit(store, auth, "adminUpdateUserDocument", userPath(user), before, { ...user });
+  addAudit(store, auth, "adminUpdateUserDocument", userPath(user), publicUser(before), publicUser(user));
   return { success: true, code: "USER_UPDATED", user: publicUser(user), userDocPath: userPath(user) };
 }
 
@@ -409,6 +422,7 @@ function adminCreateDriverInStore(store, data, auth) {
     setUserPassword(user, password);
   }
   store.users.push(user);
+  if (user.statusDriver === 'approved') grantWelcomeBonus(store, user);
   addAudit(store, auth, "adminCreateDriver", userPath(user), null, { ...user });
   return { success: true, code: "DRIVER_CREATED", user: publicUser(user), userDocPath: userPath(user) };
 }
@@ -484,6 +498,14 @@ function approveDriverInStore(store, data, auth) {
   user.isDriver = true;
   user.statusDriver = status;
   user.driverRegistrationStatus = status === "approved" ? "approved" : status;
+  if (status === 'approved') {
+    if (before.statusDriver === 'approved') {
+      // Existing approved drivers do not receive a retroactive registration reward.
+      user.driverWelcomeBonusGranted = true;
+    } else {
+      grantWelcomeBonus(store, user);
+    }
+  }
   user.updatedAt = new Date().toISOString();
   addAudit(store, auth, "approveDriver", userPath(user), before, { ...user }, { statusDriver: status });
   return { success: true, code: "DRIVER_STATUS_UPDATED", user: publicUser(user), userDocPath: userPath(user) };

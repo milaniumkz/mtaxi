@@ -61,6 +61,7 @@ class DeliveryTaxiMap extends StatefulWidget {
   final latlng.LatLng? initialToCoords;
   final String? priceText;
   final String? cityName;
+  final bool intercityEnabled;
   final bool enableAutoLocation;
   final bool enableRemoteGeocoding;
   final bool enableTileLayer;
@@ -96,6 +97,7 @@ class DeliveryTaxiMap extends StatefulWidget {
     this.initialToCoords,
     this.priceText = '',
     this.cityName = '',
+    this.intercityEnabled = false,
     this.enableAutoLocation = true,
     this.enableRemoteGeocoding = true,
     this.enableTileLayer = true,
@@ -195,7 +197,10 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
     super.initState();
     _mapController = MapController();
 
-    _serviceType = widget.initialServiceType ?? 'taxi';
+    _serviceType =
+        !widget.intercityEnabled && widget.initialServiceType == 'intercity'
+            ? 'taxi'
+            : widget.initialServiceType ?? 'taxi';
     _fromController.text = widget.initialFromAddress ?? '';
     _toController.text = widget.initialToAddress ?? '';
     _commentController.text = widget.initialComment ?? '';
@@ -1395,6 +1400,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   }
 
   void _changeServiceType(String type) {
+    if (type == 'intercity' && !widget.intercityEnabled) return;
     setState(() {
       _serviceType = type;
       if (type != 'intercity') {
@@ -1654,58 +1660,59 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  if (widget.intercityEnabled) const SizedBox(width: 8),
                   // Межгород
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _changeServiceType('intercity'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _serviceType == 'intercity'
-                              ? darkSurface
-                              : darkSurface,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: _serviceType == 'intercity'
-                                ? mintColor
-                                : fieldBorder,
-                            width: 1,
+                  if (widget.intercityEnabled)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _changeServiceType('intercity'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
-                        ),
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.alt_route,
-                                  color: _serviceType == 'intercity'
-                                      ? mintColor
-                                      : _getIntercityColor(),
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _tr('Межгород', 'Қалааралық'),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
+                          decoration: BoxDecoration(
+                            color: _serviceType == 'intercity'
+                                ? darkSurface
+                                : darkSurface,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: _serviceType == 'intercity'
+                                  ? mintColor
+                                  : fieldBorder,
+                              width: 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.alt_route,
                                     color: _serviceType == 'intercity'
                                         ? mintColor
                                         : _getIntercityColor(),
+                                    size: 20,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _tr('Межгород', 'Қалааралық'),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: _serviceType == 'intercity'
+                                          ? mintColor
+                                          : _getIntercityColor(),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ]),
               ],
             ),

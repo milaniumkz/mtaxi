@@ -43,11 +43,34 @@ const _routes = [
 ];
 
 void main() {
+  testWidgets(
+      'disabled intercity is hidden and a saved selection falls back to taxi',
+      (tester) async {
+    await tester.pumpWidget(_wrap(const DeliveryTaxiMap(
+      intercityEnabled: false,
+      initialServiceType: 'intercity',
+      enableAutoLocation: false,
+      enableRemoteGeocoding: false,
+      enableTileLayer: false,
+      intercityRoutesOverride: _routes,
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('Межгород'), findsNothing);
+    expect(find.text('Такси'), findsOneWidget);
+    expect(find.text('Доставка'), findsOneWidget);
+    expect(
+        find.byWidgetPredicate((widget) =>
+            widget is TextField &&
+            widget.decoration?.hintText == 'Куда (выбор маршрута)'),
+        findsNothing);
+  });
+
   testWidgets('intercity uses route selector and disables manual search',
       (tester) async {
     await tester.pumpWidget(
       _wrap(
         const DeliveryTaxiMap(
+          intercityEnabled: true,
           initialServiceType: 'intercity',
           enableAutoLocation: false,
           enableRemoteGeocoding: false,
@@ -85,6 +108,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         DeliveryTaxiMap(
+          intercityEnabled: true,
           initialServiceType: 'intercity',
           initialFromAddress: 'Усть-Каменогорск, Абая 1',
           enableAutoLocation: false,
@@ -117,6 +141,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         DeliveryTaxiMap(
+          intercityEnabled: true,
           initialServiceType: 'intercity',
           enableAutoLocation: false,
           enableRemoteGeocoding: false,
@@ -150,6 +175,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         DeliveryTaxiMap(
+          intercityEnabled: true,
           initialServiceType: 'intercity',
           enableAutoLocation: false,
           enableRemoteGeocoding: false,

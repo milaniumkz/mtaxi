@@ -67,7 +67,7 @@ function parseFirebaseServiceAccount(raw) {
 }
 
 function isLocalSmsProvider(env) {
-  const provider = normalize(env.MTAXI_SMS_PROVIDER || "local").toLowerCase();
+  const provider = normalize(env.MTAXI_SMS_PROVIDER || "disabled").toLowerCase();
   return provider === "local" || provider === "console" || provider === "dev";
 }
 
@@ -480,7 +480,7 @@ async function runPreflight({
   const fcmEnabled = normalize(env.MTAXI_FCM_ENABLED).toLowerCase() === "true";
   const allowSimulatedPush = isTruthy(env.MTAXI_ALLOW_SIMULATED_PUSH);
   const isProduction = normalize(env.NODE_ENV).toLowerCase() === "production";
-  const smsProvider = normalize(env.MTAXI_SMS_PROVIDER || "local").toLowerCase();
+  const smsProvider = normalize(env.MTAXI_SMS_PROVIDER || "disabled").toLowerCase();
   const allowLocalSms = isTruthy(env.MTAXI_ALLOW_LOCAL_SMS);
   const smsDevReturnCode = isTruthy(env.MTAXI_SMS_DEV_RETURN_CODE);
   const paymentProvider = normalize(env.MTAXI_PAYMENT_PROVIDER || "local").toLowerCase();
@@ -559,7 +559,7 @@ async function runPreflight({
   );
   addCheck(
     checks,
-    ["local", "dev", "redirect"].includes(paymentProvider),
+    ["local", "dev", "redirect", "kaspi_manual"].includes(paymentProvider),
     "MTAXI_PAYMENT_PROVIDER",
     "payment provider is known",
   );
@@ -633,7 +633,7 @@ async function runPreflight({
   );
   addCheck(
     checks,
-    ["local", "console", "dev", "http"].includes(smsProvider),
+    ["disabled", "local", "console", "dev", "http"].includes(smsProvider),
     "MTAXI_SMS_PROVIDER",
     "SMS provider is known",
   );
@@ -728,6 +728,12 @@ async function runPreflight({
         "GOOGLE_APPLICATION_CREDENTIALS",
         "Firebase Admin credentials file exists and contains a valid service account JSON",
       );
+      const expectedProject = normalize(env.FIREBASE_PROJECT_ID);
+      if (credentialsFileValid && expectedProject) {
+        const account = await readFirebaseServiceAccountFile(credentialsPath);
+        addCheck(checks, account.project_id === expectedProject,
+          'FIREBASE_PROJECT_ID', 'FCM credentials belong to the configured Firebase project');
+      }
     } catch (error) {
       addCheck(
         checks,
@@ -736,6 +742,10 @@ async function runPreflight({
         error?.message || "Firebase Admin credentials file is not readable",
       );
     }
+  }
+  if (fcmEnabled && serviceAccount && normalize(env.FIREBASE_PROJECT_ID)) {
+    addCheck(checks, serviceAccount.project_id === normalize(env.FIREBASE_PROJECT_ID),
+      'FIREBASE_PROJECT_ID', 'FCM credentials belong to the configured Firebase project');
   }
   addCheck(
     checks,

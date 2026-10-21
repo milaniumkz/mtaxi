@@ -47,6 +47,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
   final _passwordFieldKey = GlobalKey();
   final _passwordRepeatFieldKey = GlobalKey();
   bool _isSubmittingRegistration = false;
+  bool get _needsPassword =>
+      currentUserDocument?.snapshotData['hasPassword'] != true;
 
   String _tr({
     required String ru,
@@ -68,6 +70,7 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
   }
 
   String? _passwordRepeatFieldError() {
+    if (!_needsPassword) return null;
     final password = _model.passwordController?.text ?? '';
     final repeat = _model.passwordRepeatController?.text ?? '';
     if (repeat.trim().isEmpty) {
@@ -262,11 +265,11 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
       );
       return;
     }
-    if (password.isEmpty) {
+    if (_needsPassword && password.length < 8) {
       _scrollFieldIntoView(_passwordFieldKey);
       await _showSaveErrorDialog(
         _tr(
-          ru: 'Придумайте пароль',
+          ru: 'Пароль должен быть минимум 8 символов',
           kk: 'Құпиясөз ойлап табыңыз',
         ),
       );
@@ -1224,242 +1227,262 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                               },
                                             ),
                                           ),
-                                          Padding(
-                                            padding: const EdgeInsetsDirectional
-                                                .fromSTEB(8.0, 0.0, 8.0, 8.0),
-                                            child: TextFormField(
-                                              key: _passwordFieldKey,
-                                              controller:
-                                                  _model.passwordController,
-                                              focusNode:
-                                                  _model.passwordFocusNode,
-                                              onTap: () => _scrollFieldIntoView(
-                                                  _passwordFieldKey),
-                                              autofocus: false,
-                                              obscureText:
-                                                  !_model.passwordVisibility,
-                                              decoration: InputDecoration(
-                                                labelText: _tr(
-                                                  ru: 'Придумайте пароль',
-                                                  kk: 'Құпиясөз ойлап табыңыз',
+                                          if (_needsPassword)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      8.0, 0.0, 8.0, 8.0),
+                                              child: TextFormField(
+                                                key: _passwordFieldKey,
+                                                controller:
+                                                    _model.passwordController,
+                                                focusNode:
+                                                    _model.passwordFocusNode,
+                                                onTap: () =>
+                                                    _scrollFieldIntoView(
+                                                        _passwordFieldKey),
+                                                autofocus: false,
+                                                obscureText:
+                                                    !_model.passwordVisibility,
+                                                decoration: InputDecoration(
+                                                  labelText: _tr(
+                                                    ru: 'Пароль должен быть минимум 8 символов',
+                                                    kk: 'Құпиясөз ойлап табыңыз',
+                                                  ),
+                                                  floatingLabelBehavior:
+                                                      FloatingLabelBehavior
+                                                          .always,
+                                                  labelStyle: FlutterFlowTheme
+                                                          .of(context)
+                                                      .labelMedium
+                                                      .override(
+                                                        font: GoogleFonts
+                                                            .readexPro(),
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .primaryText,
+                                                        letterSpacing: 0.0,
+                                                      ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .primary,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  errorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedErrorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  contentPadding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(14.0, 18.0,
+                                                          14.0, 14.0),
+                                                  suffixIcon: InkWell(
+                                                    onTap: () => safeSetState(
+                                                      () => _model
+                                                              .passwordVisibility =
+                                                          !_model
+                                                              .passwordVisibility,
+                                                    ),
+                                                    focusNode: FocusNode(
+                                                        skipTraversal: true),
+                                                    child: Icon(
+                                                      _model.passwordVisibility
+                                                          ? Icons
+                                                              .visibility_outlined
+                                                          : Icons
+                                                              .visibility_off_outlined,
+                                                      size: 22.0,
+                                                    ),
+                                                  ),
                                                 ),
-                                                floatingLabelBehavior:
-                                                    FloatingLabelBehavior
-                                                        .always,
-                                                labelStyle:
+                                                style:
                                                     FlutterFlowTheme.of(context)
-                                                        .labelMedium
+                                                        .bodyMedium
                                                         .override(
                                                           font: GoogleFonts
                                                               .readexPro(),
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
                                                           letterSpacing: 0.0,
                                                         ),
-                                                enabledBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primary,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                errorBorder: OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedErrorBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                contentPadding:
-                                                    const EdgeInsetsDirectional
-                                                        .fromSTEB(
-                                                        14.0, 18.0, 14.0, 14.0),
-                                                suffixIcon: InkWell(
-                                                  onTap: () => safeSetState(
-                                                    () => _model
-                                                            .passwordVisibility =
-                                                        !_model
-                                                            .passwordVisibility,
-                                                  ),
-                                                  focusNode: FocusNode(
-                                                      skipTraversal: true),
-                                                  child: Icon(
-                                                    _model.passwordVisibility
-                                                        ? Icons
-                                                            .visibility_outlined
-                                                        : Icons
-                                                            .visibility_off_outlined,
-                                                    size: 22.0,
-                                                  ),
-                                                ),
+                                                keyboardType: TextInputType
+                                                    .visiblePassword,
+                                                validator: _model
+                                                    .passwordControllerValidator
+                                                    .asValidator(context),
                                               ),
-                                              style: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font:
-                                                        GoogleFonts.readexPro(),
-                                                    letterSpacing: 0.0,
-                                                  ),
-                                              keyboardType:
-                                                  TextInputType.visiblePassword,
-                                              validator: _model
-                                                  .passwordControllerValidator
-                                                  .asValidator(context),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsetsDirectional
-                                                .fromSTEB(8.0, 0.0, 8.0, 0.0),
-                                            child: TextFormField(
-                                              key: _passwordRepeatFieldKey,
-                                              controller: _model
-                                                  .passwordRepeatController,
-                                              focusNode: _model
-                                                  .passwordRepeatFocusNode,
-                                              onTap: () => _scrollFieldIntoView(
-                                                  _passwordRepeatFieldKey),
-                                              autofocus: false,
-                                              obscureText: !_model
-                                                  .passwordRepeatVisibility,
-                                              decoration: InputDecoration(
-                                                labelText: _tr(
-                                                  ru: 'Повторите пароль',
-                                                  kk: 'Құпиясөзді қайталаңыз',
+                                          if (_needsPassword)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      8.0, 0.0, 8.0, 0.0),
+                                              child: TextFormField(
+                                                key: _passwordRepeatFieldKey,
+                                                controller: _model
+                                                    .passwordRepeatController,
+                                                focusNode: _model
+                                                    .passwordRepeatFocusNode,
+                                                onTap: () =>
+                                                    _scrollFieldIntoView(
+                                                        _passwordRepeatFieldKey),
+                                                autofocus: false,
+                                                obscureText: !_model
+                                                    .passwordRepeatVisibility,
+                                                decoration: InputDecoration(
+                                                  labelText: _tr(
+                                                    ru: 'Повторите пароль',
+                                                    kk: 'Құпиясөзді қайталаңыз',
+                                                  ),
+                                                  floatingLabelBehavior:
+                                                      FloatingLabelBehavior
+                                                          .always,
+                                                  labelStyle: FlutterFlowTheme
+                                                          .of(context)
+                                                      .labelMedium
+                                                      .override(
+                                                        font: GoogleFonts
+                                                            .readexPro(),
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .primaryText,
+                                                        letterSpacing: 0.0,
+                                                      ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .primary,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  errorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedErrorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  contentPadding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(14.0, 18.0,
+                                                          14.0, 14.0),
+                                                  suffixIcon: InkWell(
+                                                    onTap: () => safeSetState(
+                                                      () => _model
+                                                              .passwordRepeatVisibility =
+                                                          !_model
+                                                              .passwordRepeatVisibility,
+                                                    ),
+                                                    focusNode: FocusNode(
+                                                        skipTraversal: true),
+                                                    child: Icon(
+                                                      _model.passwordRepeatVisibility
+                                                          ? Icons
+                                                              .visibility_outlined
+                                                          : Icons
+                                                              .visibility_off_outlined,
+                                                      size: 22.0,
+                                                    ),
+                                                  ),
                                                 ),
-                                                floatingLabelBehavior:
-                                                    FloatingLabelBehavior
-                                                        .always,
-                                                labelStyle:
+                                                style:
                                                     FlutterFlowTheme.of(context)
-                                                        .labelMedium
+                                                        .bodyMedium
                                                         .override(
                                                           font: GoogleFonts
                                                               .readexPro(),
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
                                                           letterSpacing: 0.0,
                                                         ),
-                                                enabledBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primary,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                errorBorder: OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedErrorBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                contentPadding:
-                                                    const EdgeInsetsDirectional
-                                                        .fromSTEB(
-                                                        14.0, 18.0, 14.0, 14.0),
-                                                suffixIcon: InkWell(
-                                                  onTap: () => safeSetState(
-                                                    () => _model
-                                                            .passwordRepeatVisibility =
-                                                        !_model
-                                                            .passwordRepeatVisibility,
-                                                  ),
-                                                  focusNode: FocusNode(
-                                                      skipTraversal: true),
-                                                  child: Icon(
-                                                    _model.passwordRepeatVisibility
-                                                        ? Icons
-                                                            .visibility_outlined
-                                                        : Icons
-                                                            .visibility_off_outlined,
-                                                    size: 22.0,
-                                                  ),
-                                                ),
+                                                keyboardType: TextInputType
+                                                    .visiblePassword,
+                                                validator: _model
+                                                    .passwordRepeatControllerValidator
+                                                    .asValidator(context),
                                               ),
-                                              style: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font:
-                                                        GoogleFonts.readexPro(),
-                                                    letterSpacing: 0.0,
-                                                  ),
-                                              keyboardType:
-                                                  TextInputType.visiblePassword,
-                                              validator: _model
-                                                  .passwordRepeatControllerValidator
-                                                  .asValidator(context),
                                             ),
-                                          ),
                                         ],
                                       ),
                                     ),

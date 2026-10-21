@@ -3,6 +3,7 @@ const { asDate, asNumber, normalizePhone, normalizeString } = require("./utils/v
 const { addLedger } = require("./payments");
 const { queueOrderPushEventInStore } = require("./push");
 const { requireAdmin } = require("./admin");
+const { recordCompletedOrder, debitCommission, refundCommission } = require("./driver_bonuses");
 
 const ORDER_STATUS = Object.freeze({
   OPEN: 0,
@@ -171,6 +172,7 @@ function calculateOrderQuoteFromData({
 
 async function calculateOrderQuoteAsync(data = {}) {
   const store = await readStoreAsync();
+  if (getOrderType({ type: data.type }) === "intercity" && store.settings?.intercityEnabled !== true) return intercityDisabled();
   return calculateOrderQuoteFromStore(store, data);
 }
 
@@ -216,6 +218,7 @@ async function createPassengerOrderAsync(data = {}, auth) {
 }
 
 function createPassengerOrderInStore(store, data, auth, { type, from, to, city }) {
+  if (type === "intercity" && store.settings?.intercityEnabled !== true) return intercityDisabled();
   const user = store.users.find((item) => item.id === auth.user.id);
   const active = store.orders.find(
     (order) => order.id === user?.activePassengerOrderId && isActivePassengerOrder(order),
@@ -353,6 +356,7 @@ async function adminCreateOrderAsync(data = {}, auth) {
 }
 
 function adminCreateOrderInStore(store, data, auth, { type, from, to, city }) {
+  if (type === "intercity" && store.settings?.intercityEnabled !== true) return intercityDisabled();
   store.users ||= [];
   store.orders ||= [];
   const user = findOrCreateAdminPassenger(store, data);
@@ -736,7 +740,7 @@ function acceptOrderInStore(store, auth, orderId) {
   const isVipDriver = driver.vip === true;
   const requiredBalance = isVipDriver ? 0 : requiredDriverBalance(order, store.settings || {});
   const balance = asNumber(driver.balance) || 0;
-  if (balance < requiredBalance) {
+  if (!debitCommission(driver, order, requiredBalance)) {
     return {
       success: false,
       accepted: false,
@@ -747,7 +751,6 @@ function acceptOrderInStore(store, auth, orderId) {
     };
   }
 
-  driver.balance = balance - requiredBalance;
   driver.activeDriverOrderId = order.id;
   driver.hasActiveDriverOrder = true;
   driver.roleState = "DRIVER_ON_TRIP";
@@ -765,6 +768,8 @@ function acceptOrderInStore(store, auth, orderId) {
       userId: driver.id,
       orderId: order.id,
       amount: requiredBalance,
+      bonusAmount: order.acceptedBonusCommission,
+      cashAmount: order.acceptedCashCommission,
       balanceBefore: balance,
       balanceAfter: driver.balance,
     });
@@ -831,7 +836,7 @@ function cancelPassengerOrderInStore(store, auth, orderId) {
     const refund = asNumber(order.acceptedCommission) || 0;
     if (refund > 0) {
       const before = asNumber(driver.balance) || 0;
-      driver.balance = before + refund;
+      refundCommission(driver, order);
       addLedger(store, {
         type: "order_commission_refund",
         userId: driver.id,
@@ -923,6 +928,7 @@ function advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus) {
   }
   if (nextStatus === ORDER_STATUS.COMPLETED) {
     order.completedAt = new Date().toISOString();
+    recordCompletedOrder(store, driver, order);
     closeActiveOrderRefs(store, order);
     queueOrderPushEventInStore(store, {
       order,
@@ -974,3 +980,7 @@ module.exports = {
   cancelPassengerOrderAsync,
   advanceDriverOrderStatusAsync,
 };
+
+function intercityDisabled() {
+  return { success: false, code: "INTERCITY_DISABLED", error: "Межгород временно отключён" };
+}

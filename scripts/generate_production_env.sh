@@ -23,25 +23,10 @@ random_hex() {
 }
 
 require_env MTAXI_PUBLIC_BASE_URL
-require_env MTAXI_SMS_HTTP_URL
 require_env MTAXI_PAYMENT_URL_TEMPLATE
 
 mtaxi_validate_remote_backend_url "$MTAXI_PUBLIC_BASE_URL" "MTaxi production env generation failed" >/dev/null
-mtaxi_validate_remote_backend_url "$MTAXI_SMS_HTTP_URL" "MTaxi production env generation failed" >/dev/null
 mtaxi_validate_remote_backend_url "$MTAXI_PAYMENT_URL_TEMPLATE" "MTaxi production env generation failed" >/dev/null
-
-sms_method="$(printf '%s' "${MTAXI_SMS_HTTP_METHOD:-POST}" | tr '[:lower:]' '[:upper:]')"
-case "$sms_method" in
-  GET|POST|PUT|PATCH) ;;
-  *) fail "MTAXI_SMS_HTTP_METHOD must be GET, POST, PUT or PATCH" ;;
-esac
-
-default_sms_body_template='{"phone":"{{phone}}","message":"{{message}}","code":"{{code}}"}'
-sms_body_template="${MTAXI_SMS_HTTP_BODY_TEMPLATE:-$default_sms_body_template}"
-case "$sms_body_template" in
-  *'{{phone}}'*'{{message}}'*|*'{{phone}}'*'{{code}}'*) ;;
-  *) fail "MTAXI_SMS_HTTP_BODY_TEMPLATE must contain {{phone}} and {{message}} or {{code}}" ;;
-esac
 
 case "$MTAXI_PAYMENT_URL_TEMPLATE" in
   *'{{paymentId}}'*'{{amount}}'*) ;;
@@ -85,11 +70,8 @@ mkdir -p "$(dirname "$output_path")"
       MTAXI_TOKEN_SECRET=*) printf 'MTAXI_TOKEN_SECRET=%s\n' "$token_secret" ;;
       POSTGRES_PASSWORD=*) printf 'POSTGRES_PASSWORD=%s\n' "$postgres_password" ;;
       DATABASE_URL=*) printf 'DATABASE_URL=postgres://mtaxi:%s@postgres:5432/mtaxi\n' "$postgres_password" ;;
-      MTAXI_SMS_HTTP_URL=*) printf 'MTAXI_SMS_HTTP_URL=%s\n' "$MTAXI_SMS_HTTP_URL" ;;
-      MTAXI_SMS_HTTP_METHOD=*) printf 'MTAXI_SMS_HTTP_METHOD=%s\n' "$sms_method" ;;
-      MTAXI_SMS_HTTP_BEARER_TOKEN=*) printf 'MTAXI_SMS_HTTP_BEARER_TOKEN=%s\n' "${MTAXI_SMS_HTTP_BEARER_TOKEN:-}" ;;
-      MTAXI_SMS_HTTP_HEADERS=*) printf 'MTAXI_SMS_HTTP_HEADERS=%s\n' "${MTAXI_SMS_HTTP_HEADERS:-}" ;;
-      MTAXI_SMS_HTTP_BODY_TEMPLATE=*) printf 'MTAXI_SMS_HTTP_BODY_TEMPLATE=%s\n' "$sms_body_template" ;;
+      MTAXI_SMS_PROVIDER=*) printf 'MTAXI_SMS_PROVIDER=disabled\n' ;;
+      MTAXI_SMS_HTTP_*=*) printf '%s=\n' "${line%%=*}" ;;
       MTAXI_PAYMENT_URL_TEMPLATE=*) printf 'MTAXI_PAYMENT_URL_TEMPLATE=%s\n' "$MTAXI_PAYMENT_URL_TEMPLATE" ;;
       MTAXI_PAYMENT_CALLBACK_SECRET=*) printf 'MTAXI_PAYMENT_CALLBACK_SECRET=%s\n' "$payment_secret" ;;
       MTAXI_SEED_ADMIN_ON_START=*) printf 'MTAXI_SEED_ADMIN_ON_START=%s\n' "$seed_admin_on_start" ;;
@@ -97,6 +79,7 @@ mkdir -p "$(dirname "$output_path")"
       MTAXI_ADMIN_PASSWORD=*) printf 'MTAXI_ADMIN_PASSWORD=%s\n' "${MTAXI_ADMIN_PASSWORD:-replace-with-admin-password}" ;;
       MTAXI_ADMIN_NAME=*) printf 'MTAXI_ADMIN_NAME=%s\n' "${MTAXI_ADMIN_NAME:-Администратор}" ;;
       MTAXI_ADMIN_CITY=*) printf 'MTAXI_ADMIN_CITY=%s\n' "${MTAXI_ADMIN_CITY:-Белоусовка}" ;;
+      FIREBASE_PROJECT_ID=*) printf 'FIREBASE_PROJECT_ID=%s\n' "${FIREBASE_PROJECT_ID:-mtaxi-52990}" ;;
       FIREBASE_SERVICE_ACCOUNT_JSON=*) [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}${GOOGLE_APPLICATION_CREDENTIALS:-}" ] || printf '%s\n' "$line" ;;
       '# GOOGLE_APPLICATION_CREDENTIALS='*) [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}${GOOGLE_APPLICATION_CREDENTIALS:-}" ] || printf '%s\n' "$line" ;;
       *) printf '%s\n' "$line" ;;

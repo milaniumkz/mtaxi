@@ -59,6 +59,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   DocumentReference? _entryActiveOrderRef;
   int _quoteRequestId = 0;
   Timer? _localPriceDebounce;
+  StreamSubscription<AppRuntimeSettings>? _settingsSubscription;
+  bool _intercityEnabled = false;
 
   bool get _shouldPreservePassengerOrderState {
     final activeOrderRef = getEffectivePassengerOrderRef(currentUserDocument);
@@ -318,6 +320,21 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => HomePageModel());
+    _settingsSubscription = watchAppRuntimeSettings().listen((settings) {
+      if (!mounted) return;
+      setState(() {
+        _intercityEnabled = settings.intercityEnabled;
+        if (!_intercityEnabled && FFAppState().serviceType == 'intercity') {
+          FFAppState().serviceType = 'taxi';
+          FFAppState().taxi = true;
+          FFAppState().delivery = false;
+          FFAppState().kudaString = '';
+          FFAppState().kudaCoords = null;
+          _intercityFixedPrice = null;
+          FFAppState().update(() {});
+        }
+      });
+    });
 
     getCurrentUserLocation(
       defaultLocation: _fallbackPassengerLocation,
@@ -357,6 +374,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   @override
   void dispose() {
     _localPriceDebounce?.cancel();
+    _settingsSubscription?.cancel();
     _model.dispose();
 
     super.dispose();
@@ -438,7 +456,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
           top: true,
           bottom: false,
           child: custom_widgets.DeliveryTaxiMap(
-            key: ValueKey('delivery_taxi_map_${FFAppState().serviceType}'),
+            key: ValueKey(
+                'delivery_taxi_map_${FFAppState().serviceType}_$_intercityEnabled'),
+            intercityEnabled: _intercityEnabled,
             width: MediaQuery.sizeOf(context).width * 1.0,
             height: MediaQuery.sizeOf(context).height,
             priceText: FFAppState().price,

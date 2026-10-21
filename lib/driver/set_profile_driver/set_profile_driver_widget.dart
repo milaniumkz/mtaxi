@@ -106,6 +106,8 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final _firstNameFieldKey = GlobalKey();
   final _lastNameFieldKey = GlobalKey();
+  bool get _needsPassword =>
+      currentUserDocument?.snapshotData['hasPassword'] != true;
   final _passwordFieldKey = GlobalKey();
   final _passwordRepeatFieldKey = GlobalKey();
   final _plateFieldKey = GlobalKey();
@@ -161,6 +163,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   }
 
   String? _passwordRepeatFieldError(BuildContext context) {
+    if (!_needsPassword) return null;
     if (!_didAttemptSubmit) {
       return null;
     }
@@ -215,7 +218,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
       return _firstNameFieldKey;
     }
     if (_plateFieldError(context) != null) return _plateFieldKey;
-    if ((_model.textController3?.text ?? '').trim().isEmpty) {
+    if (_needsPassword && (_model.textController3?.text ?? '').trim().isEmpty) {
       return _passwordFieldKey;
     }
     if (_passwordRepeatFieldError(context) != null) {
@@ -253,10 +256,11 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
             kk: 'Тізімнен қалаңызды немесе ауылыңызды таңдаңыз',
           )
         : null);
-    addIf(_requiredFieldError(
-      _model.textController3?.text ?? '',
-      _tr(context, ru: 'Придумайте пароль', kk: 'Құпиясөз ойлап табыңыз'),
-    ));
+    if (_needsPassword)
+      addIf(_requiredFieldError(
+        _model.textController3?.text ?? '',
+        _tr(context, ru: 'Придумайте пароль', kk: 'Құпиясөз ойлап табыңыз'),
+      ));
     addIf(_passwordRepeatFieldError(context));
     return errors.toSet().toList();
   }
@@ -1760,45 +1764,59 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                             ),
                           ],
                         ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  15.0, 5.0, 15.0, 0.0),
-                              child: Container(
-                                width: MediaQuery.sizeOf(context).width * 0.8,
-                                child: TextFormField(
-                                  key: _passwordFieldKey,
-                                  controller: _model.textController3,
-                                  focusNode: _model.textFieldFocusNode3,
-                                  onChanged: (_) {
-                                    if (_didAttemptSubmit) safeSetState(() {});
-                                  },
-                                  onTap: () =>
-                                      _scrollFieldIntoView(_passwordFieldKey),
-                                  autofocus: false,
-                                  obscureText: !_model.passwordVisibility1,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        FFLocalizations.of(context).getText(
-                                      'z8p3pkmb' /* Придумайте пароль */,
-                                    ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
-                                    errorText: _requiredFieldError(
-                                      _model.textController3?.text ?? '',
-                                      _tr(
-                                        context,
-                                        ru: 'Придумайте пароль',
-                                        kk: 'Құпиясөз ойлап табыңыз',
+                      if (_needsPassword)
+                        Row(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsetsDirectional.fromSTEB(
+                                    15.0, 5.0, 15.0, 0.0),
+                                child: Container(
+                                  width: MediaQuery.sizeOf(context).width * 0.8,
+                                  child: TextFormField(
+                                    key: _passwordFieldKey,
+                                    controller: _model.textController3,
+                                    focusNode: _model.textFieldFocusNode3,
+                                    onChanged: (_) {
+                                      if (_didAttemptSubmit)
+                                        safeSetState(() {});
+                                    },
+                                    onTap: () =>
+                                        _scrollFieldIntoView(_passwordFieldKey),
+                                    autofocus: false,
+                                    obscureText: !_model.passwordVisibility1,
+                                    decoration: InputDecoration(
+                                      labelText:
+                                          FFLocalizations.of(context).getText(
+                                        'z8p3pkmb' /* Придумайте пароль */,
                                       ),
-                                    ),
-                                    labelStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
+                                      errorText: _requiredFieldError(
+                                        _model.textController3?.text ?? '',
+                                        _tr(
+                                          context,
+                                          ru: 'Придумайте пароль',
+                                          kk: 'Құпиясөз ойлап табыңыз',
+                                        ),
+                                      ),
+                                      labelStyle: FlutterFlowTheme.of(context)
+                                          .labelMedium
+                                          .override(
+                                            font: GoogleFonts.readexPro(
+                                              fontWeight:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontWeight,
+                                              fontStyle:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontStyle,
+                                            ),
+                                            color: FlutterFlowTheme.of(context)
+                                                .primaryText,
+                                            letterSpacing: 0.0,
                                             fontWeight:
                                                 FlutterFlowTheme.of(context)
                                                     .labelMedium
@@ -1808,22 +1826,22 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                                                     .labelMedium
                                                     .fontStyle,
                                           ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    hintStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
+                                      hintStyle: FlutterFlowTheme.of(context)
+                                          .labelMedium
+                                          .override(
+                                            font: GoogleFonts.readexPro(
+                                              fontWeight:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontWeight,
+                                              fontStyle:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontStyle,
+                                            ),
+                                            color: FlutterFlowTheme.of(context)
+                                                .primaryText,
+                                            letterSpacing: 0.0,
                                             fontWeight:
                                                 FlutterFlowTheme.of(context)
                                                     .labelMedium
@@ -1833,131 +1851,140 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                                                     .labelMedium
                                                     .fontStyle,
                                           ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
                                           color: FlutterFlowTheme.of(context)
-                                              .primaryText,
+                                              .alternate,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: FlutterFlowTheme.of(context)
+                                              .primary,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      errorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: FlutterFlowTheme.of(context)
+                                              .error,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      focusedErrorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: FlutterFlowTheme.of(context)
+                                              .error,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      contentPadding:
+                                          EdgeInsetsDirectional.fromSTEB(
+                                              14.0, 18.0, 14.0, 14.0),
+                                      suffixIcon: InkWell(
+                                        onTap: () async {
+                                          safeSetState(() =>
+                                              _model.passwordVisibility1 =
+                                                  !_model.passwordVisibility1);
+                                        },
+                                        focusNode:
+                                            FocusNode(skipTraversal: true),
+                                        child: Icon(
+                                          _model.passwordVisibility1
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .override(
+                                          font: GoogleFonts.readexPro(
+                                            fontWeight:
+                                                FlutterFlowTheme.of(context)
+                                                    .bodyMedium
+                                                    .fontWeight,
+                                            fontStyle:
+                                                FlutterFlowTheme.of(context)
+                                                    .bodyMedium
+                                                    .fontStyle,
+                                          ),
                                           letterSpacing: 0.0,
                                           fontWeight:
                                               FlutterFlowTheme.of(context)
-                                                  .labelMedium
+                                                  .bodyMedium
                                                   .fontWeight,
                                           fontStyle:
                                               FlutterFlowTheme.of(context)
-                                                  .labelMedium
+                                                  .bodyMedium
                                                   .fontStyle,
                                         ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedErrorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    contentPadding:
-                                        EdgeInsetsDirectional.fromSTEB(
-                                            14.0, 18.0, 14.0, 14.0),
-                                    suffixIcon: InkWell(
-                                      onTap: () async {
-                                        safeSetState(() =>
-                                            _model.passwordVisibility1 =
-                                                !_model.passwordVisibility1);
-                                      },
-                                      focusNode: FocusNode(skipTraversal: true),
-                                      child: Icon(
-                                        _model.passwordVisibility1
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                        size: 22,
-                                      ),
-                                    ),
+                                    keyboardType: TextInputType.visiblePassword,
+                                    validator: _model.textController3Validator
+                                        .asValidator(context),
                                   ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.readexPro(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                  keyboardType: TextInputType.visiblePassword,
-                                  validator: _model.textController3Validator
-                                      .asValidator(context),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  15.0, 5.0, 15.0, 0.0),
-                              child: Container(
-                                width: MediaQuery.sizeOf(context).width * 0.8,
-                                child: TextFormField(
-                                  key: _passwordRepeatFieldKey,
-                                  controller: _model.textController4,
-                                  focusNode: _model.textFieldFocusNode4,
-                                  onChanged: (_) {
-                                    if (_didAttemptSubmit) safeSetState(() {});
-                                  },
-                                  onTap: () => _scrollFieldIntoView(
-                                      _passwordRepeatFieldKey),
-                                  autofocus: false,
-                                  obscureText: !_model.passwordVisibility2,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        FFLocalizations.of(context).getText(
-                                      '3u2799x2' /* Повторите пароль */,
-                                    ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
-                                    errorText:
-                                        _passwordRepeatFieldError(context),
-                                    labelStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
+                          ],
+                        ),
+                      if (_needsPassword)
+                        Row(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsetsDirectional.fromSTEB(
+                                    15.0, 5.0, 15.0, 0.0),
+                                child: Container(
+                                  width: MediaQuery.sizeOf(context).width * 0.8,
+                                  child: TextFormField(
+                                    key: _passwordRepeatFieldKey,
+                                    controller: _model.textController4,
+                                    focusNode: _model.textFieldFocusNode4,
+                                    onChanged: (_) {
+                                      if (_didAttemptSubmit)
+                                        safeSetState(() {});
+                                    },
+                                    onTap: () => _scrollFieldIntoView(
+                                        _passwordRepeatFieldKey),
+                                    autofocus: false,
+                                    obscureText: !_model.passwordVisibility2,
+                                    decoration: InputDecoration(
+                                      labelText:
+                                          FFLocalizations.of(context).getText(
+                                        '3u2799x2' /* Повторите пароль */,
+                                      ),
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
+                                      errorText:
+                                          _passwordRepeatFieldError(context),
+                                      labelStyle: FlutterFlowTheme.of(context)
+                                          .labelMedium
+                                          .override(
+                                            font: GoogleFonts.readexPro(
+                                              fontWeight:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontWeight,
+                                              fontStyle:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontStyle,
+                                            ),
+                                            color: FlutterFlowTheme.of(context)
+                                                .primaryText,
+                                            letterSpacing: 0.0,
                                             fontWeight:
                                                 FlutterFlowTheme.of(context)
                                                     .labelMedium
@@ -1967,22 +1994,22 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                                                     .labelMedium
                                                     .fontStyle,
                                           ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    hintStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
+                                      hintStyle: FlutterFlowTheme.of(context)
+                                          .labelMedium
+                                          .override(
+                                            font: GoogleFonts.readexPro(
+                                              fontWeight:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontWeight,
+                                              fontStyle:
+                                                  FlutterFlowTheme.of(context)
+                                                      .labelMedium
+                                                      .fontStyle,
+                                            ),
+                                            color: FlutterFlowTheme.of(context)
+                                                .primaryText,
+                                            letterSpacing: 0.0,
                                             fontWeight:
                                                 FlutterFlowTheme.of(context)
                                                     .labelMedium
@@ -1992,98 +2019,93 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                                                     .labelMedium
                                                     .fontStyle,
                                           ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
                                           color: FlutterFlowTheme.of(context)
-                                              .primaryText,
+                                              .alternate,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: FlutterFlowTheme.of(context)
+                                              .primary,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      errorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: FlutterFlowTheme.of(context)
+                                              .error,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      focusedErrorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: FlutterFlowTheme.of(context)
+                                              .error,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                      ),
+                                      contentPadding:
+                                          EdgeInsetsDirectional.fromSTEB(
+                                              14.0, 18.0, 14.0, 14.0),
+                                      suffixIcon: InkWell(
+                                        onTap: () async {
+                                          safeSetState(() =>
+                                              _model.passwordVisibility2 =
+                                                  !_model.passwordVisibility2);
+                                        },
+                                        focusNode:
+                                            FocusNode(skipTraversal: true),
+                                        child: Icon(
+                                          _model.passwordVisibility2
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .override(
+                                          font: GoogleFonts.readexPro(
+                                            fontWeight:
+                                                FlutterFlowTheme.of(context)
+                                                    .bodyMedium
+                                                    .fontWeight,
+                                            fontStyle:
+                                                FlutterFlowTheme.of(context)
+                                                    .bodyMedium
+                                                    .fontStyle,
+                                          ),
                                           letterSpacing: 0.0,
                                           fontWeight:
                                               FlutterFlowTheme.of(context)
-                                                  .labelMedium
+                                                  .bodyMedium
                                                   .fontWeight,
                                           fontStyle:
                                               FlutterFlowTheme.of(context)
-                                                  .labelMedium
+                                                  .bodyMedium
                                                   .fontStyle,
                                         ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedErrorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    contentPadding:
-                                        EdgeInsetsDirectional.fromSTEB(
-                                            14.0, 18.0, 14.0, 14.0),
-                                    suffixIcon: InkWell(
-                                      onTap: () async {
-                                        safeSetState(() =>
-                                            _model.passwordVisibility2 =
-                                                !_model.passwordVisibility2);
-                                      },
-                                      focusNode: FocusNode(skipTraversal: true),
-                                      child: Icon(
-                                        _model.passwordVisibility2
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                        size: 22,
-                                      ),
-                                    ),
+                                    keyboardType: TextInputType.visiblePassword,
+                                    validator: _model.textController4Validator
+                                        .asValidator(context),
                                   ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.readexPro(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                  keyboardType: TextInputType.visiblePassword,
-                                  validator: _model.textController4Validator
-                                      .asValidator(context),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                       Row(
                         mainAxisSize: MainAxisSize.max,
                         children: [

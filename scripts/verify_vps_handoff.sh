@@ -200,7 +200,7 @@ status_contains "API domain and DNS" \
   "status file does not list API domain and DNS"
 status_contains 'Production `server/.env`' \
   "status file does not list production server env"
-status_contains "Real SMS provider" \
+status_contains "Password login and administrator recovery verification" \
   "status file does not list real SMS provider"
 status_contains "Real payment provider" \
   "status file does not list real payment provider"
@@ -263,8 +263,8 @@ env_contract_contains '"NODE_ENV": "production"' \
   "env contract does not pin NODE_ENV production"
 env_contract_contains '"MTAXI_STORE": "postgres"' \
   "env contract does not pin PostgreSQL store"
-env_contract_contains '"MTAXI_SMS_PROVIDER": "http"' \
-  "env contract does not pin HTTP SMS provider"
+env_contract_contains '"MTAXI_SMS_PROVIDER": "disabled"' \
+  "env contract does not pin password-only authentication"
 env_contract_contains '"MTAXI_PAYMENT_PROVIDER": "redirect"' \
   "env contract does not pin redirect payment provider"
 env_contract_contains '"MTAXI_FCM_ENABLED": "true"' \

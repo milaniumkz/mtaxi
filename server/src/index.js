@@ -18,7 +18,8 @@ const {
   localPaymentPageEnabled,
 } = require("./payments");
 const { startMaintenanceScheduler } = require("./maintenance_scheduler");
-const { storeHealth } = require("./store");
+const { storeHealth, withStoreAsync } = require("./store");
+const { configureLaunchDefaultsInStore } = require('../scripts/configure_launch_defaults');
 const { runPreflight } = require("../scripts/preflight");
 
 const app = express();
@@ -246,6 +247,7 @@ async function startProductionEntrypoint() {
       process.exit(1);
     }
   }
+  await withStoreAsync(async store => configureLaunchDefaultsInStore(store));
   const runtime = startServer();
   process.on("SIGTERM", () => stopServer(runtime, "SIGTERM"));
   process.on("SIGINT", () => stopServer(runtime, "SIGINT"));

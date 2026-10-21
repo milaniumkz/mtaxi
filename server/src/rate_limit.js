@@ -15,6 +15,7 @@ function authRateLimitConfig(env = process.env) {
 }
 
 function clientIp(req) {
+  if (req?.ip || req?.socket?.remoteAddress) return normalizeString(req.ip || req.socket.remoteAddress);
   const forwarded = normalizeString(req?.headers?.["x-forwarded-for"] || req?.get?.("x-forwarded-for"));
   if (forwarded) return forwarded.split(",")[0].trim();
   return normalizeString(req?.ip || req?.socket?.remoteAddress || "unknown");

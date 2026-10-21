@@ -1,0 +1,33 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mtaxi-intercity-toggle-'));
+process.env.MTAXI_DATA_DIR = dataDir;
+process.env.MTAXI_STORE = 'json';
+const { readStoreAsync } = require('../src/store');
+const { updateRuntimeSettingsAsync, getRuntimeSettingsAsync } = require('../src/settings');
+const { createPassengerOrderAsync, adminCreateOrderAsync, getOrderQuoteAsync } = require('../src/orders');
+test.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+
+test('intercity starts disabled, can be enabled by admin and disabled again without deleting orders', async () => {
+  const store = await readStoreAsync();
+  const passenger = { user: store.users.find(user => user.roleState === 'PASSENGER') };
+  const admin = { user: store.users.find(user => user.role === 'admin') };
+  const orderData = { type: 'intercity', city: 'Белоусовка', ot: 'Белоусовка', kuda: 'Иртышск', distanceKm: 35 };
+  assert.equal((await getRuntimeSettingsAsync()).settings.intercityEnabled, false);
+  assert.equal((await createPassengerOrderAsync(orderData, passenger)).code, 'INTERCITY_DISABLED');
+  assert.equal((await getOrderQuoteAsync(orderData, passenger)).code, 'INTERCITY_DISABLED');
+  assert.equal((await adminCreateOrderAsync({ ...orderData, phone: passenger.user.phone }, admin)).code, 'INTERCITY_DISABLED');
+  assert.equal((await updateRuntimeSettingsAsync({ intercityEnabled: true }, passenger)).success, false);
+  await updateRuntimeSettingsAsync({ intercityEnabled: true }, admin);
+  assert.equal((await getRuntimeSettingsAsync()).settings.intercityEnabled, true);
+  assert.equal((await getOrderQuoteAsync(orderData, passenger)).success, true);
+  const created = await createPassengerOrderAsync(orderData, passenger);
+  assert.equal(created.success, true);
+  await updateRuntimeSettingsAsync({ intercityEnabled: false }, admin);
+  assert.equal((await createPassengerOrderAsync(orderData, passenger)).code, 'INTERCITY_DISABLED');
+  assert.equal((await readStoreAsync()).orders.some(order => `order/${order.id}` === created.orderDocPath), true);
+  assert.equal((await getOrderQuoteAsync({ ...orderData, type: 'taxi' }, passenger)).success, true);
+});

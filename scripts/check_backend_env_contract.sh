@@ -29,7 +29,7 @@ if (contract.store !== "PostgreSQL in production") fail("production store must b
 for (const [name, value] of Object.entries({
   NODE_ENV: "production",
   MTAXI_STORE: "postgres",
-  MTAXI_SMS_PROVIDER: "http",
+  MTAXI_SMS_PROVIDER: "disabled",
   MTAXI_PAYMENT_PROVIDER: "redirect",
   MTAXI_FCM_ENABLED: "true",
 })) {
@@ -39,7 +39,6 @@ for (const name of [
   "MTAXI_PUBLIC_BASE_URL",
   "MTAXI_TOKEN_SECRET",
   "DATABASE_URL",
-  "MTAXI_SMS_HTTP_URL",
   "MTAXI_PAYMENT_URL_TEMPLATE",
   "MTAXI_PAYMENT_CALLBACK_SECRET",
 ]) {

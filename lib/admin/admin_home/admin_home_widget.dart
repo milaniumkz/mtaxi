@@ -9,6 +9,8 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
 import '/admin/admin_utils.dart';
+import 'kaspi_requests_banner.dart';
+import '/backend/push_notifications/web_push_button.dart';
 
 const _mtaxiPageBg = Color(0xFF12051B);
 const _mtaxiMint = Color(0xFF28D8C6);
@@ -926,6 +928,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           _buildAdminTopBar(context),
           const SizedBox(height: 18),
           _buildDashboard(context),
+          const KaspiRequestsBanner(),
+          const WebPushButton(),
           const SizedBox(height: 16),
           _buildDriverReviewSection(context),
           const SizedBox(height: 16),
