@@ -15,8 +15,8 @@ if (health.ok !== true || health.service !== 'mtaxi-backend' || health.store?.ty
 }
 NODE
 cd "$root_dir"
-flutter build apk --debug --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define="MTAXI_BACKEND_URL=$backend_url"
+flutter build apk --profile --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define="MTAXI_BACKEND_URL=$backend_url"
 mkdir -p output
-cp build/app/outputs/flutter-apk/app-debug.apk output/mtaxi-staging.apk
+cp build/app/outputs/flutter-apk/app-profile.apk output/mtaxi-staging.apk
 (cd output && sha256sum mtaxi-staging.apk > mtaxi-staging.apk.sha256)
 printf 'Test APK built: %s/output/mtaxi-staging.apk\n' "$root_dir"

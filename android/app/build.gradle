@@ -55,7 +55,11 @@ android {
 
     packaging {
         jniLibs {
-            keepDebugSymbols += ["**/*.so"]
+            // Keep symbols only when explicitly requested for native debugging.
+            // Shipping them made a universal test APK exceed 1 GB.
+            if (project.hasProperty("mtaxiKeepNativeSymbols")) {
+                keepDebugSymbols += ["**/*.so"]
+            }
         }
     }
 
