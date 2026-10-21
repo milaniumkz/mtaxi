@@ -1,0 +1,22 @@
+name: MTaxi VPS service diagnostics
+on:
+  push:
+    branches: [codex/free-staging-20261021]
+    paths: [.github/workflows/vps-diagnostics.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Inspect running service errors
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'cd /opt/mtaxi && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml ps && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml logs --tail=90 backend'
