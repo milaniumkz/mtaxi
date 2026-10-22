@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# An interrupted SSH client must not overlap another backend activation.
+exec 9>/run/lock/mtaxi-deploy.lock
+flock -w 300 9
 cd /opt/mtaxi
 test -f .git-deploy-managed
 test -f /etc/mtaxi/firebase.json
