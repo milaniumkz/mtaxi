@@ -67,7 +67,7 @@ class _KaspiPaymentActionsState extends State<KaspiPaymentActions> {
             onPressed: _busy
                 ? null
                 : () => _act('confirmDriverTopUpPayment',
-                    'Вы получили ${widget.payment['amount']} ₸ от водителя? Подтверждение зачислит деньги на его баланс.'),
+                    'Вы получили ${widget.payment['amount']} ₸ от пользователя? Подтверждение зачислит деньги на его денежный счёт.'),
             child: const Text('Подтвердить оплату')),
         TextButton(
             onPressed: _busy

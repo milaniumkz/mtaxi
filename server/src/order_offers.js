@@ -23,7 +23,7 @@ function driverDetails(store, user) {
     driverId: user.id,
     driverName: user.displayName || "Водитель",
     driverPhoto: user.photoUrl || "",
-    driverCar: [user.carBrand, user.carModel, user.color]
+    driverCar: [user.carBrand || user.marka || user.Marka, user.carModel || user.model, user.color]
       .filter(Boolean)
       .join(" "),
     driverPlate: user.gosNomer || "",

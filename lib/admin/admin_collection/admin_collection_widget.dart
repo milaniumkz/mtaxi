@@ -3886,20 +3886,18 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
   }
 
   bool _canAdminReopenOrder(int status, DocumentReference? driverRef) {
-    if (status == _completedOrderStatus) {
+    if (status == 4 || status == _completedOrderStatus) {
       return false;
     }
     return status != 0 || driverRef != null;
   }
 
   bool _canAdminCancelOrder(int status) {
-    return status >= 0 &&
-        status < _completedOrderStatus &&
-        status != _cancelledOrderStatus;
+    return status >= 0 && status < 4 && status != _cancelledOrderStatus;
   }
 
   bool _canAdminCompleteOrder(int status, DocumentReference? driverRef) {
-    return driverRef != null && status > 0 && status < _completedOrderStatus;
+    return driverRef != null && status == 4;
   }
 
   Future<bool> _confirmAdminOrderAction(
@@ -4051,7 +4049,13 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     required DocumentReference orderRef,
     required int currentStatus,
   }) {
-    final statuses = const [0, 1, 2, 3, 4, 5, 6];
+    if (currentStatus == 4 || currentStatus == 5)
+      return Text(currentStatus == 4
+          ? 'Поездка началась: отмена и возврат в очередь недоступны.'
+          : 'Поездка завершена, расчёт выполнен.');
+    if (currentStatus == 6 || currentStatus == 7)
+      return const SizedBox.shrink();
+    final statuses = const [6, 7];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

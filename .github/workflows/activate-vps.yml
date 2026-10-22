@@ -1,5 +1,5 @@
 name: Deploy and publish MTaxi test app
-# Voice plugin is pinned to the existing Android Java 8 toolchain.
+# Validate trip accounting and hide forbidden admin transitions before publication.
 on:
   push:
     branches: [codex/free-staging-20261021]

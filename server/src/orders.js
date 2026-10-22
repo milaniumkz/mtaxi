@@ -787,7 +787,7 @@ function acceptOrderInStore(store, auth, orderId) {
   order.driverId = driver.id;
   order.driverName = driver.displayName || "";
   order.driverPhone = driver.phone || "";
-  order.driverCar = [driver.carBrand, driver.carModel, driver.color].filter(Boolean).join(" ");
+  order.driverCar = [driver.carBrand || driver.marka || driver.Marka, driver.carModel || driver.model, driver.color].filter(Boolean).join(" ");
   order.driverPlate = driver.gosNomer || "";
   order.acceptedAt = new Date().toISOString();
   order.acceptedCommission = requiredBalance;

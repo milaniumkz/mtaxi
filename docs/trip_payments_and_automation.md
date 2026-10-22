@@ -14,7 +14,7 @@ Automatic transitions use server receipt times and GPS samples from the authenti
 - Remaining within 60 m of pickup for 15 seconds automatically marks arrival.
 - After verified pickup presence, remaining at least 100 m from pickup for 15 seconds automatically starts the trip.
 - Manual arrival also needs a fresh (≤30 seconds), accurate location within 120 m of pickup when pickup coordinates are available.
-- The app sends active-trip positions at least every three seconds while its active trip screen and location permission are available. Changes occur on the first qualifying subsequent sample; without fresh GPS/network data the server does not invent movement or advance a timer.
+- The app attempts to publish fresh active-trip GPS positions every three seconds while its active trip screen and location permission are available. GPS acquisition and network latency can delay samples. Changes occur on the first qualifying subsequent sample; without fresh GPS/network data the server does not invent movement or advance a timer.
 
 This resists accidental GPS jumps, duplicate actions and status/refund races. Phone-supplied GPS is not proof against device-level spoofing or collusion. Background/locked-phone delivery and real-road maneuver/voice quality require physical Android/iOS tests before launch.
 

@@ -96,7 +96,10 @@ class _TripNavigationState extends State<TripNavigation> {
                 bounds: LatLngBounds.fromPoints(points),
                 padding: const EdgeInsets.fromLTRB(40, 160, 40, 320)));
         } else {
-          setState(() => _message = 'Не удалось построить маршрут. Повторяем…');
+          setState(() {
+            _steps = [];
+            _message = 'Не удалось построить маршрут. Повторяем…';
+          });
         }
       }
       if (widget.isDriver && _steps.isNotEmpty) {
