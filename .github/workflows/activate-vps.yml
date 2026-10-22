@@ -81,8 +81,8 @@ jobs:
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'install -d -m 755 /var/www/mtaxi/downloads'
           node -e 'const fs=require("fs");const version=JSON.parse(fs.readFileSync("build/web/version.json","utf8"));fs.writeFileSync("output/test-build.json",JSON.stringify({...version,revision:process.env.GITHUB_SHA,apkSha256:fs.readFileSync("output/mtaxi-staging.apk.sha256","utf8").trim().split(/\s+/)[0],publishedAt:new Date().toISOString()}));'
-          sshpass -e scp -o StrictHostKeyChecking=yes output/test-build.json output/mtaxi-staging.apk output/mtaxi-staging.apk.sha256 "root@$VPS_HOST:/var/www/mtaxi/downloads/"
-          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'chmod 644 /var/www/mtaxi/downloads/*'
+          sshpass -e scp -o StrictHostKeyChecking=yes deploy/publish_test_apk.sh output/test-build.json output/mtaxi-staging.apk output/mtaxi-staging.apk.sha256 "root@$VPS_HOST:/opt/mtaxi-incoming/"
+          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'bash /opt/mtaxi-incoming/publish_test_apk.sh /opt/mtaxi-incoming /var/www/mtaxi/downloads'
           apksigner_bin="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
           "$apksigner_bin" verify output/mtaxi-staging.apk
           curl --fail --head "$APP_URL/downloads/mtaxi-staging.apk"
