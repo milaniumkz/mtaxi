@@ -1,5 +1,5 @@
 name: Deploy and publish MTaxi test app
-# Validate trip accounting and hide forbidden admin transitions before publication.
+# Includes the zero-distance and small-screen navigation regression fix.
 on:
   push:
     branches: [codex/free-staging-20261021]

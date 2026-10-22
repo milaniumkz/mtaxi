@@ -5,6 +5,14 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:latlong2/latlong.dart';
 import '/backend/backend_calls/backend_calls.dart';
 
+CameraFit navigationRouteFit(List<LatLng> points, double height) =>
+    CameraFit.bounds(
+      bounds: LatLngBounds.fromPoints(points),
+      maxZoom: 17,
+      minZoom: 3,
+      padding: EdgeInsets.fromLTRB(24, height * .12, 24, height * .32),
+    );
+
 /// Driver positions are published by the active trip screen with GPS accuracy.
 /// This view only displays positions the server considers fresh.
 class TripNavigation extends StatefulWidget {
@@ -92,9 +100,8 @@ class _TripNavigationState extends State<TripNavigation> {
                 '${status < 4 ? 'До посадки' : 'До назначения'} ≈ $minutes мин · без учёта пробок';
           });
           if (_ready && !widget.isDriver && points.length > 1)
-            _map.fitCamera(CameraFit.bounds(
-                bounds: LatLngBounds.fromPoints(points),
-                padding: const EdgeInsets.fromLTRB(40, 160, 40, 320)));
+            _map.fitCamera(
+                navigationRouteFit(points, _map.camera.nonRotatedSize.y));
         } else {
           setState(() {
             _steps = [];
@@ -195,6 +202,8 @@ class _TripNavigationState extends State<TripNavigation> {
           options: MapOptions(
               initialCenter: center,
               initialZoom: 15,
+              minZoom: 3,
+              maxZoom: 19,
               onMapReady: () {
                 _ready = true;
               }),
