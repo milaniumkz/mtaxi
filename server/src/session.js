@@ -59,6 +59,7 @@ function buildSessionBootstrap(store, authUser) {
     success: true,
     user: publicSessionUser,
     driverBonus,
+    passengerBonus: { balance: Number(user.passengerBonusBalance) || 0, percent: Number(store.settings?.passengerBonusPercent ?? 2), maxSpendPercent: Number(store.settings?.passengerBonusSpendPercent ?? 100) },
     userDocPath: `users/${user.id}`,
     roleState: publicSessionUser.roleState || "PASSENGER",
     activePassengerOrderRef: passengerOrder ? `order/${passengerOrder.id}` : null,

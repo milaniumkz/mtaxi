@@ -21,6 +21,9 @@ const Set<String> _dedupedCallNames = {
 };
 const Set<String> _criticalOrderCallNames = {
   'acceptOrder',
+  'respondOrderOffer',
+  'submitOrderOffer',
+  'createPassengerTopUpPayment',
   'createPassengerOrder',
   'advanceDriverOrderStatus',
   'cancelPassengerOrder',

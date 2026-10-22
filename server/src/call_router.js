@@ -1,3 +1,5 @@
+const { submitOrderOfferAsync, listOrderOffersAsync, respondOrderOfferAsync, getTripTrackingAsync, rateTripDriverAsync } = require('./order_offers');
+const { createPassengerTopUpPaymentAsync } = require('./payments');
 const {
   passwordLogin,
   registerWithPassword,
@@ -118,6 +120,12 @@ const blockedUserAllowedCalls = new Set([
 ]);
 
 const handlers = {
+  submitOrderOffer: async ({data,auth}) => submitOrderOfferAsync(data,auth),
+  listOrderOffers: async ({data,auth}) => listOrderOffersAsync(data,auth),
+  respondOrderOffer: async ({data,auth}) => respondOrderOfferAsync(data,auth),
+  getTripTracking: async ({data,auth}) => getTripTrackingAsync(data,auth),
+  rateTripDriver: async ({data,auth}) => rateTripDriverAsync(data,auth),
+  createPassengerTopUpPayment: async ({data,auth,req}) => createPassengerTopUpPaymentAsync(data,auth,req),
   registerWithPassword: async ({ data }) => registerWithPassword(data),
   passwordLogin: async ({ data }) => passwordLogin(data),
   lookupUserByPhone: async ({ data }) => lookupUserByPhone(data),

@@ -1,9 +1,10 @@
+const { reservePassengerBonus, refundPassengerBonus, settlePassengerBonus } = require('./passenger_bonuses');
 const { readStoreAsync, withStoreAsync, newId } = require("./store");
 const { asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { publicUser } = require("./users");
 const { addLedger } = require("./payments");
 const { setUserPassword } = require("./passwords");
-const { grantWelcomeBonus, refundCommission: refundDriverCommission } = require("./driver_bonuses");
+const { grantWelcomeBonus, recordCompletedOrder, refundCommission: refundDriverCommission } = require("./driver_bonuses");
 
 const ACTIVE_ORDER_STATUSES = new Set([0, 1, 2, 3, 4]);
 const CONTENT_SCHEMAS = {
@@ -130,6 +131,7 @@ function findOrder(store, orderDocPath) {
 }
 
 function clearOrderRefs(store, order, { refundCommission = false } = {}) {
+  if ([6,7].includes(Number(order.status))) refundPassengerBonus(store, order);
   const passenger = store.users.find((user) => user.id === order.userId);
   const driver = store.users.find((user) => user.id === order.driverId);
   if (passenger?.activePassengerOrderId === order.id) {
@@ -616,24 +618,40 @@ function adminManageOrderInStore(store, data, auth) {
   const order = findOrder(store, data.orderDocPath);
   if (!order) return { success: false, code: "ORDER_NOT_FOUND", error: "Заказ не найден" };
   const before = { ...order };
+  if ([4,5].includes(Number(order.status)) && ["cancel", "reopen", "setstatus"].includes(normalizeString(data.action).toLowerCase())) return { success: false, code: "TRIP_ALREADY_STARTED", error: "Начатую поездку нельзя отменить или вернуть в очередь" };
+  if (order.passengerBonusSettled && ["cancel", "reopen", "setstatus"].includes(normalizeString(data.action).toLowerCase())) return { success: false, code: "ORDER_ALREADY_SETTLED", error: "Расчёт по заказу уже завершён" };
   const action = normalizeString(data.action).toLowerCase();
   const now = new Date().toISOString();
   let message = "Заказ обновлен";
 
   if (action === "complete") {
+    if (Number(order.status) !== 4 || !order.driverId) return { success: false, code: "ORDER_STATUS_SEQUENCE_REQUIRED", error: "Завершить можно только начатую поездку" };
     order.status = 5;
     order.completedAt = now;
+    const paidDriver = store.users.find(u => u.id === order.driverId);
+    if (paidDriver) { recordCompletedOrder(store, paidDriver, order); settlePassengerBonus(store, order, paidDriver); }
     clearOrderRefs(store, order);
     message = "Заказ завершен";
   } else if (action === "cancel") {
     order.status = 6;
+    refundPassengerBonus(store, order);
     order.cancelledAt = now;
     order.cancelledBy = "admin";
     clearOrderRefs(store, order, { refundCommission: true });
     message = "Заказ отменен";
   } else if (action === "reopen") {
-    clearOrderRefs(store, order, { refundCommission: true });
+    const passengerAccount = store.users.find(u => u.id === order.userId);
+    if (!passengerAccount || store.orders.some(o => o.id !== order.id && o.userId === order.userId && [0,1,2,3,4].includes(Number(o.status)))) return { success:false, code:"PASSENGER_HAS_ACTIVE_ORDER", error:"У пассажира уже есть активный заказ" };
+    if (order.passengerBonusRefunded) {
+      const funding = reservePassengerBonus(store, order, passengerAccount, order.usePassengerBonuses === true);
+      if (funding) return funding;
+      order.passengerBonusRefunded = false;
+    }
     order.status = 0;
+    clearOrderRefs(store, order, { refundCommission: true });
+    delete order.cancelledAt; delete order.cancelledBy; delete order.cancelStage; delete order.expiredAt;
+    delete order.acceptedOfferId; order.offers = [];
+    delete order.autoArrivalSince; delete order.autoDepartureSince; delete order.autoLastPosition; delete order.pickupPresenceVerified;
     order.driverId = "";
     order.driverName = "";
     order.driverPhone = "";
@@ -651,6 +669,7 @@ function adminManageOrderInStore(store, data, auth) {
     if (!Number.isInteger(targetStatus) || targetStatus < 0 || targetStatus > 7) {
       return { success: false, code: "ORDER_STATUS_INVALID", error: "Некорректный статус" };
     }
+    if (![6,7].includes(targetStatus)) return { success:false,code:"ORDER_STATUS_SEQUENCE_REQUIRED",error:"Используйте последовательные действия водителя или завершение поездки" };
     order.status = targetStatus;
     syncOrderRefsForStatus(store, order);
     message = `Статус заказа изменен: ${targetStatus}`;

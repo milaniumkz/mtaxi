@@ -37,7 +37,7 @@ test('approved driver receives one welcome reward, earns daily reward and cannot
       store.orders.push({ id, userId: passenger.id, status: 0, price: 500, type: 'taxi' });
     });
     assert.equal((await acceptOrderAsync({ orderId: id }, driverAuth)).success, true);
-    assert.equal((await advanceDriverOrderStatusAsync({ orderId: id, nextStatus: 5 }, driverAuth)).success, true);
+    for (const nextStatus of [3,4,5]) assert.equal((await advanceDriverOrderStatusAsync({ orderId: id, nextStatus }, driverAuth)).success, true);
   }
   const session = await getSessionBootstrapAsync({}, driverAuth);
   assert.equal(session.driverBonus.completedOrders, 10);

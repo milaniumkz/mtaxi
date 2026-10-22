@@ -30,6 +30,7 @@ async function fetchJson(url) {
     return null;
   }
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(10000),
     headers: {
       "User-Agent": userAgent,
       Accept: "application/json",
@@ -252,18 +253,26 @@ async function placeDetails(data = {}) {
   return { success: false, code: "PLACE_NOT_FOUND", status: "NOT_FOUND", error: "Адрес не найден" };
 }
 
+function maneuverInstruction(m, name) {
+  if (m.type === 'arrive') return 'Вы прибыли к месту назначения';
+  if (m.type === 'depart') return 'Начните движение по маршруту';
+  if (['roundabout', 'rotary'].includes(m.type)) return `На круговом движении выберите съезд ${m.exit || 1}`;
+  const direction = {left:'налево', right:'направо', 'slight left':'плавно налево', 'slight right':'плавно направо', 'sharp left':'резко налево', 'sharp right':'резко направо', uturn:'для разворота'}[m.modifier];
+  return (direction ? `Поверните ${direction}` : 'Продолжайте движение прямо') + (name ? `, ${name}` : '');
+}
+
 async function routeLookup(data = {}) {
   const fromLat = parseNumber(data.fromLat ?? data.from?.lat ?? data.from?.latitude);
   const fromLng = parseNumber(data.fromLng ?? data.from?.lng ?? data.from?.lon ?? data.from?.longitude);
   const toLat = parseNumber(data.toLat ?? data.to?.lat ?? data.to?.latitude);
   const toLng = parseNumber(data.toLng ?? data.to?.lng ?? data.to?.lon ?? data.to?.longitude);
-  if (fromLat == null || fromLng == null || toLat == null || toLng == null) {
+  if (fromLat == null || fromLng == null || toLat == null || toLng == null || Math.abs(fromLat)>90 || Math.abs(toLat)>90 || Math.abs(fromLng)>180 || Math.abs(toLng)>180) {
     return { success: false, code: "COORDS_REQUIRED", error: "Передайте точки маршрута" };
   }
 
-  const profile = normalizeString(data.profile) || "driving";
+  const profile = "driving";
   const result = await fetchJson(
-    `https://router.project-osrm.org/route/v1/${profile}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`,
+    `https://router.project-osrm.org/route/v1/${profile}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`,
   );
   const route = Array.isArray(result?.routes) ? result.routes[0] : null;
   const coordinates = Array.isArray(route?.geometry?.coordinates)
@@ -280,6 +289,11 @@ async function routeLookup(data = {}) {
     durationSeconds: parseNumber(route.duration) || 0,
     durationMinutes: Math.round((parseNumber(route.duration) || 0) / 60),
     coordinates,
+    steps: (route.legs || []).flatMap(leg => (leg.steps || []).map(step => ({
+      location: step.maneuver?.location,
+      instruction: maneuverInstruction(step.maneuver || {}, step.name),
+      distanceMeters: Number(step.distance) || 0,
+    }))),
   };
 }
 

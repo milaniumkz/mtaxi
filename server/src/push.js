@@ -481,6 +481,7 @@ function queueOrderPushEventInStore(store, {
   body,
   orderAlert = false,
   initialPageName,
+  eventId = "",
 }) {
   if (!order?.id || !eventType) {
     return null;
@@ -501,7 +502,7 @@ function queueOrderPushEventInStore(store, {
     excludeUserIds,
     orderAlert,
     initialPageName: initialPageName || (role === "driver" ? "homeDriver" : "seachDriver"),
-    dedupeKey: `${order.id}:${normalizedEvent}:${role}:${targetUserIds.join(",")}`,
+    dedupeKey: `${order.id}:${normalizedEvent}:${role}:${targetUserIds.join(",")}${eventId ? ":" + eventId : ""}`,
     dataPayload: {
       type: normalizedEvent,
       orderDocPath,

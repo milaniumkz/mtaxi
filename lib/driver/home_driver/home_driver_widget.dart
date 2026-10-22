@@ -1,3 +1,4 @@
+import '/trips/order_offers.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/app_settings/app_settings.dart';
 import '/backend/backend.dart';
@@ -461,7 +462,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
             children: [
               Expanded(
                 child: Text(
-                  'Стоимость: ${formatAppCurrency(order.price)}',
+                  'Цена пассажира: ${formatAppCurrency(order.price)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: FlutterFlowTheme.of(context).bodyLarge.override(
@@ -1374,7 +1375,12 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                           false;
                                       if (!isVip &&
                                           ((currentUserDocument?.balance ?? 0) +
-                                              ((currentUserDocument?.snapshotData['bonusBalance'] as num?)?.toDouble() ?? 0)) <
+                                                  ((currentUserDocument
+                                                                      ?.snapshotData[
+                                                                  'bonusBalance']
+                                                              as num?)
+                                                          ?.toDouble() ??
+                                                      0)) <
                                               _driverMinBalanceToTakeOrder) {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
@@ -1672,6 +1678,21 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                                                     ],
                                                                   ),
                                                           ),
+                                                          TextButton.icon(
+                                                              onPressed: !isAssignedToCurrentDriver &&
+                                                                      liveOrder
+                                                                              .status ==
+                                                                          0
+                                                                  ? () => proposeDriverPrice(
+                                                                      context,
+                                                                      liveOrder
+                                                                          .reference
+                                                                          .path)
+                                                                  : null,
+                                                              icon: const Icon(Icons
+                                                                  .price_change_outlined),
+                                                              label: const Text(
+                                                                  'Предложить свою цену')),
                                                           const Spacer(),
                                                           Padding(
                                                             padding:

@@ -32,12 +32,16 @@ const NUMERIC_SETTING_FIELDS = new Set([
   "commissionNight",
   "driverBonusTargetOrders",
   "driverBonusReward",
+  "passengerBonusPercent",
+  "passengerBonusSpendPercent",
 ]);
 
 function runtimeSettingsFromStore(store) {
   const settings = store.settings || {};
   const intercity = store.intercityTariff || {};
   return {
+    passengerBonusPercent: asNumber(settings.passengerBonusPercent) ?? 2,
+    passengerBonusSpendPercent: asNumber(settings.passengerBonusSpendPercent) ?? 100,
     intercityEnabled: settings.intercityEnabled === true,
     driverBonusEnabled: settings.driverBonusEnabled !== false,
     driverBonusTargetOrders: asNumber(settings.driverBonusTargetOrders) ?? 10,
@@ -105,7 +109,12 @@ async function updateRuntimeSettingsAsync(data = {}, auth) {
 
   const fields =
     data.fields && typeof data.fields === "object" ? data.fields : data;
-  return withStoreAsync(async (store) => updateRuntimeSettingsInStore(store, fields));
+  try {
+    return await withStoreAsync(async (store) => updateRuntimeSettingsInStore(store, fields));
+  } catch (error) {
+    if (error.message?.startsWith('SETTING_INVALID:')) return { success:false,code:'SETTING_INVALID',error:'Некорректное значение настройки',field:error.message.split(':')[1] };
+    throw error;
+  }
 }
 
 function updateRuntimeSettingsInStore(store, fields = {}) {
@@ -126,6 +135,7 @@ function updateRuntimeSettingsInStore(store, fields = {}) {
     if (parsed == null) {
       throw new Error(`SETTING_INVALID:${key}`);
     }
+    if (['passengerBonusPercent', 'passengerBonusSpendPercent'].includes(key) && (parsed < 0 || parsed > 100)) throw new Error(`SETTING_INVALID:${key}`);
     if (key === 'driverBonusTargetOrders' && (!Number.isSafeInteger(parsed) || parsed < 0)) {
       throw new Error(`SETTING_INVALID:${key}`);
     }

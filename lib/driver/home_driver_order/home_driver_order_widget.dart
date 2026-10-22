@@ -1,3 +1,4 @@
+import '/trips/trip_navigation.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/backend_orders.dart';
@@ -9,7 +10,6 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/instant_timer.dart';
 import 'dart:async';
-import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -812,6 +812,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
     );
   }
 
+  double? _lastGpsAccuracy;
+
   bool _shouldSyncDriverLocation(LatLng nextLocation) {
     final lastWriteAt = _lastLocationWriteAt;
     final lastLocation = _lastWrittenLocation;
@@ -819,7 +821,7 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       return true;
     }
     final elapsed = DateTime.now().difference(lastWriteAt);
-    if (elapsed < const Duration(seconds: 8)) {
+    if (elapsed < const Duration(seconds: 3)) {
       return false;
     }
     final distanceMeters = Geolocator.distanceBetween(
@@ -828,7 +830,7 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       nextLocation.latitude,
       nextLocation.longitude,
     );
-    return distanceMeters >= 15;
+    return distanceMeters >= 15 || elapsed >= const Duration(seconds: 3);
   }
 
   void _rememberSyncedDriverLocation(LatLng location) {
@@ -1019,6 +1021,7 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
         timeLimit: const Duration(seconds: 8),
       );
       setState(() {
+        _lastGpsAccuracy = position.accuracy;
         currentUserLocationValue =
             LatLng(position.latitude, position.longitude);
       });
@@ -1051,6 +1054,7 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                 'coords': {
                   'latitude': nextLocation.latitude,
                   'longitude': nextLocation.longitude,
+                  'accuracy': _lastGpsAccuracy,
                 },
               },
             );
@@ -1293,19 +1297,12 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                   }
 
                   final effectiveStatus = _effectiveOrderStatus(order);
-                  final pointA = order.otCoords;
-                  final pointB = order.kudaCoords ?? order.otCoords;
 
                   return Stack(
                     children: [
                       Positioned.fill(
-                        child: custom_widgets.MapsMarsh(
-                          width: MediaQuery.sizeOf(context).width * 1.0,
-                          height: MediaQuery.sizeOf(context).height * 1.0,
-                          pointA: pointA,
-                          pointB: pointB,
-                          zoom: 11.0,
-                        ),
+                        child: TripNavigation(
+                            orderDocPath: order.reference.path, isDriver: true),
                       ),
                       Align(
                         alignment: Alignment.bottomCenter,
@@ -1390,6 +1387,17 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                                                 fontWeight: FontWeight.w800,
                                               ),
                                         ),
+                                        Text(
+                                            'Наличными получить: ${order.snapshotData['cashToDriver'] ?? order.price} ₸'),
+                                        if ((order.snapshotData[
+                                                        'passengerBonusUsed'] ??
+                                                    0) +
+                                                (order.snapshotData[
+                                                        'passengerWalletUsed'] ??
+                                                    0) >
+                                            0)
+                                          Text(
+                                              'На денежный баланс после завершения: ${(order.snapshotData['passengerBonusUsed'] ?? 0) + (order.snapshotData['passengerWalletUsed'] ?? 0)} ₸'),
                                         const SizedBox(height: 14),
                                         if (canShowPassengerContacts &&
                                             ((order.snapshotData[

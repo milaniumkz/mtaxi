@@ -5156,6 +5156,14 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     ],
     'appSettings': [
       _FieldSpec(
+          key: 'passengerBonusPercent',
+          label: 'Бонус пассажиру за поездку (%)',
+          type: _FieldType.doubleType),
+      _FieldSpec(
+          key: 'passengerBonusSpendPercent',
+          label: 'Максимальная оплата бонусами (%)',
+          type: _FieldType.doubleType),
+      _FieldSpec(
           key: 'driverBonusTargetOrders',
           label: 'Заказов за сутки для бонуса',
           type: _FieldType.intType),

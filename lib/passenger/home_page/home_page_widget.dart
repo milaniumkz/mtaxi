@@ -1,3 +1,4 @@
+import '/trips/passenger_wallet.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/app_city_tariffs/app_city_tariffs.dart';
 import '/backend/app_settings/app_settings.dart';
@@ -461,7 +462,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
             intercityEnabled: _intercityEnabled,
             width: MediaQuery.sizeOf(context).width * 1.0,
             height: MediaQuery.sizeOf(context).height,
-            priceText: FFAppState().price,
+            priceText: 'от 500 ₸',
             initialServiceType: FFAppState().serviceType,
             cityName: _effectiveCity,
             initialFromCoords: currentUserLocationValue == null
@@ -551,6 +552,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
             },
           ),
         ),
+        floatingActionButton: const PassengerWalletButton(),
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
         bottomNavigationBar: AnimatedPadding(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
@@ -598,7 +601,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                       );
                       return;
                     }
-                    final price = double.tryParse(FFAppState().price);
+                    final fare = await choosePassengerFare(context);
+                    if (fare == null || !mounted) return;
+                    final price = fare.price.toDouble();
                     final orderType = serviceType;
                     final orderComment =
                         isDelivery ? '' : FFAppState().comment.trim();
@@ -667,7 +672,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 ? fromCity
                                 : _effectiveCity;
                           }(),
-                          if (price != null) 'price': price,
+                          'price': price,
+                          'paymentMode': fare.wallet ? 'wallet' : 'cash',
+                          'usePassengerBonuses': fare.bonuses,
                           'comment': orderComment,
                           'deliveryItem': deliveryItem,
                           'replaceExistingActiveOrder': false,

@@ -213,8 +213,14 @@ function updatePreferencesInStore(store, data, auth) {
   if (data.coords && typeof data.coords === "object") {
     const latitude = asNumber(data.coords.latitude ?? data.coords.lat);
     const longitude = asNumber(data.coords.longitude ?? data.coords.lng);
-    if (latitude != null && longitude != null) {
+    if (latitude != null && longitude != null && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) {
       user.coords = { latitude, longitude };
+      user.coordsUpdatedAt = new Date().toISOString();
+      user.coordsAccuracy = asNumber(data.coords.accuracy);
+      const { observeDriverPosition } = require('./trip_automation');
+      const { advanceDriverOrderStatusInStore } = require('./orders');
+      observeDriverPosition(store, user, { latitude, longitude, accuracy: asNumber(data.coords.accuracy) },
+        status => advanceDriverOrderStatusInStore(store, { user }, user.activeDriverOrderId, status));
     }
   }
   user.updatedAt = new Date().toISOString();
@@ -275,6 +281,7 @@ function deleteCurrentAccountDeepInStore(store, _data, auth) {
   if (!user) {
     return { success: false, code: "USER_NOT_FOUND", error: "Пользователь не найден" };
   }
+  if ((store.orders || []).some(o => (o.userId === user.id || o.driverId === user.id) && [2,3,4].includes(Number(o.status)))) return { success:false,code:"ACTIVE_TRIP_ACCOUNT_DELETE_DENIED",error:"Завершите или отмените активную поездку перед удалением аккаунта" };
   const userId = user.id;
   const userPath = `users/${userId}`;
   const phone = normalizePhone(user.phone);

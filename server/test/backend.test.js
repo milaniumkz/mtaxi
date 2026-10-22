@@ -1667,7 +1667,7 @@ test("docker deployment runs backend with PostgreSQL and production preflight", 
     "utf8",
   );
 
-  assert.match(dockerfile, /FROM node:20-bookworm-slim/);
+  assert.match(dockerfile, /FROM node:24-bookworm-slim/);
   assert.match(dockerfile, /postgresql-client/);
   assert.match(dockerfile, /npm ci --omit=dev/);
   assert.match(dockerfile, /npm run db:apply-schema/);
@@ -5392,6 +5392,8 @@ test("advanceDriverOrderStatus completes order and clears active flags", async (
   assert.equal(arrived.success, true);
   assert.equal(arrived.status, 3);
 
+  assert.equal((await advanceDriverOrderStatusAsync({ orderDocPath: `order/${activeOrderId}`, nextStatus: 4 }, { user: driver })).success, true);
+
   const completed = await advanceDriverOrderStatusAsync(
     { orderDocPath: `order/${activeOrderId}`, nextStatus: 5 },
     { user: readStore().users.find((user) => user.id === "u_driver_7086362153") },
@@ -5721,6 +5723,8 @@ test("deleteCurrentAccountDeep removes user-owned backend data", async () => {
   const chat = await ensureSupportChatAsync({}, { user: driver });
   await sendSupportChatMessageAsync({ chatDocPath: chat.chatPath, text: "Удалить меня" }, { user: driver });
 
+  assert.equal((await deleteCurrentAccountDeepAsync({}, { user: driver })).code, 'ACTIVE_TRIP_ACCOUNT_DELETE_DENIED');
+  for (const nextStatus of [3,4,5]) assert.equal((await advanceDriverOrderStatusAsync({orderDocPath:order.orderDocPath,nextStatus},{user:driver})).success,true);
   const deleted = await deleteCurrentAccountDeepAsync({}, { user: driver });
   assert.equal(deleted.success, true);
   assert.equal(deleted.removed.users, 1);
@@ -5936,35 +5940,18 @@ test("admin can create passenger through backend", async () => {
   assert.equal(verifyPassword("123456", saved.passwordHash), true);
 });
 
-test("adminManageOrder completes, cancels and reopens orders with active refs", async () => {
-  const admin = readStore().users.find((user) => user.id === "u_admin_70000000000");
-  const passenger = readStore().users.find((user) => user.id === "u_passenger_7052597368");
-  const driver = readStore().users.find((user) => user.id === "u_driver_7086362153");
-  const order = await createPassengerOrderAsync({
-    type: "taxi",
-    city: "Белоусовка",
-    ot: "Алтайская 12",
-    kuda: "Переулок Степной 15",
-    date: "2026-07-22T06:00:00.000Z",
-  }, { user: passenger });
-  assert.equal(order.created, true);
-  const accepted = await acceptOrderAsync({ orderDocPath: order.orderDocPath }, { user: driver });
-  assert.equal(accepted.accepted, true);
-
-  const completed = await adminManageOrderAsync({ orderDocPath: order.orderDocPath, action: "complete" }, { user: admin });
-  assert.equal(completed.success, true);
-  assert.equal(completed.status, 5);
-  assert.equal(readStore().users.find((user) => user.id === driver.id).hasActiveDriverOrder, false);
-
-  const reopened = await adminManageOrderAsync({ orderDocPath: order.orderDocPath, action: "reopen" }, { user: admin });
-  assert.equal(reopened.success, true);
-  assert.equal(reopened.status, 0);
-  assert.equal(readStore().users.find((user) => user.id === passenger.id).hasActivePassengerOrder, true);
-
-  const cancelled = await adminManageOrderAsync({ orderDocPath: order.orderDocPath, action: "cancel" }, { user: admin });
-  assert.equal(cancelled.success, true);
-  assert.equal(cancelled.status, 6);
-  assert.equal(readStore().users.find((user) => user.id === passenger.id).hasActivePassengerOrder, false);
+test("admin cannot reopen a settled trip or bypass trip progression", async () => {
+  const admin = readStore().users.find(u => u.role === 'admin');
+  const passenger = readStore().users.find(u => u.id === 'u_passenger_7052597368');
+  const driver = readStore().users.find(u => u.id === 'u_driver_7086362153');
+  const order = await createPassengerOrderAsync({type:'taxi',city:'Белоусовка',ot:'Алтайская 12',kuda:'Степной 15',price:500},{user:passenger});
+  assert.equal((await acceptOrderAsync({orderDocPath:order.orderDocPath},{user:driver})).accepted,true);
+  assert.equal((await adminManageOrderAsync({orderDocPath:order.orderDocPath,action:'complete'},{user:admin})).success,false);
+  for(const nextStatus of [3,4]) assert.equal((await advanceDriverOrderStatusAsync({orderDocPath:order.orderDocPath,nextStatus},{user:driver})).success,true);
+  assert.equal((await adminManageOrderAsync({orderDocPath:order.orderDocPath,action:'cancel'},{user:admin})).code,'TRIP_ALREADY_STARTED');
+  assert.equal((await adminManageOrderAsync({orderDocPath:order.orderDocPath,action:'complete'},{user:admin})).success,true);
+  assert.equal((await adminManageOrderAsync({orderDocPath:order.orderDocPath,action:'reopen'},{user:admin})).success,false);
+  assert.equal(readStore().users.find(u=>u.id===driver.id).hasActiveDriverOrder,false);
 });
 
 test("driver top-up payment is created pending and confirmed idempotently", async () => {

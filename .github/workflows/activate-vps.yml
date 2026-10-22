@@ -28,10 +28,6 @@ jobs:
           umask 077
           mkdir -p ~/.ssh
           printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
-      - name: Activate PostgreSQL backend and real FCM
-        env:
-          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
-        run: sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'bash -s' < deploy/activate_vps.sh
       - name: Install pinned Flutter
         run: |
           git clone --depth 1 --branch 3.41.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
@@ -44,12 +40,16 @@ jobs:
       - name: Validate application and build web
         run: |
           npm ci --prefix server
-          npm test --prefix server
+          MTAXI_FCM_ENABLED=false npm test --prefix server
           flutter pub get --enforce-lockfile
           flutter test --no-pub
           flutter analyze --no-pub
           flutter build web --no-pub --no-web-resources-cdn --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define="MTAXI_BACKEND_URL=$APP_URL"
           tar -czf "$RUNNER_TEMP/web.tar.gz" -C build/web .
+      - name: Activate PostgreSQL backend and real FCM
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'bash -s' < deploy/activate_vps.sh
       - name: Publish web version
         env:
           SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
@@ -59,6 +59,19 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'tar -xzf /opt/mtaxi-incoming/web.tar.gz -C /var/www/mtaxi && find /var/www/mtaxi -type d -exec chmod 755 {} + && find /var/www/mtaxi -type f -exec chmod 644 {} +'
           curl --fail --silent --output /dev/null "$APP_URL/"
           curl --fail --silent --output /dev/null "$APP_URL/admin"
+      - name: Preserve test APK signing key between builds
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          umask 077
+          mkdir -p ~/.android
+          if sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'test -f /etc/mtaxi/test-debug.keystore'; then
+            sshpass -e scp -o StrictHostKeyChecking=yes "root@$VPS_HOST:/etc/mtaxi/test-debug.keystore" ~/.android/debug.keystore
+          else
+            keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=MTaxi Test, O=MTaxi, C=KZ" -keyalg RSA -keysize 3072 -validity 3650
+            sshpass -e scp -o StrictHostKeyChecking=yes ~/.android/debug.keystore "root@$VPS_HOST:/etc/mtaxi/test-debug.keystore"
+            sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'chmod 600 /etc/mtaxi/test-debug.keystore'
+          fi
       - name: Build phone APK against live HTTPS backend
         run: bash scripts/build_test_apk.sh "$APP_URL"
       - name: Publish APK and checksum

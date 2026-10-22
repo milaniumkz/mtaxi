@@ -242,10 +242,18 @@ async function createDriverTopUpPaymentAsync(data = {}, auth, req) {
   return withStoreAsync(async (store) => createDriverTopUpPaymentInStore(store, data, auth, amount, req));
 }
 
-async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
+async function createPassengerTopUpPaymentAsync(data = {}, auth, req) {
+  const authError = requireAuth(auth);
+  if (authError) return authError;
+  const amount = asNumber(data.amount);
+  if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 1000000) return { success: false, code: 'PAYMENT_AMOUNT_INVALID', error: 'Введите сумму от 1 до 1 000 000 ₸' };
+  return withStoreAsync(store => createDriverTopUpPaymentInStore(store, { ...data, method: 'kaspi_manual' }, auth, amount, req, 'passenger'));
+}
+
+async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, purpose = "driver") {
   const user = store.users.find((item) => item.id === auth.user.id);
   if (!user) return { success: false, code: "USER_NOT_FOUND", error: "Пользователь не найден" };
-  if (user.isDriver !== true) {
+  if (purpose === "driver" && user.isDriver !== true) {
     return { success: false, code: "DRIVER_PROFILE_REQUIRED", error: "Пополнение доступно только водителю" };
   }
   const manualKaspi = data.method === 'kaspi_manual' || paymentProviderName() === 'kaspi_manual';
@@ -288,6 +296,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
     id: newId("payment"),
     paymentId: newId(manualKaspi ? 'kaspi' : 'kassa24'),
     sequence: store.paymentSequence,
+    purpose,
     userId: user.id,
     userPhone: user.phone,
     amount,
@@ -831,6 +840,7 @@ async function getMoneyStatsAsync(data = {}, auth) {
 module.exports = {
   adminMarkKaspiInvoiceSentAsync,
   createDriverTopUpPaymentAsync,
+  createPassengerTopUpPaymentAsync,
   getDriverTopUpPaymentStatusAsync,
   confirmDriverTopUpPaymentAsync,
   failDriverTopUpPaymentAsync,
