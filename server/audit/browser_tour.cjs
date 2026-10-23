@@ -50,7 +50,7 @@ module.exports = async function tour() {
         check('Open screen ' + path + ' (' + role + ')', role,
           'Screen renders its expected content', e.message, false, name + '.png');
       }
-      fs.writeFileSync('/workspace/mtaxi/output/full-audit/browser-elements.json', JSON.stringify(tourInventory, null, 2));
+      fs.writeFileSync((global.auditOutputDir || '/workspace/mtaxi/output/full-audit') + '/browser-elements.json', JSON.stringify(tourInventory, null, 2));
     }
     await q.close();
   }
