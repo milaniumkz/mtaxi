@@ -10,7 +10,16 @@ global.apiPort=process.env.MTAXI_AUDIT_API_PORT||'18084';
  global.open=async(role,path,width=390)=>{
   const actor=role==='admin'?actors[0]:role==='driver'?actors[1]:actors[40];
   const ctx=await browser.newContext({viewport:{width,height:844},permissions:['geolocation'],geolocation:{latitude:53.53,longitude:76.68,accuracy:10}});
-  await ctx.route('https://**/*',async r=>{external.push(new URL(r.request().url()).origin);await r.fulfill({status:200,contentType:'image/png',body:png});});
+  await ctx.route('https://**/*',async r=>{
+    const url=new URL(r.request().url()); external.push(url.origin);
+    // Read-only static fonts are permitted; bank, SMS, FCM and map traffic stays synthetic.
+    if(url.hostname==='fonts.gstatic.com' && r.request().method()==='GET') {
+      try {const bytes=require('node:child_process').execFileSync('curl',['-fsSL','--max-time','15',url.href]);await r.fulfill({status:200,contentType:'font/ttf',body:bytes});}
+      catch {await r.abort();}
+      return;
+    }
+    await r.fulfill({status:200,contentType:'image/png',body:png});
+  });
   await ctx.addInitScript(({actor})=>{const {token,passwordHash,...user}=actor;localStorage.setItem('flutter.mtaxi_backend_access_token',JSON.stringify(token));localStorage.setItem('flutter.mtaxi_backend_user_json',JSON.stringify(JSON.stringify(user)));},{actor});
   await ctx.route('http://127.0.0.1:18080/**',async route=>{const req=route.request();const r=await fetch(req.url().replace(':18080',':'+apiPort),{method:req.method(),headers:req.headers(),body:['GET','HEAD'].includes(req.method())?undefined:req.postDataBuffer(),signal:AbortSignal.timeout(15000)});const headers=Object.fromEntries(r.headers);delete headers['content-length'];delete headers['transfer-encoding'];await route.fulfill({status:r.status,headers,body:Buffer.from(await r.arrayBuffer())});});
   const p=await ctx.newPage();p.setDefaultTimeout(8000);p.setDefaultNavigationTimeout(20000);p.on('pageerror',e=>errors.push({role,error:e.message}));
@@ -19,7 +28,7 @@ global.apiPort=process.env.MTAXI_AUDIT_API_PORT||'18084';
   await p.locator('flt-semantics-placeholder').evaluateAll(es=>es.forEach(e=>e.click()));await p.waitForTimeout(300);return p;
  };
  global.shot=async(p,name)=>{await p.screenshot({path:'/workspace/mtaxi/output/full-audit/'+name+'.png'});};
- global.text=async(p)=>p.locator('flt-semantics-host').innerText();
+ global.text=async(p)=>p.locator('flt-semantics-host').evaluate(host=>[host.innerText,...Array.from(host.querySelectorAll('[aria-label]'),e=>e.getAttribute('aria-label'))].filter(Boolean).join('\n'));
  global.call=async(index,name,data={})=>{const r=await fetch('http://127.0.0.1:'+apiPort+'/call/'+name,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+actors[index].token},body:JSON.stringify(data)});return r.json();};
  global.p=await open('passenger','/homePage');global.d=await open('driver','/homeDriver');global.a=await open('admin','/admin',1440);
  console.log('READY '+JSON.stringify({passenger:p.url(),driver:d.url(),admin:a.url()}));

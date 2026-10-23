@@ -74,10 +74,13 @@ void main() {
       activateBackendUser(target == 'approved-after-review'
           ? {
               ...user,
-              'statusDriver': 'pending',
-              'driverRegistrationStatus': 'pending'
+              'statusDriver': 'pending_review',
+              'driverRegistrationStatus': 'pending_review'
             }
           : user);
+      if (target == 'approved-after-review') {
+        expect(isDriverRegistrationPendingReview(), isTrue);
+      }
       final gate = Completer<Map<String, dynamic>>();
       final activeTab = ValueNotifier(true);
       final router = GoRouter(initialLocation: '/profile', routes: [
@@ -106,8 +109,8 @@ void main() {
           expect(currentUserDocument?.snapshotData['statusDriver'], 'approved');
           activateBackendUser({
             ...user,
-            'statusDriver': 'pending',
-            'driverRegistrationStatus': 'pending'
+            'statusDriver': 'pending_review',
+            'driverRegistrationStatus': 'pending_review'
           });
           activeTab.value = false;
           await tester.pump();
