@@ -11,8 +11,8 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
   const {updateUserPreferencesAsync}=require('../src/users');
   const prefix='audit-scope-';
   try {
-    for(const [name,phone]of [['d','+70000000801'],['p','+70000000802'],['x','+70000000803']]) {
-      await db.query('INSERT INTO users(id,phone,balance,is_driver,status_driver) VALUES($1,$2,1000,$3,$4)',[prefix+name,phone,name==='d',name==='d'?'approved':'']);
+    for(const [name,phone]of [['d','+70000000801'],['p','+70000000802'],['x','+70000000803'],['e','+70000000804'],['f','+70000000805']]) {
+      await db.query('INSERT INTO users(id,phone,balance,is_driver,status_driver) VALUES($1,$2,1000,$3,$4)',[prefix+name,phone,['d','e','f'].includes(name),['d','e','f'].includes(name)?'approved':'']);
     }
     await db.query("INSERT INTO orders(id,user_id,driver_id,status,price,ot_lat,ot_lng) VALUES($1,$2,$3,2,500,53.53,76.68)",[prefix+'trip',prefix+'p',prefix+'d']);
     await db.query("INSERT INTO orders(id,user_id,driver_id,status,price) VALUES($1,$2,$3,5,500)",[prefix+'old',prefix+'p',prefix+'d']);
@@ -60,6 +60,27 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
       assert.equal((await store.lookupUserByIdAsync(prefix+'d')).balance,1123);
       assert.notEqual((await store.lookupUserByIdAsync(prefix+'p')).language,'bad');
     });
+    await t.test('independent financial writes overlap and cross-driver push FKs do not deadlock',async()=>{
+      for(const id of ['e','f'])await db.query("INSERT INTO fcm_tokens(id,user_id,token,platform,enabled,data) VALUES($1,$2,$3,'android',true,'{}')",[prefix+id+'-token',prefix+id,prefix+id+'-token-value']);
+      let entered=0,release,timedOut=false;const gate=new Promise(r=>release=r);
+      const timer=setTimeout(()=>{timedOut=true;release();},2000);
+      try {
+        await Promise.all(['e','f'].map(id=>store.withStoreAsync(async s=>{
+          if(++entered===2)release();await gate;
+          const other=id==='e'?'f':'e',orderId=prefix+id+'-parallel';
+          s.users.find(u=>u.id===prefix+id).balance-=1;
+          s.orders.push({id:orderId,userId:prefix+id,status:0,price:500});
+          s.notifications.push({id:prefix+id+'-push',type:'TEST',orderId});
+          s.notificationDeliveries.push({id:prefix+id+'-delivery',notificationId:prefix+id+'-push',tokenId:prefix+other+'-token',userId:prefix+other,status:'queued'});
+        },financialOrderScope('',prefix+id))));
+        assert.equal(timedOut,false,'Independent orders must run concurrently');
+        for(const id of ['e','f'])assert.equal((await store.lookupUserByIdAsync(prefix+id)).balance,999);
+      }finally{clearTimeout(timer);release();}
+    });
+    await t.test('financial scope rejects modifying a user without its row lock',async()=>{
+      await assert.rejects(store.withStoreAsync(s=>{s.users.find(u=>u.id===prefix+'f').balance++;},financialOrderScope('',prefix+'e')));
+      assert.equal((await store.lookupUserByIdAsync(prefix+'f')).balance,999);
+    });
     await t.test('GPS automatically advances arrival and queues passenger push with complete audience',async()=>{
       const now=Date.now();
       await db.query("UPDATE orders SET data=jsonb_build_object('autoArrivalSince',$2::bigint,'autoLastPosition',jsonb_build_object('latitude',53.53,'longitude',76.68,'accuracy',10,'at',$3::bigint)) WHERE id=$1",[prefix+'trip',now-16000,now-1000]);
@@ -72,12 +93,28 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
       assert.equal(after.users.find(u=>u.id===prefix+'d').balance,1123);
       assert.ok(after.users.find(u=>u.id===prefix+'x'));
     });
+    await t.test('GPS racing assignment and completion cannot deadlock or overwrite money',async()=>{
+      const ordersApi=require('../src/orders');
+      assert.equal((await ordersApi.cancelPassengerOrderAsync({orderDocPath:'order/'+prefix+'trip'},{user:{id:prefix+'p'}})).success,true);
+      const before=(await store.lookupUserByIdAsync(prefix+'d')).balance;
+      for(let i=0;i<10;i++) {
+        const created=await ordersApi.createPassengerOrderAsync({type:'taxi',city:'Железинка',ot:'Тест1',kuda:'Тест10',price:500,fromPoint:{latitude:53.53,longitude:76.68},toPoint:{latitude:53.54,longitude:76.69}},{user:{id:prefix+'p'}});
+        assert.equal(created.success,true);const request={orderDocPath:created.orderDocPath};
+        const gps=()=>updateUserPreferencesAsync({coords:{latitude:53.53,longitude:76.68,accuracy:10}},{user:{id:prefix+'d'}});
+        const assigned=await Promise.all([ordersApi.acceptOrderAsync(request,{user:{id:prefix+'d'}}),gps()]);
+        assert.ok(assigned.every(r=>r.success));
+        for(const nextStatus of [3,4])assert.equal((await ordersApi.advanceDriverOrderStatusAsync({...request,nextStatus},{user:{id:prefix+'d'}})).success,true);
+        const done=await Promise.all([ordersApi.advanceDriverOrderStatusAsync({...request,nextStatus:5},{user:{id:prefix+'d'}}),gps()]);
+        assert.ok(done.every(r=>r.success));
+      }
+      const driver=await store.lookupUserByIdAsync(prefix+'d');assert.equal(driver.balance,before-500);assert.equal(driver.activeDriverOrderId,null);
+    });
   }finally{
-    await db.query("DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE data->>'orderId' LIKE 'audit-scope-%')");
-    await db.query("DELETE FROM notifications WHERE data->>'orderId' LIKE 'audit-scope-%'");
+    await db.query("DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE data->>'orderId' IN (SELECT id FROM orders WHERE user_id LIKE 'audit-scope-%')) OR user_id LIKE 'audit-scope-%'");
+    await db.query("DELETE FROM notifications WHERE data->>'orderId' IN (SELECT id FROM orders WHERE user_id LIKE 'audit-scope-%')");
     await db.query("DELETE FROM fcm_tokens WHERE id LIKE 'audit-scope-%'");
-    await db.query("DELETE FROM ledger WHERE id LIKE 'audit-scope-%'");
-    await db.query("DELETE FROM orders WHERE id LIKE 'audit-scope-%'");
-    await db.query("DELETE FROM users WHERE id LIKE 'audit-scope-%'");await db.end();await store.getPool().end();
+    await db.query("DELETE FROM ledger WHERE id LIKE 'audit-scope-%' OR user_id LIKE 'audit-scope-%'");
+    await db.query("DELETE FROM orders WHERE id LIKE 'audit-scope-%' OR user_id LIKE 'audit-scope-%'");
+    await db.query("DELETE FROM users WHERE id LIKE 'audit-scope-%'");await db.end();await store.getPool().end();await store.getReadPool().end();
   }
 });

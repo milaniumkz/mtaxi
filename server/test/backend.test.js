@@ -688,7 +688,7 @@ test("postgres store serializes snapshot writes with advisory transaction lock",
   assert.match(pgStore, /async function writeStoreAsync\(store\) \{\s+return withPgTransaction/s);
   // Financial/full snapshots remain exclusive; shared user scopes are verified
   // against real concurrent transactions in postgres_scoped_store.test.js.
-  assert.match(pgStore, /const transact = scope\?\.userLockId \? withUserTransaction : withPgTransaction/);
+  assert.match(pgStore, /scope\?\.userLockId \? withUserTransaction : withPgTransaction/);
 });
 
 test("store health reports selected local JSON store", async () => {

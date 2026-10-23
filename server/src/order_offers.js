@@ -204,7 +204,7 @@ async function respondOrderOfferAsync(data, auth) {
       x.status = x.id === offer.id ? "accepted" : "closed";
     });
     return result;
-  }, financialOrderScope(idOf(data), auth.user.id));
+  }, financialOrderScope(idOf(data), auth.user.id, data.offerId));
 }
 async function getTripTrackingAsync(data, auth) {
   if (!auth?.user) return fail("UNAUTHENTICATED", "Войдите в приложение");

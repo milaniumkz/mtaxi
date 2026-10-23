@@ -11,12 +11,13 @@ function requireDatabaseUrl() {
   }
 }
 
-function createPool() {
+function createPool(options = {}) {
   requireDatabaseUrl();
-  return new Pool({ connectionString: databaseUrl });
+  return new Pool({ connectionString: databaseUrl, ...options });
 }
 
 let pool;
+let readPool;
 
 function getPool() {
   if (!pool) {
@@ -25,8 +26,13 @@ function getPool() {
   return pool;
 }
 
-async function withPgClient(callback) {
-  const client = await getPool().connect();
+function getReadPool() {
+  if (!readPool) readPool = createPool({application_name: 'mtaxi_reads'});
+  return readPool;
+}
+
+async function withPgClient(callback, {readOnly = false} = {}) {
+  const client = await (readOnly ? getReadPool() : getPool()).connect();
   try {
     return await callback(client);
   } finally {
@@ -120,7 +126,7 @@ async function lookupUserByIdAsync(id) {
   return withPgClient(async client => {
     const result = await client.query("SELECT * FROM users WHERE id = $1", [String(id)]);
     return result.rows[0] ? userFromRow(result.rows[0]) : null;
-  });
+  }, {readOnly:true});
 }
 
 async function readStoreWithClient(client, scope = null) {
@@ -470,6 +476,8 @@ async function writeStoreWithClient(client, store = {}, previous = null) {
   }
   for (const user of changedRows(users, previous?.users)) {
     const c = coords(user.coords);
+    const oldUser = previous?.users?.find(item=>item.id===user.id);
+    const updatePhone = !oldUser || oldUser.phone !== user.phone;
     await client.query(
       `INSERT INTO users (
         id, phone, password_hash, display_name, role, role_state,
@@ -483,7 +491,7 @@ async function writeStoreWithClient(client, store = {}, previous = null) {
         COALESCE($24::timestamptz, now()), COALESCE($25::timestamptz, now())
       )
       ON CONFLICT (id) DO UPDATE SET
-        phone = EXCLUDED.phone,
+        ${updatePhone ? "phone = EXCLUDED.phone," : ""}
         password_hash = EXCLUDED.password_hash,
         display_name = EXCLUDED.display_name,
         role = EXCLUDED.role,
@@ -1089,7 +1097,7 @@ async function readStoreAsync(scope = null) {
       await client.query("ROLLBACK");
       throw error;
     }
-  });
+  }, {readOnly:true});
 }
 
 async function writeStoreAsync(store) {
@@ -1097,7 +1105,7 @@ async function writeStoreAsync(store) {
 }
 
 async function withStoreAsync(mutator, scope = null) {
-  const transact = scope?.userLockId ? withUserTransaction : withPgTransaction;
+  const transact = scope?.financial ? withFinancialTransaction : scope?.userLockId ? withUserTransaction : withPgTransaction;
   return transact(async (client) => {
     const store = await readStoreWithClient(client, scope);
     const previous = structuredClone(store);
@@ -1105,24 +1113,51 @@ async function withStoreAsync(mutator, scope = null) {
     if (scope) assertScopedMutation(store, previous, scope);
     await writeStoreWithClient(client, store, previous);
     return result;
-  }, scope?.userLockId);
+  }, scope?.financial ? scope : scope?.userLockId);
 }
 
 // Shared advisory locks allow unrelated GPS writers to run concurrently, while
-// financial/full-store transactions still acquire the exclusive counterpart.
+// legacy full-store transactions still acquire the exclusive counterpart.
 async function withUserTransaction(callback, userId) {
+  // All scoped writers lock an existing order before users. Recheck the active
+  // pointer under the user lock: it may change while we acquire the order lock.
+  for (let attempt=0; attempt<4; attempt++) {
+    const result = await withPgClient(async client => {
+      await client.query('BEGIN');
+      try {
+        await client.query('SELECT pg_advisory_xact_lock_shared(hashtext($1))', [STORE_WRITE_LOCK_KEY]);
+        const before = (await client.query('SELECT active_driver_order_id FROM users WHERE id=$1',[userId])).rows[0]?.active_driver_order_id || null;
+        if (before) await client.query('SELECT id FROM orders WHERE id=$1 FOR UPDATE',[before]);
+        const current = (await client.query('SELECT active_driver_order_id FROM users WHERE id=$1 FOR NO KEY UPDATE',[userId])).rows[0]?.active_driver_order_id || null;
+        if (current !== before) {await client.query('ROLLBACK');return {retry:true};}
+        const value = await callback(client);
+        await client.query('COMMIT');
+        return {value};
+      } catch (error) {await client.query('ROLLBACK');throw error;}
+    });
+    if (!result.retry) return result.value;
+  }
+  return withPgTransaction(callback);
+}
+async function withFinancialTransaction(callback, scope) {
   return withPgClient(async client => {
     await client.query('BEGIN');
     try {
-      await client.query('SELECT pg_advisory_xact_lock_shared(hashtext($1))', [STORE_WRITE_LOCK_KEY]);
-      await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [userId]);
-      const result = await callback(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    }
+      await client.query('SELECT pg_advisory_xact_lock_shared(hashtext($1))',[STORE_WRITE_LOCK_KEY]);
+      const {orderId,actorId,offerId}=scope.financial;
+      const order = orderId ? (await client.query('SELECT user_id,driver_id,data FROM orders WHERE id=$1 FOR UPDATE',[orderId])).rows[0] : null;
+      const offeredDriver = Array.isArray(order?.data?.offers) ? order.data.offers.find(o=>o.id===offerId)?.driverId : null;
+      const ids=[...new Set([actorId,order?.user_id,order?.driver_id,offeredDriver].filter(Boolean))].sort();
+      // NO KEY UPDATE is compatible with FK checks made by push deliveries to
+      // other drivers; money/assignment writes to the same user still conflict.
+      const users=(await client.query('SELECT id,active_passenger_order_id,active_driver_order_id FROM users WHERE id=ANY($1::text[]) ORDER BY id FOR NO KEY UPDATE',[ids])).rows;
+      scope.lockedUserIds=new Set(users.map(u=>u.id));
+      const orderIds=[...new Set([orderId,...users.flatMap(u=>[u.active_passenger_order_id,u.active_driver_order_id])].filter(Boolean))];
+      scope.tables.orders={where:'id=ANY($1::text[]) OR (status=5 AND driver_id=$2)',values:[orderIds,actorId]};
+      scope.tables.users={where:'is_driver=true OR id=ANY($1::text[])',values:[ids]};
+      const result=await callback(client);
+      await client.query('COMMIT');return result;
+    } catch(error) {await client.query('ROLLBACK');throw error;}
   });
 }
 function assertScopedMutation(store, previous, scope) {
@@ -1132,6 +1167,23 @@ function assertScopedMutation(store, previous, scope) {
     if (Array.isArray(rows) && hasRemovedRows(store[key] || [], rows)) {
       throw new Error('Deletion from scoped store is forbidden: ' + key);
     }
+  }
+  if (scope.financial) {
+    const writable=new Set(['users','orders','ledger','notifications','notificationDeliveries']);
+    for (const key of Object.keys(store)) if (!writable.has(key) && !isDeepStrictEqual(store[key],previous[key])) throw new Error('Financial scope cannot mutate '+key);
+    for (const user of changedRows(store.users,previous.users)) {
+      const before=previous.users.find(u=>u.id===user.id);
+      if (!scope.lockedUserIds.has(user.id) || !before || user.phone!==before.phone) throw new Error('Financial scope requires locked existing user');
+    }
+    for (const order of changedRows(store.orders,previous.orders)) {
+      const existed=previous.orders.some(o=>o.id===order.id);
+      if (existed ? order.id!==scope.financial.orderId : scope.financial.orderId || order.userId!==scope.financial.actorId) throw new Error('Financial scope cannot modify unrelated order');
+    }
+    for (const key of ['ledger','notifications','notificationDeliveries']) {
+      const existing=new Set(previous[key].map(item=>item.id));
+      if (changedRows(store[key],previous[key]).some(item=>existing.has(item.id))) throw new Error('Financial scope may only append '+key);
+    }
+    return;
   }
   if (!scope.userLockId) return;
   const allowed = new Set(['users','orders','notifications','notificationDeliveries']);
@@ -1215,6 +1267,7 @@ module.exports = {
   storeHealth,
   createPool,
   getPool,
+  getReadPool,
   withPgClient,
   withPgTransaction,
   readStore,
