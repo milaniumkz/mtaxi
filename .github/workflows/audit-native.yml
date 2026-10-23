@@ -1,5 +1,5 @@
 name: Build isolated MTaxi audit APK without deployment
-# Final audit candidate: approval refresh, document labels and role links; no VPS changes.
+# Final audit candidate: cached-tab approval refresh, document labels and role links; no VPS changes.
 on:
   push:
     branches: [codex/full-audit-20261023]

@@ -1,6 +1,7 @@
 import '/backend/uploads/mtaxi_network_image.dart';
 import '/design/mtaxi_theme.dart';
 import '/design/driver_approval.dart';
+import '/design/bottom_navigation.dart';
 import 'dart:async';
 
 import '/auth/backend_auth/auth_util.dart';
@@ -42,6 +43,7 @@ class _ProfileWidgetState extends State<ProfileWidget> {
   bool _isSwitchingRoleState = false;
   bool _isSigningOut = false;
   bool _isRefreshingProfile = false;
+  bool? _wasActive;
   final Set<String> _optimisticallyReadSupportChatPaths = {};
   final Set<String> _optimisticallyReadSupportChatKeys = {};
 
@@ -722,6 +724,18 @@ class _ProfileWidgetState extends State<ProfileWidget> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_reloadProfile());
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = MTaxiTabActivity.isActive(context);
+    if (_wasActive == false && active) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_reloadProfile());
+      });
+    }
+    _wasActive = active;
   }
 
   @override

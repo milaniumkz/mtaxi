@@ -14,6 +14,7 @@ import 'package:mtaxi/auth/backend_auth/auth_util.dart';
 import 'package:mtaxi/auth/backend_auth/backend_user_provider.dart';
 import 'package:mtaxi/backend/backend_session.dart';
 import 'package:mtaxi/design/mtaxi_theme.dart';
+import 'package:mtaxi/design/bottom_navigation.dart';
 import 'package:mtaxi/flutter_flow/internationalization.dart';
 import 'package:mtaxi/passenger/profile/profile_widget.dart';
 
@@ -78,8 +79,14 @@ void main() {
             }
           : user);
       final gate = Completer<Map<String, dynamic>>();
+      final activeTab = ValueNotifier(true);
       final router = GoRouter(initialLocation: '/profile', routes: [
-        GoRoute(path: '/profile', builder: (_, __) => const ProfileWidget()),
+        GoRoute(
+            path: '/profile',
+            builder: (_, __) => ValueListenableBuilder<bool>(
+                valueListenable: activeTab,
+                builder: (_, active, __) => MTaxiTabActivity(
+                    active: active, child: const ProfileWidget()))),
         GoRoute(
             path: '/homeDriver',
             builder: (_, __) => const Scaffold(body: Text('Экран водителя'))),
@@ -95,6 +102,20 @@ void main() {
         await tester.pump(const Duration(seconds: 1));
         await tester.pump();
         if (target == 'approved-after-review') {
+          expect(find.text('Анкета на проверке'), findsNothing);
+          expect(currentUserDocument?.snapshotData['statusDriver'], 'approved');
+          activateBackendUser({
+            ...user,
+            'statusDriver': 'pending',
+            'driverRegistrationStatus': 'pending'
+          });
+          activeTab.value = false;
+          await tester.pump();
+          activeTab.value = true;
+          for (var i = 0; i < 3; i++) {
+            await tester.pump(const Duration(seconds: 1));
+            await tester.pump();
+          }
           expect(find.text('Анкета на проверке'), findsNothing);
           expect(currentUserDocument?.snapshotData['statusDriver'], 'approved');
         } else if (target == 'logout') {
@@ -157,6 +178,7 @@ void main() {
                 });
               }));
       router.dispose();
+      activeTab.dispose();
       activateBackendUser(null);
       UserModeResolver.clearTransientRoleState();
     });
