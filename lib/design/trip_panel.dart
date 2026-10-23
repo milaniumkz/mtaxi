@@ -1,3 +1,4 @@
+import '/trips/payment_summary.dart';
 import '/design/mtaxi_icon.dart';
 import 'package:flutter/material.dart';
 import '/flutter_flow/internationalization.dart';
@@ -130,10 +131,7 @@ class TripPanel extends StatelessWidget {
                       style: const TextStyle(fontSize: 12)),
                 ] else ...[
                   const SizedBox(height: 8),
-                  Text(order['paymentMode'] == 'wallet'
-                      ? tr(
-                          'Оплата со счёта приложения', 'Қосымша шотынан төлеу')
-                      : tr('Оплата наличными', 'Қолма-қол төлеу')),
+                  Text(passengerPaymentSummary(order, tr)),
                 ],
               ])),
           if (value('comment', '').isNotEmpty) ...[

@@ -46,7 +46,7 @@ jobs:
           curl --fail --silent --show-error https://mtaxi.89.126.192.185.sslip.io/downloads/mtaxi-staging.apk -o "$RUNNER_TEMP/previous.apk"
           previous_certificate="$("$apksigner_bin" verify --print-certs "$RUNNER_TEMP/previous.apk" | mtaxi_apk_certificate_sha256)"
           test "$audit_certificate" = "$previous_certificate"
-          "$(dirname "$apksigner_bin")/aapt" dump badging output/audit-native/mtaxi-audit.apk | head -1 > output/audit-native/package.txt
+          "$(dirname "$apksigner_bin")/aapt" dump badging output/audit-native/mtaxi-audit.apk | sed -n '1p' > output/audit-native/package.txt
           printf '%s\n' "$audit_certificate" > output/audit-native/certificate-sha256.txt
           (cd output/audit-native && sha256sum mtaxi-audit.apk > mtaxi-audit.apk.sha256)
           printf 'revision=%s\nbackend=http://127.0.0.1:18084\nprevious_apk_same_certificate=true\ninstallation_upgrade_test=blocked_no_device\nnot_deployed=true\n' "$GITHUB_SHA" > output/audit-native/verification.txt

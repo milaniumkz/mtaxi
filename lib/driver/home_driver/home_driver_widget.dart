@@ -65,6 +65,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   LatLng? currentUserLocationValue;
+  double? _lastGpsAccuracy;
   String? _locationError;
   final Set<String> _seenOrderIds = {};
   final Map<String, DocumentReference> _visibleOrderRefsById = {};
@@ -600,6 +601,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
               'coords': {
                 'latitude': location.latitude,
                 'longitude': location.longitude,
+                'accuracy': _lastGpsAccuracy,
               },
             },
           );
@@ -687,6 +689,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
       );
       setState(() {
         _locationError = null;
+        _lastGpsAccuracy = position.accuracy;
         currentUserLocationValue =
             LatLng(position.latitude, position.longitude);
       });
@@ -1274,12 +1277,18 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return Center(
-                        child: Text(
-                          'Не удалось загрузить заказы',
-                          style: FlutterFlowTheme.of(context)
-                              .bodyMedium
-                              .override(color: _mtaxiMuted),
-                        ),
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text(FFLocalizations.of(context).getVariableText(
+                              ruText: 'Не удалось загрузить заказы',
+                              kkText: 'Тапсырыстар жүктелмеді')),
+                          TextButton(
+                              onPressed: () => setState(() {}),
+                              child: Text(FFLocalizations.of(context)
+                                  .getVariableText(
+                                      ruText: 'Повторить',
+                                      kkText: 'Қайталау'))),
+                        ]),
                       );
                     }
                     final driverOrderRecordList =
