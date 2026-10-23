@@ -1,4 +1,5 @@
 const { withStoreAsync, newId } = require("./store");
+const { preferencesScope } = require("./store/scopes");
 const { asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { hasUserPassword, setUserPassword } = require("./passwords");
 
@@ -263,7 +264,7 @@ async function submitDriverRegistrationAsync(data = {}, auth) {
 async function updateUserPreferencesAsync(data = {}, auth) {
   const authError = requireAuth(auth);
   if (authError) return authError;
-  return withStoreAsync(async (store) => updatePreferencesInStore(store, data, auth));
+  return withStoreAsync(async (store) => updatePreferencesInStore(store, data, auth), preferencesScope(auth.user.id));
 }
 
 async function setPasswordAsync(data = {}, auth) {

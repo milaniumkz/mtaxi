@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const { performance, monitorEventLoopDelay } = require('node:perf_hooks');
 const base = process.env.MTAXI_AUDIT_BASE || 'http://127.0.0.1:18080';
 const url = new URL(base);
-if (url.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(url.hostname) || !['18080','18081','18083'].includes(url.port)) throw Error('Local audit target required');
+if (url.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(url.hostname) || !['18080','18081','18083','18085'].includes(url.port)) throw Error('Local audit target required');
 const actors = JSON.parse(fs.readFileSync(process.env.MTAXI_AUDIT_ACTORS));
 if (actors.length !== 1000 || actors.some(x=>!x.id.startsWith('audit_'))) throw Error('Synthetic actors required');
 const output = process.env.MTAXI_AUDIT_RESULT || 'load-results.json';

@@ -123,7 +123,18 @@ async function lookupUserByIdAsync(id) {
   });
 }
 
-async function readStoreWithClient(client) {
+async function readStoreWithClient(client, scope = null) {
+  const readQuery = (sql) => {
+    if (!scope) return client.query(sql);
+    const table = /\bFROM\s+(\w+)/i.exec(sql)?.[1];
+    if (!table) throw new Error('Scoped read requires an explicit table');
+    const selection = scope.tables[table];
+    if (!selection) return Promise.resolve({rows: []});
+    if (selection === true) return client.query(sql);
+    const boundary = sql.search(/\bORDER BY\b|\bLIMIT\b/i);
+    const offset = boundary < 0 ? sql.length : boundary;
+    return client.query(sql.slice(0, offset) + ' WHERE (' + selection.where + ') ' + sql.slice(offset), selection.values);
+  };
   const [
     settingsResult,
     usersResult,
@@ -144,8 +155,8 @@ async function readStoreWithClient(client) {
     genericResult,
     auditResult,
   ] = await Promise.all([
-    client.query("SELECT key, value FROM app_settings"),
-    client.query(
+    readQuery("SELECT key, value FROM app_settings"),
+    readQuery(
       `SELECT id, phone, password_hash, display_name, role, role_state,
               active_mode, preferred_client_mode, is_driver, status_driver,
               driver_registration_status, driver_online, blocked, vip, balance,
@@ -155,12 +166,12 @@ async function readStoreWithClient(client) {
        FROM users
        ORDER BY created_at ASC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, phone, sms_code, sms_code_hash, provider, status, data, created_at, expires_at
        FROM sms_codes
        ORDER BY created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, user_id, driver_id, type, status, ot, kuda,
               ot_lat, ot_lng, kuda_lat, kuda_lng, price, accepted_commission,
               comment, cancelled_by, data, created_at, updated_at,
@@ -168,72 +179,72 @@ async function readStoreWithClient(client) {
        FROM orders
        ORDER BY created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, user_id, payment_id, status, amount, idempotency_key,
               provider, data, created_at, updated_at
        FROM payments
        ORDER BY updated_at DESC, created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, user_id, status, amount, data, created_at, updated_at, resolved_at
        FROM withdrawals
        ORDER BY updated_at DESC, created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, user_id, order_id, payment_id, type, source, amount,
               balance_before, balance_after, data, created_at
        FROM ledger
        ORDER BY created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, user_id, admin_id, support_chat_key, last_message,
               unread_for_admin, unread_for_user, data, created_at, updated_at
        FROM support_chats
        ORDER BY updated_at DESC, created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, chat_id, user_id, text, image_url, data, created_at
        FROM support_messages
        ORDER BY created_at ASC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, user_id, token, platform, enabled, data, created_at, updated_at
        FROM fcm_tokens
        ORDER BY updated_at DESC, created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, dedupe_key, event_type, title, body, data, created_at
        FROM notifications
        ORDER BY created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, notification_id, token_id, user_id, status, attempts,
               last_error, sent_at, created_at, updated_at
        FROM notification_deliveries
        ORDER BY created_at DESC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, user_id, notification_id, event_type, order_id, data, created_at
        FROM push_delivery_acks
        ORDER BY created_at DESC`,
     ),
-    client.query("SELECT collection, fields FROM content_documents"),
-    client.query(
+    readQuery("SELECT collection, fields FROM content_documents"),
+    readQuery(
       `SELECT id, title, price_day, price_night, delivery_price, data, updated_at
        FROM city_prices
        ORDER BY title ASC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, ot, kuda, tarif, com, data, updated_at
        FROM intercity_routes
        ORDER BY ot ASC, kuda ASC`,
     ),
-    client.query(
+    readQuery(
       `SELECT collection, id, fields, created_at, updated_at
        FROM generic_documents
        ORDER BY collection ASC, updated_at DESC, id ASC`,
     ),
-    client.query(
+    readQuery(
       `SELECT id, action, target, admin_id, admin_phone, before_data, after_data, extra, created_at
        FROM audit_logs
        ORDER BY created_at DESC
@@ -1067,11 +1078,11 @@ async function writeStoreWithClient(client, store = {}, previous = null) {
   }
 }
 
-async function readStoreAsync() {
+async function readStoreAsync(scope = null) {
   return withPgClient(async client => {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     try {
-      const result = await readStoreWithClient(client);
+      const result = await readStoreWithClient(client, scope);
       await client.query("COMMIT");
       return result;
     } catch (error) {
@@ -1085,14 +1096,81 @@ async function writeStoreAsync(store) {
   return withPgTransaction(async (client) => writeStoreWithClient(client, store));
 }
 
-async function withStoreAsync(mutator) {
-  return withPgTransaction(async (client) => {
-    const store = await readStoreWithClient(client);
+async function withStoreAsync(mutator, scope = null) {
+  const transact = scope?.userLockId ? withUserTransaction : withPgTransaction;
+  return transact(async (client) => {
+    const store = await readStoreWithClient(client, scope);
     const previous = structuredClone(store);
     const result = await mutator(store);
+    if (scope) assertScopedMutation(store, previous, scope);
     await writeStoreWithClient(client, store, previous);
     return result;
+  }, scope?.userLockId);
+}
+
+// Shared advisory locks allow unrelated GPS writers to run concurrently, while
+// financial/full-store transactions still acquire the exclusive counterpart.
+async function withUserTransaction(callback, userId) {
+  return withPgClient(async client => {
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT pg_advisory_xact_lock_shared(hashtext($1))', [STORE_WRITE_LOCK_KEY]);
+      await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [userId]);
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
+}
+function assertScopedMutation(store, previous, scope) {
+  // The legacy writer deletes omitted IDs when rows are removed. Partial views
+  // must be update/append only; reject a deletion before any SQL writes occur.
+  for (const [key, rows] of Object.entries(previous)) {
+    if (Array.isArray(rows) && hasRemovedRows(store[key] || [], rows)) {
+      throw new Error('Deletion from scoped store is forbidden: ' + key);
+    }
+  }
+  if (!scope.userLockId) return;
+  const allowed = new Set(['users','orders','notifications','notificationDeliveries']);
+  for (const key of Object.keys(store)) {
+    if (!allowed.has(key) && !isDeepStrictEqual(store[key],previous[key])) {
+      throw new Error('Shared user transaction cannot mutate ' + key);
+    }
+  }
+  const userFields = new Set(['city','soundEnabled','themeMode','language','photoUrl',
+    'lastActive','coords','coordsUpdatedAt','coordsAccuracy','updatedAt',
+    'roleState','activeMode','preferredClientMode','driverOnLine']);
+  const tripFields = new Set(['status','updatedAt','driverArrivedAt','tripStartedAt',
+    'pickupPresenceVerified','autoLastPosition','autoArrivalSince','autoDepartureSince',
+    'autoArrivedAt','autoStartedAt']);
+  const assertOnlyFields = (record, before, allowedFields) => {
+    for (const key of new Set([...Object.keys(record),...Object.keys(before || {})])) {
+      if (!allowedFields.has(key) && !isDeepStrictEqual(record[key],before?.[key])) {
+        throw new Error('Shared transaction cannot modify field: ' + key);
+      }
+    }
+  };
+  for (const user of changedRows(store.users, previous.users)) {
+    if (user.id !== scope.userLockId) throw new Error('Shared transaction cannot modify another user');
+    const before = previous.users.find(u => u.id === user.id);
+    if (!before) throw new Error('Shared transaction cannot create a user');
+    assertOnlyFields(user,before,userFields);
+  }
+  for (const order of changedRows(store.orders, previous.orders)) {
+    const before = previous.orders.find(o => o.id === order.id);
+    if (!before || order.driverId !== scope.userLockId || ![2,3,4].includes(Number(order.status))) throw new Error('Invalid shared trip update');
+    if (Number(order.status)!==Number(before.status) && Number(order.status)!==Number(before.status)+1) throw new Error('Invalid shared trip transition');
+    assertOnlyFields(order,before,tripFields);
+  }
+  for (const key of ['notifications','notificationDeliveries']) {
+    const existing = new Set(previous[key].map(item=>item.id));
+    if (changedRows(store[key],previous[key]).some(item=>existing.has(item.id))) {
+      throw new Error('Shared transaction may only append push records');
+    }
+  }
 }
 
 function newId(prefix) {

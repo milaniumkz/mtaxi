@@ -1,3 +1,4 @@
+const { trackingScope } = require("./store/scopes");
 const { withStoreAsync, readStoreAsync, newId } = require("./store");
 const { acceptOrderInStore } = require("./orders");
 const { routeLookup } = require("./geocoding");
@@ -207,7 +208,7 @@ async function respondOrderOfferAsync(data, auth) {
 }
 async function getTripTrackingAsync(data, auth) {
   if (!auth?.user) return fail("UNAUTHENTICATED", "Войдите в приложение");
-  const store = await readStoreAsync();
+  const store = await readStoreAsync(trackingScope(idOf(data)));
   const o = store.orders.find((x) => x.id === idOf(data));
   if (!o || ![o.userId, o.driverId].includes(auth.user.id))
     return fail("ORDER_FORBIDDEN", "Нет доступа к маршруту");
