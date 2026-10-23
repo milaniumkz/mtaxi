@@ -7,7 +7,7 @@ module.exports=async function journey(){
  try {
   await p.getByRole('button',{name:'Куда едем?',exact:true}).click();
   await p.getByRole('textbox',{name:'Откуда',exact:true}).fill('Тестовая 1');
-  await p.getByRole('button',{name:'Тестовая 1, Железинка',exact:true}).click({timeout:15000});
+  await p.getByRole('textbox',{name:'Откуда',exact:true}).press('Enter');
   await p.getByRole('textbox',{name:'Куда',exact:true}).fill('Тестовая 10');
   await p.getByRole('button',{name:'Тестовая 10, Железинка',exact:true}).click({timeout:15000});
   await p.getByRole('button',{name:'Готово',exact:true}).click();
