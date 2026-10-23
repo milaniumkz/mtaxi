@@ -14,14 +14,14 @@ import '/flutter_flow/upload_data.dart';
 import 'dart:async';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:webviewx_plus/webviewx_plus.dart';
 import 'set_profile_model.dart';
 export 'set_profile_model.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class SetProfileWidget extends StatefulWidget {
   const SetProfileWidget({super.key});
@@ -418,12 +418,12 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final textColor = isDark ? Colors.white : const Color(0xFF1E1525);
+    final textColor = isDark ? Colors.white : const Color(0xFF1B242B);
     final appBarBg = isDark ? _mtaxiMint : surface;
     final appBarText = isDark ? Colors.white : textColor;
-    final ctaTextColor = isDark ? const Color(0xFF071718) : Colors.white;
+    const ctaTextColor = Color(0xFF1B242B);
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     return GestureDetector(
       onTap: () {
@@ -446,7 +446,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
               kk: 'Жолаушыны тіркеу',
             ),
             style: FlutterFlowTheme.of(context).titleLarge.override(
-                  font: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+                  font: TextStyle(
+                      fontFamily: 'Noto Sans', fontWeight: FontWeight.w800),
                   color: appBarText,
                   fontWeight: FontWeight.w800,
                 ),
@@ -502,7 +503,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                       style: FlutterFlowTheme.of(context)
                                           .bodySmall
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodySmall
@@ -771,8 +773,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                         context)
                                                     .labelMedium
                                                     .override(
-                                                      font:
-                                                          GoogleFonts.readexPro(
+                                                      font: TextStyle(
+                                                        fontFamily: 'Noto Sans',
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
                                                                     context)
@@ -804,8 +806,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                         context)
                                                     .labelMedium
                                                     .override(
-                                                      font:
-                                                          GoogleFonts.readexPro(
+                                                      font: TextStyle(
+                                                        fontFamily: 'Noto Sans',
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
                                                                     context)
@@ -885,34 +887,36 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                         .fromSTEB(14.0, 18.0,
                                                             14.0, 14.0),
                                               ),
-                                              style: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font: GoogleFonts.readexPro(
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                    letterSpacing: 0.0,
-                                                    fontWeight:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodyMedium
-                                                            .fontWeight,
-                                                    fontStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodyMedium
-                                                            .fontStyle,
-                                                  ),
+                                              style:
+                                                  FlutterFlowTheme.of(context)
+                                                      .bodyMedium
+                                                      .override(
+                                                        font: TextStyle(
+                                                          fontFamily:
+                                                              'Noto Sans',
+                                                          fontWeight:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontWeight,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
+                                                        letterSpacing: 0.0,
+                                                        fontWeight:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .fontWeight,
+                                                        fontStyle:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .fontStyle,
+                                                      ),
                                               validator: _model
                                                   .textController1Validator
                                                   .asValidator(context),
@@ -981,8 +985,9 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                   context)
                                                               .bodyMedium
                                                               .override(
-                                                                font: GoogleFonts
-                                                                    .readexPro(
+                                                                font: TextStyle(
+                                                                  fontFamily:
+                                                                      'Noto Sans',
                                                                   fontWeight: FlutterFlowTheme.of(
                                                                           context)
                                                                       .bodyMedium
@@ -1072,8 +1077,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                     context)
                                                                 .labelMedium
                                                                 .override(
-                                                                  font: GoogleFonts
-                                                                      .readexPro(
+                                                                  font:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'Noto Sans',
                                                                     fontWeight: FlutterFlowTheme.of(
                                                                             context)
                                                                         .labelMedium
@@ -1102,8 +1109,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                     context)
                                                                 .labelMedium
                                                                 .override(
-                                                                  font: GoogleFonts
-                                                                      .readexPro(
+                                                                  font:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'Noto Sans',
                                                                     fontWeight: FlutterFlowTheme.of(
                                                                             context)
                                                                         .labelMedium
@@ -1196,8 +1205,9 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                   context)
                                                               .bodyMedium
                                                               .override(
-                                                                font: GoogleFonts
-                                                                    .readexPro(
+                                                                font: TextStyle(
+                                                                  fontFamily:
+                                                                      'Noto Sans',
                                                                   fontWeight: FlutterFlowTheme.of(
                                                                           context)
                                                                       .bodyMedium
@@ -1257,8 +1267,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                           .of(context)
                                                       .labelMedium
                                                       .override(
-                                                        font: GoogleFonts
-                                                            .readexPro(),
+                                                        font: TextStyle(
+                                                          fontFamily:
+                                                              'Noto Sans',
+                                                        ),
                                                         color:
                                                             FlutterFlowTheme.of(
                                                                     context)
@@ -1344,8 +1356,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                     FlutterFlowTheme.of(context)
                                                         .bodyMedium
                                                         .override(
-                                                          font: GoogleFonts
-                                                              .readexPro(),
+                                                          font: TextStyle(
+                                                            fontFamily:
+                                                                'Noto Sans',
+                                                          ),
                                                           letterSpacing: 0.0,
                                                         ),
                                                 keyboardType: TextInputType
@@ -1385,8 +1399,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                           .of(context)
                                                       .labelMedium
                                                       .override(
-                                                        font: GoogleFonts
-                                                            .readexPro(),
+                                                        font: TextStyle(
+                                                          fontFamily:
+                                                              'Noto Sans',
+                                                        ),
                                                         color:
                                                             FlutterFlowTheme.of(
                                                                     context)
@@ -1472,8 +1488,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                     FlutterFlowTheme.of(context)
                                                         .bodyMedium
                                                         .override(
-                                                          font: GoogleFonts
-                                                              .readexPro(),
+                                                          font: TextStyle(
+                                                            fontFamily:
+                                                                'Noto Sans',
+                                                          ),
                                                           letterSpacing: 0.0,
                                                         ),
                                                 keyboardType: TextInputType
@@ -1515,7 +1533,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                 textStyle: FlutterFlowTheme.of(context)
                                     .titleSmall
                                     .override(
-                                      font: GoogleFonts.readexPro(
+                                      font: TextStyle(
+                                        fontFamily: 'Noto Sans',
                                         fontWeight: FlutterFlowTheme.of(context)
                                             .titleSmall
                                             .fontWeight,

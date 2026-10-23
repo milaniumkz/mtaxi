@@ -6,13 +6,13 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/custom_code/actions/index.dart' as actions;
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'editkuda_model.dart';
 export 'editkuda_model.dart';
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiText = Color(0xFF1B242B);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class EditkudaWidget extends StatefulWidget {
   const EditkudaWidget({super.key});
@@ -109,7 +109,8 @@ class _EditkudaWidgetState extends State<EditkudaWidget> {
                     '5pzzplbn' /* Введите адрес конечной точки? */,
                   ),
                   style: FlutterFlowTheme.of(context).headlineMedium.override(
-                        font: GoogleFonts.outfit(
+                        font: TextStyle(
+                          fontFamily: 'Noto Sans',
                           fontWeight: FlutterFlowTheme.of(context)
                               .headlineMedium
                               .fontWeight,
@@ -153,7 +154,8 @@ class _EditkudaWidgetState extends State<EditkudaWidget> {
                       onSelected: onSelected,
                       textStyle:
                           FlutterFlowTheme.of(context).bodyMedium.override(
-                                font: GoogleFonts.readexPro(
+                                font: TextStyle(
+                                  fontFamily: 'Noto Sans',
                                   fontWeight: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontWeight,
@@ -231,7 +233,8 @@ class _EditkudaWidgetState extends State<EditkudaWidget> {
                         ),
                         hintStyle:
                             FlutterFlowTheme.of(context).labelMedium.override(
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .labelMedium
                                         .fontWeight,
@@ -282,7 +285,8 @@ class _EditkudaWidgetState extends State<EditkudaWidget> {
                         fillColor: surface2,
                       ),
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            font: GoogleFonts.readexPro(
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
                               fontWeight: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontWeight,
@@ -340,7 +344,8 @@ class _EditkudaWidgetState extends State<EditkudaWidget> {
                         color: _mtaxiMint,
                         textStyle:
                             FlutterFlowTheme.of(context).titleMedium.override(
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .titleMedium
                                         .fontWeight,

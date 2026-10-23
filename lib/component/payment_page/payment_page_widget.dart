@@ -7,11 +7,11 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/instant_timer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'payment_page_model.dart';
 export 'payment_page_model.dart';
 
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class PaymentPageWidget extends StatefulWidget {
   const PaymentPageWidget({
@@ -181,13 +181,13 @@ class _PaymentPageWidgetState extends State<PaymentPageWidget> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final textColor = isDark ? Colors.white : const Color(0xFF1E1525);
+    final textColor = isDark ? Colors.white : const Color(0xFF1B242B);
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
-    final ctaColor = isDark ? const Color(0xFF28D8C6) : const Color(0xFFFF6500);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
+    final ctaColor = isDark ? const Color(0xFF28D8C6) : const Color(0xFFE6BD63);
     return PopScope(
       canPop: true,
       child: SizedBox(
@@ -219,7 +219,8 @@ class _PaymentPageWidgetState extends State<PaymentPageWidget> {
                       'Пополнение',
                       textAlign: TextAlign.center,
                       style: FlutterFlowTheme.of(context).titleMedium.override(
-                            font: GoogleFonts.readexPro(
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
                               fontWeight: FontWeight.w800,
                             ),
                             color: textColor,
@@ -240,7 +241,8 @@ class _PaymentPageWidgetState extends State<PaymentPageWidget> {
                       'Касса 24',
                       textAlign: TextAlign.center,
                       style: FlutterFlowTheme.of(context).titleLarge.override(
-                            font: GoogleFonts.readexPro(
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
                               fontWeight: FontWeight.w800,
                             ),
                             color: textColor,
@@ -254,7 +256,9 @@ class _PaymentPageWidgetState extends State<PaymentPageWidget> {
                       _statusText,
                       textAlign: TextAlign.center,
                       style: FlutterFlowTheme.of(context).bodySmall.override(
-                            font: GoogleFonts.readexPro(),
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
+                            ),
                             color: mutedColor,
                             letterSpacing: 0.0,
                           ),
@@ -267,7 +271,9 @@ class _PaymentPageWidgetState extends State<PaymentPageWidget> {
                           textAlign: TextAlign.center,
                           style:
                               FlutterFlowTheme.of(context).bodySmall.override(
-                                    font: GoogleFonts.readexPro(),
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
+                                    ),
                                     color: FlutterFlowTheme.of(context).error,
                                     letterSpacing: 0.0,
                                   ),
@@ -289,7 +295,8 @@ class _PaymentPageWidgetState extends State<PaymentPageWidget> {
                             textStyle: FlutterFlowTheme.of(context)
                                 .titleSmall
                                 .override(
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .titleSmall
                                         .fontWeight,

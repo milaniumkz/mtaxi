@@ -116,7 +116,7 @@ Future<Map<String, dynamic>> makeCloudCall(
   Future<Map<String, dynamic>> executeCall() async {
     try {
       unawaited(getAppRuntimeSettings());
-      return _makeExternalBackendCall(
+      return await _makeExternalBackendCall(
         callName,
         input,
         effectiveTimeout,

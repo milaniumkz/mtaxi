@@ -1,7 +1,6 @@
 // ignore_for_file: overridden_fields, annotate_overrides
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,8 +17,8 @@ abstract class FlutterFlowTheme {
     return darkMode == null
         ? ThemeMode.system
         : darkMode
-        ? ThemeMode.dark
-        : ThemeMode.light;
+            ? ThemeMode.dark
+            : ThemeMode.light;
   }
 
   static void saveThemeMode(ThemeMode mode) => mode == ThemeMode.system
@@ -142,21 +141,21 @@ class LightModeTheme extends FlutterFlowTheme {
   @Deprecated('Use tertiary instead')
   Color get tertiaryColor => tertiary;
 
-  late Color primary = const Color(0xFF28D8C6);
-  late Color secondary = const Color(0xFF210B2C);
-  late Color tertiary = const Color(0xFFFFC857);
-  late Color alternate = const Color(0xFFE8EDF1);
-  late Color primaryText = const Color(0xFF18151E);
-  late Color secondaryText = const Color(0xFF6D7480);
-  late Color primaryBackground = const Color(0xFFF7F8FA);
+  late Color primary = const Color(0xFFE6BD63);
+  late Color secondary = const Color(0xFF1B242B);
+  late Color tertiary = const Color(0xFFE6BD63);
+  late Color alternate = const Color(0xFFE8EBE5);
+  late Color primaryText = const Color(0xFF1B242B);
+  late Color secondaryText = const Color(0xFF5C6862);
+  late Color primaryBackground = const Color(0xFFFCFCFA);
   late Color secondaryBackground = const Color(0xFFFFFFFF);
-  late Color accent1 = const Color(0x4D28D8C6);
-  late Color accent2 = const Color(0x33210B2C);
-  late Color accent3 = const Color(0x4DFFC857);
+  late Color accent1 = const Color(0x4DE6BD63);
+  late Color accent2 = const Color(0x331B242B);
+  late Color accent3 = const Color(0x4DE6BD63);
   late Color accent4 = const Color(0xCCFFFFFF);
   late Color success = const Color(0xFF249689);
   late Color warning = const Color(0xFFF9CF58);
-  late Color error = const Color(0xFFFF5963);
+  late Color error = const Color(0xFF993F32);
   late Color info = const Color(0xFFFFFFFF);
 }
 
@@ -213,111 +212,126 @@ class ThemeTypography extends Typography {
 
   final FlutterFlowTheme theme;
 
-  String get displayLargeFamily => 'Outfit';
+  String get displayLargeFamily => 'Noto Sans';
   bool get displayLargeIsCustom => false;
-  TextStyle get displayLarge => GoogleFonts.outfit(
-    color: theme.primaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 64.0,
-  );
-  String get displayMediumFamily => 'Outfit';
+  TextStyle get displayLarge => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 64.0,
+      );
+  String get displayMediumFamily => 'Noto Sans';
   bool get displayMediumIsCustom => false;
-  TextStyle get displayMedium => GoogleFonts.outfit(
-    color: theme.primaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 44.0,
-  );
-  String get displaySmallFamily => 'Outfit';
+  TextStyle get displayMedium => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 44.0,
+      );
+  String get displaySmallFamily => 'Noto Sans';
   bool get displaySmallIsCustom => false;
-  TextStyle get displaySmall => GoogleFonts.outfit(
-    color: theme.primaryText,
-    fontWeight: FontWeight.w600,
-    fontSize: 36.0,
-  );
-  String get headlineLargeFamily => 'Outfit';
+  TextStyle get displaySmall => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.w600,
+        fontSize: 36.0,
+      );
+  String get headlineLargeFamily => 'Noto Sans';
   bool get headlineLargeIsCustom => false;
-  TextStyle get headlineLarge => GoogleFonts.outfit(
-    color: theme.primaryText,
-    fontWeight: FontWeight.w600,
-    fontSize: 32.0,
-  );
-  String get headlineMediumFamily => 'Outfit';
+  TextStyle get headlineLarge => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.w600,
+        fontSize: 32.0,
+      );
+  String get headlineMediumFamily => 'Noto Sans';
   bool get headlineMediumIsCustom => false;
-  TextStyle get headlineMedium => GoogleFonts.outfit(
-    color: theme.primaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 24.0,
-  );
-  String get headlineSmallFamily => 'Outfit';
+  TextStyle get headlineMedium => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 24.0,
+      );
+  String get headlineSmallFamily => 'Noto Sans';
   bool get headlineSmallIsCustom => false;
-  TextStyle get headlineSmall => GoogleFonts.outfit(
-    color: theme.primaryText,
-    fontWeight: FontWeight.w500,
-    fontSize: 24.0,
-  );
-  String get titleLargeFamily => 'Outfit';
+  TextStyle get headlineSmall => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.w500,
+        fontSize: 24.0,
+      );
+  String get titleLargeFamily => 'Noto Sans';
   bool get titleLargeIsCustom => false;
-  TextStyle get titleLarge => GoogleFonts.outfit(
-    color: theme.primaryText,
-    fontWeight: FontWeight.w500,
-    fontSize: 22.0,
-  );
-  String get titleMediumFamily => 'Readex Pro';
+  TextStyle get titleLarge => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.w500,
+        fontSize: 22.0,
+      );
+  String get titleMediumFamily => 'Noto Sans';
   bool get titleMediumIsCustom => false;
-  TextStyle get titleMedium => GoogleFonts.readexPro(
-    color: theme.info,
-    fontWeight: FontWeight.normal,
-    fontSize: 18.0,
-  );
-  String get titleSmallFamily => 'Readex Pro';
+  TextStyle get titleMedium => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.info,
+        fontWeight: FontWeight.normal,
+        fontSize: 18.0,
+      );
+  String get titleSmallFamily => 'Noto Sans';
   bool get titleSmallIsCustom => false;
-  TextStyle get titleSmall => GoogleFonts.readexPro(
-    color: theme.info,
-    fontWeight: FontWeight.w500,
-    fontSize: 16.0,
-  );
-  String get labelLargeFamily => 'Readex Pro';
+  TextStyle get titleSmall => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.info,
+        fontWeight: FontWeight.w500,
+        fontSize: 16.0,
+      );
+  String get labelLargeFamily => 'Noto Sans';
   bool get labelLargeIsCustom => false;
-  TextStyle get labelLarge => GoogleFonts.readexPro(
-    color: theme.secondaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 16.0,
-  );
-  String get labelMediumFamily => 'Readex Pro';
+  TextStyle get labelLarge => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.secondaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 16.0,
+      );
+  String get labelMediumFamily => 'Noto Sans';
   bool get labelMediumIsCustom => false;
-  TextStyle get labelMedium => GoogleFonts.readexPro(
-    color: theme.secondaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 14.0,
-  );
-  String get labelSmallFamily => 'Readex Pro';
+  TextStyle get labelMedium => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.secondaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 14.0,
+      );
+  String get labelSmallFamily => 'Noto Sans';
   bool get labelSmallIsCustom => false;
-  TextStyle get labelSmall => GoogleFonts.readexPro(
-    color: theme.secondaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 12.0,
-  );
-  String get bodyLargeFamily => 'Readex Pro';
+  TextStyle get labelSmall => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.secondaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 12.0,
+      );
+  String get bodyLargeFamily => 'Noto Sans';
   bool get bodyLargeIsCustom => false;
-  TextStyle get bodyLarge => GoogleFonts.readexPro(
-    color: theme.primaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 16.0,
-  );
-  String get bodyMediumFamily => 'Readex Pro';
+  TextStyle get bodyLarge => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 16.0,
+      );
+  String get bodyMediumFamily => 'Noto Sans';
   bool get bodyMediumIsCustom => false;
-  TextStyle get bodyMedium => GoogleFonts.readexPro(
-    color: theme.primaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 14.0,
-  );
-  String get bodySmallFamily => 'Readex Pro';
+  TextStyle get bodyMedium => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 14.0,
+      );
+  String get bodySmallFamily => 'Noto Sans';
   bool get bodySmallIsCustom => false;
-  TextStyle get bodySmall => GoogleFonts.readexPro(
-    color: theme.primaryText,
-    fontWeight: FontWeight.normal,
-    fontSize: 12.0,
-  );
+  TextStyle get bodySmall => TextStyle(
+        fontFamily: 'Noto Sans',
+        color: theme.primaryText,
+        fontWeight: FontWeight.normal,
+        fontSize: 12.0,
+      );
 }
 
 class DarkModeTheme extends FlutterFlowTheme {
@@ -361,16 +375,9 @@ extension TextStyleHelper on TextStyle {
     List<Shadow>? shadows,
     String? package,
   }) {
-    if (useGoogleFonts && fontFamily != null) {
-      font = GoogleFonts.getFont(
-        fontFamily,
-        fontWeight: fontWeight ?? this.fontWeight,
-        fontStyle: fontStyle ?? this.fontStyle,
-      );
-    }
-
     return font != null
         ? font.copyWith(
+            fontFamily: 'Noto Sans',
             color: color ?? this.color,
             fontSize: fontSize ?? this.fontSize,
             letterSpacing: letterSpacing ?? this.letterSpacing,
@@ -381,7 +388,7 @@ extension TextStyleHelper on TextStyle {
             shadows: shadows,
           )
         : copyWith(
-            fontFamily: fontFamily,
+            fontFamily: 'Noto Sans',
             package: package,
             color: color,
             fontSize: fontSize,

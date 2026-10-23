@@ -6,8 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '/backend/app_settings/app_settings.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class ForceUpdateGate extends StatefulWidget {
   const ForceUpdateGate({
@@ -130,10 +130,10 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final textColor = isDark ? Colors.white : const Color(0xFF1E1525);
+    final textColor = isDark ? Colors.white : const Color(0xFF1B242B);
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
     final buttonText =
         isDark ? const Color(0xFF13191D) : const Color(0xFF12051B);
     final updateMessage = _policy.updateMessage.isNotEmpty

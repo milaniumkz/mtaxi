@@ -1,3 +1,9 @@
+import '/design/bottom_navigation.dart';
+import '/design/order_preview.dart';
+import '/design/mtaxi_theme.dart';
+import '/design/map_attribution.dart';
+import 'package:flutter_map/flutter_map.dart' as maps;
+import 'package:latlong2/latlong.dart' as geo;
 import '/trips/order_offers.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/app_settings/app_settings.dart';
@@ -8,13 +14,13 @@ import '/backend/backend_calls/backend_calls.dart';
 import '/backend/order_state_compat.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
+
 import '/flutter_flow/instant_timer.dart';
 import 'dart:async';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:provider/provider.dart';
 import 'package:webviewx_plus/webviewx_plus.dart';
 import 'home_driver_model.dart';
@@ -27,11 +33,9 @@ import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiMuted = Color(0xFF5C6862);
 const _mtaxiLightText = Color(0xFF17111D);
-const _mtaxiLightMuted = Color(0xFF7C7484);
-const _mtaxiOrange = Color(0xFFFF6500);
 
 class HomeDriverWidget extends StatefulWidget {
   const HomeDriverWidget({
@@ -52,6 +56,9 @@ class HomeDriverWidget extends StatefulWidget {
 
 class _HomeDriverWidgetState extends State<HomeDriverWidget> {
   late HomeDriverModel _model;
+  bool _tabActive = true;
+  bool _showFeed = false;
+  String? _feedType;
   bool _redirectingToPassengerMode = false;
   bool _recoveringActiveDriverOrder = false;
   bool _openingAcceptedDriverOrder = false;
@@ -349,27 +356,6 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     return '';
   }
 
-  Widget _orderAddressBlock(
-    OrderRecord order, {
-    TextStyle? style,
-  }) {
-    final from = _safeOrderAddress(order, 'ot');
-    final to = _safeOrderAddress(order, 'kuda');
-    if (from.isEmpty && to.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (from.isNotEmpty) Text('Откуда: $from', style: style),
-          if (to.isNotEmpty) Text('Куда: $to', style: style),
-        ],
-      ),
-    );
-  }
-
   String? _orderDistanceLabel(OrderRecord order) {
     final rawDistance = order.snapshotData['distanceKm'] ??
         order.snapshotData['distance_km'] ??
@@ -405,6 +391,10 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     if (date == null) {
       return '--:--';
     }
+    final elapsed = DateTime.now().difference(date);
+    if (!elapsed.isNegative && elapsed < const Duration(minutes: 1))
+      return FFLocalizations.of(context)
+          .getVariableText(ruText: 'Только что', kkText: 'Жаңа ғана');
     return dateTimeFormat(
       "Hm",
       date,
@@ -423,102 +413,66 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
         : _orderComment(order.snapshotData, order.comment);
     final from = _safeOrderAddress(order, 'ot');
     final to = _safeOrderAddress(order, 'kuda');
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 26, 18, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _orderTypeTitle(orderType),
-            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                  color: _mtaxiOrange,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 14),
-          if (from.isNotEmpty)
-            Text(
-              'Откуда: $from',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlutterFlowTheme.of(context).bodyLarge.override(
-                    color: _mtaxiLightText,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          const SizedBox(height: 8),
-          if (to.isNotEmpty)
-            Text(
-              'Куда: $to',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlutterFlowTheme.of(context).bodyLarge.override(
-                    color: _mtaxiLightText,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Цена пассажира: ${formatAppCurrency(order.price)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlutterFlowTheme.of(context).bodyLarge.override(
-                        color: _mtaxiLightText,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 106,
-                height: 46,
-                alignment: Alignment.center,
+    return MTaxiCard(
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            Text(_orderTypeTitle(orderType),
+                style: const TextStyle(fontSize: 12)),
+            Text(_orderTimeLabel(context, order),
+                style: const TextStyle(fontSize: 12))
+          ]),
+      const SizedBox(height: 16),
+      Text(from,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 10),
+      Text('→ $to'),
+      if (_orderDistanceLabel(order) != null) ...[
+        const SizedBox(height: 10),
+        _orderDistanceText(order)
+      ],
+      if (comment.isNotEmpty) ...[const SizedBox(height: 10), Text(comment)],
+      const SizedBox(height: 18),
+      Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 10,
+          children: [
+            Text(formatAppCurrency(order.price),
+                style:
+                    const TextStyle(fontSize: 27, fontWeight: FontWeight.w700)),
+            const DecoratedBox(
                 decoration: BoxDecoration(
-                  color: _mtaxiOrange,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Взять',
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-              ),
-            ],
-          ),
-          if (comment.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              comment,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlutterFlowTheme.of(context).bodySmall.override(
-                    color: _mtaxiLightMuted,
-                  ),
-            ),
-          ],
-        ],
-      ),
-    );
+                    color: MTaxiDesign.gold,
+                    borderRadius: BorderRadius.all(Radius.circular(14))),
+                child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    child: Text('Посмотреть',
+                        style: TextStyle(
+                            color: MTaxiDesign.ink,
+                            fontWeight: FontWeight.w700)))),
+          ]),
+    ]));
   }
 
   Widget _intercityBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.16),
+        color: MTaxiDesign.muted.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange),
+        border: Border.all(color: MTaxiDesign.muted),
       ),
       child: const Text(
         'МЕЖГОРОД',
         style: TextStyle(
-          color: Colors.orange,
-          fontSize: 11,
+          color: MTaxiDesign.muted,
+          fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -529,15 +483,15 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.16),
+        color: const Color(0xFF126E68).withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green),
+        border: Border.all(color: const Color(0xFF126E68)),
       ),
       child: const Text(
         'ДОСТАВКА',
         style: TextStyle(
-          color: Colors.green,
-          fontSize: 11,
+          color: const Color(0xFF126E68),
+          fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -548,15 +502,15 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.14),
+        color: const Color(0xFF126E68).withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue),
+        border: Border.all(color: const Color(0xFF126E68)),
       ),
       child: const Text(
         'ТАКСИ',
         style: TextStyle(
-          color: Colors.blue,
-          fontSize: 11,
+          color: const Color(0xFF126E68),
+          fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -631,7 +585,13 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     _model.instantTimer = InstantTimer.periodic(
       duration: Duration(seconds: _runtimeSettings.driverCoordsUpdateSec),
       callback: (timer) async {
+        if (!_tabActive ||
+            !(ModalRoute.of(context)?.isCurrent ?? true) ||
+            (WidgetsBinding.instance.lifecycleState != null &&
+                WidgetsBinding.instance.lifecycleState !=
+                    AppLifecycleState.resumed)) return;
         await _resolveLocation();
+        if (!_tabActive || !mounted) return;
         final location = currentUserLocationValue;
         if (location != null) {
           await makeCloudCall(
@@ -985,6 +945,12 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tabActive = MTaxiTabActivity.isActive(context);
+  }
+
+  @override
   void initState() {
     super.initState();
     _model = createModel(context, () => HomeDriverModel());
@@ -1025,18 +991,105 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     super.dispose();
   }
 
+  Widget _driverLanding(LatLng center) {
+    String tr(String ru, String kk) =>
+        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    final user = currentUserDocument;
+    return Column(children: [
+      Expanded(
+          child: Stack(children: [
+        maps.FlutterMap(
+            options: maps.MapOptions(
+                initialCenter: geo.LatLng(center.latitude, center.longitude),
+                initialZoom: 14,
+                maxZoom: 18),
+            children: [
+              maps.TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.mtaxi.app'),
+              if (currentUserLocationValue != null)
+                maps.MarkerLayer(markers: [
+                  maps.Marker(
+                      point: geo.LatLng(center.latitude, center.longitude),
+                      width: 44,
+                      height: 44,
+                      child: const Icon(Icons.local_taxi,
+                          size: 36, color: MTaxiDesign.ink))
+                ]),
+              const MTaxiMapAttribution(),
+            ]),
+        const Positioned(top: 36, left: 22, child: MTaxiBrand()),
+      ])),
+      ConstrainedBox(
+          constraints:
+              BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .5),
+          child: SingleChildScrollView(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(tr('Хорошего дня!', 'Күніңіз сәтті өтсін!'),
+                        style: const TextStyle(
+                            fontSize: 27, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 16),
+                    MTaxiCard(
+                        child: Wrap(spacing: 24, runSpacing: 16, children: [
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr('Денежный счёт', 'Ақша шоты')),
+                            const SizedBox(height: 6),
+                            Text(
+                                user == null
+                                    ? '—'
+                                    : formatAppCurrency(user.balance),
+                                style: const TextStyle(
+                                    fontSize: 22, fontWeight: FontWeight.w700))
+                          ]),
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr(
+                                'Бонусы на комиссию', 'Комиссияға бонустар')),
+                            const SizedBox(height: 6),
+                            Text(
+                                user?.snapshotData['bonusBalance'] is num
+                                    ? formatAppCurrency(
+                                        (user!.snapshotData['bonusBalance']
+                                                as num)
+                                            .toDouble())
+                                    : '—',
+                                style: const TextStyle(
+                                    fontSize: 22, fontWeight: FontWeight.w700))
+                          ]),
+                    ])),
+                    const SizedBox(height: 18),
+                    FilledButton(
+                        style: FilledButton.styleFrom(
+                            backgroundColor: MTaxiDesign.ink,
+                            foregroundColor: Colors.white),
+                        onPressed: () => setState(() => _showFeed = true),
+                        child:
+                            Text(tr('Смотреть заказы', 'Тапсырыстарды қарау'))),
+                    const SizedBox(height: 12),
+                    Text(
+                        tr('Бонусы оплачивают комиссию сервиса. Деньги и бонусы учитываются отдельно.',
+                            'Бонустар сервис комиссиясын төлейді. Ақша мен бонустар бөлек есептеледі.'),
+                        style: const TextStyle(fontSize: 12)),
+                  ]))),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : _mtaxiLightText;
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
         isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EDF1);
-    final ctaTextColor =
-        isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
     if (!UserModeResolver.canOpenDriverScreens(currentUserDocument)) {
       if (_shouldHoldDriverFlowDuringSync()) {
         _recoverActiveDriverOrderIfNeeded();
@@ -1208,6 +1261,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                   ),
                 );
               }
+              if (!_showFeed) return _driverLanding(effectiveLocation);
               final orderStream = _driverOrderStream();
               return StreamBuilder<List<OrderRecord>>(
                   stream: orderStream,
@@ -1253,6 +1307,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                       }
                       final type =
                           (order.snapshotData['type'] as String?) ?? 'taxi';
+                      if (_feedType != null && type != _feedType) return false;
                       if (allowedTypes != null && allowedTypes.isNotEmpty) {
                         if (!allowedTypes.contains(type)) {
                           return false;
@@ -1318,13 +1373,44 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                       mainAxisSize: MainAxisSize.max,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(children: [
+                              IconButton(
+                                  tooltip: 'К карте',
+                                  onPressed: () =>
+                                      setState(() => _showFeed = false),
+                                  icon: const Icon(Icons.arrow_back)),
+                              Expanded(
+                                  child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(children: [
+                                        for (final entry in <String?, String>{
+                                          null: 'Все',
+                                          'taxi': 'Такси',
+                                          'delivery': 'Доставка'
+                                        }.entries)
+                                          Padding(
+                                              padding: const EdgeInsets.only(
+                                                  right: 8),
+                                              child: ChoiceChip(
+                                                  label: Text(entry.value),
+                                                  selected:
+                                                      _feedType == entry.key,
+                                                  selectedColor:
+                                                      MTaxiDesign.gold,
+                                                  onSelected: (_) => setState(
+                                                      () => _feedType =
+                                                          entry.key)))
+                                      ])))
+                            ])),
                         const DriverBonusCard(),
                         Container(
                           height: 58,
                           color: surface,
                           alignment: Alignment.center,
                           child: Text(
-                            'Лента заказов',
+                            'Заказы рядом',
                             style: FlutterFlowTheme.of(context)
                                 .titleLarge
                                 .override(
@@ -1353,7 +1439,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                           Expanded(
                             child: ListView.builder(
                               padding:
-                                  const EdgeInsets.fromLTRB(16, 26, 16, 150),
+                                  const EdgeInsets.fromLTRB(22, 12, 22, 24),
                               itemCount: displayOrders.length,
                               itemBuilder: (context, driverIndex) {
                                 final driverOrderRecord =
@@ -1480,13 +1566,6 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                                 }
                                                 final liveOrder =
                                                     orderSnapshot.data!;
-                                                final liveOrderType = (liveOrder
-                                                            .snapshotData[
-                                                        'type'] as String?) ??
-                                                    'taxi';
-                                                final liveIsIntercity =
-                                                    liveOrderType ==
-                                                        'intercity';
                                                 final isOrderAvailable =
                                                     liveOrder.status == 0 &&
                                                         liveOrder.idDriver ==
@@ -1541,253 +1620,72 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                                       height: MediaQuery.sizeOf(
                                                                   context)
                                                               .height *
-                                                          0.55,
+                                                          0.88,
                                                       decoration: BoxDecoration(
                                                         color: surface,
                                                       ),
-                                                      child: Column(
-                                                        mainAxisSize:
-                                                            MainAxisSize.max,
-                                                        children: [
-                                                          const SizedBox(
-                                                              height: 12),
-                                                          Text(
-                                                            'Детали заказа',
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .headlineSmall
-                                                                .override(
-                                                                  color:
-                                                                      textColor,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w800,
-                                                                ),
-                                                          ),
-                                                          const SizedBox(
-                                                              height: 12),
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    horizontal:
-                                                                        16),
-                                                            child: (isOrderAvailable ||
-                                                                    isAssignedToCurrentDriver)
-                                                                ? Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      Row(
-                                                                        children: [
-                                                                          Text(
-                                                                            'Время: ${_orderTimeLabel(context, liveOrder)}',
-                                                                            style:
-                                                                                FlutterFlowTheme.of(context).bodyMedium.override(color: textColor),
-                                                                          ),
-                                                                          if (liveIsIntercity) ...[
-                                                                            const SizedBox(width: 8),
-                                                                            Container(
-                                                                              padding: const EdgeInsets.symmetric(
-                                                                                horizontal: 8,
-                                                                                vertical: 2,
-                                                                              ),
-                                                                              decoration: BoxDecoration(
-                                                                                color: Colors.orange.withValues(alpha: 0.15),
-                                                                                borderRadius: BorderRadius.circular(8),
-                                                                                border: Border.all(
-                                                                                  color: Colors.orange,
-                                                                                ),
-                                                                              ),
-                                                                              child: const Text(
-                                                                                'МЕЖГОРОД',
-                                                                                style: TextStyle(
-                                                                                  color: Colors.orange,
-                                                                                  fontWeight: FontWeight.w600,
-                                                                                  fontSize: 11,
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                          ],
-                                                                        ],
-                                                                      ),
-                                                                      _orderDistanceText(
-                                                                          liveOrder),
-                                                                      _orderAddressBlock(
-                                                                          liveOrder),
-                                                                      Text(
-                                                                        'Стоимость: ${formatAppCurrency(liveOrder.price)}',
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .titleMedium
-                                                                            .override(
-                                                                              color: _mtaxiMint,
-                                                                              fontWeight: FontWeight.w800,
-                                                                            ),
-                                                                      ),
-                                                                      const SizedBox(
-                                                                          height:
-                                                                              6),
-                                                                      if (liveOrderType !=
-                                                                              'delivery' &&
-                                                                          _orderComment(liveOrder.snapshotData, liveOrder.comment)
-                                                                              .isNotEmpty)
-                                                                        Text(
-                                                                          'Комментарий: ${_orderComment(liveOrder.snapshotData, liveOrder.comment)}',
-                                                                          style: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .override(color: mutedColor),
-                                                                        ),
-                                                                      if (_orderDeliveryItem(
-                                                                              liveOrder.snapshotData)
-                                                                          .isNotEmpty) ...[
-                                                                        const SizedBox(
-                                                                            height:
-                                                                                6),
-                                                                        Text(
-                                                                          'Что доставить: ${_orderDeliveryItem(liveOrder.snapshotData)}',
-                                                                          style: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .override(color: mutedColor),
-                                                                        ),
-                                                                      ],
-                                                                    ],
-                                                                  )
-                                                                : Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      Text(
-                                                                        _unavailableOrderMessage(
-                                                                          liveOrder,
-                                                                        ),
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .titleMedium
-                                                                            .override(color: textColor),
-                                                                      ),
-                                                                      const SizedBox(
-                                                                          height:
-                                                                              8),
-                                                                      Text(
-                                                                        'Закройте окно заказа.',
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .override(color: mutedColor),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                          ),
-                                                          TextButton.icon(
-                                                              onPressed: !isAssignedToCurrentDriver &&
-                                                                      liveOrder
-                                                                              .status ==
-                                                                          0
-                                                                  ? () => proposeDriverPrice(
-                                                                      context,
-                                                                      liveOrder
-                                                                          .reference
-                                                                          .path)
-                                                                  : null,
-                                                              icon: const Icon(Icons
-                                                                  .price_change_outlined),
-                                                              label: const Text(
-                                                                  'Предложить свою цену')),
-                                                          const Spacer(),
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(16),
-                                                            child: Builder(
-                                                              builder:
-                                                                  (context) {
-                                                                final isTakingOrder =
-                                                                    _takingOrderIds
-                                                                        .contains(
-                                                                  liveOrder
-                                                                      .reference
-                                                                      .id,
-                                                                );
-                                                                return FFButtonWidget(
-                                                                  onPressed: isAssignedToCurrentDriver
-                                                                      ? () async {
-                                                                          FFAppState()
-                                                                              .syncLegacyOrderRefs(
-                                                                            passengerOrderRef:
-                                                                                getEffectivePassengerLegacyOrderRef(),
-                                                                            driverOrderRef:
-                                                                                liveOrder.reference,
-                                                                          );
-                                                                          UserModeResolver
-                                                                              .setTransientRoleState(
-                                                                            'DRIVER_ON_TRIP',
-                                                                          );
-                                                                          FFAppState()
-                                                                              .update(() {});
-                                                                          Navigator
-                                                                              .pop(
-                                                                            context,
-                                                                          );
-                                                                          parentContext
-                                                                              .goNamed(
-                                                                            HomeDriverOrderWidget.routeName,
-                                                                            extra: <String,
-                                                                                dynamic>{
-                                                                              kTransitionInfoKey: TransitionInfo(
-                                                                                hasTransition: true,
-                                                                                transitionType: PageTransitionType.scale,
-                                                                                alignment: Alignment.bottomCenter,
-                                                                              ),
-                                                                            },
-                                                                          );
-                                                                        }
-                                                                      : !isOrderAvailable
-                                                                          ? () async {
-                                                                              _dismissedUnavailableOrderIds.add(
-                                                                                liveOrder.reference.id,
-                                                                              );
-                                                                              Navigator.pop(context);
-                                                                            }
-                                                                          : () async {
-                                                                              await _acceptAndOpenDriverOrder(
-                                                                                parentContext,
-                                                                                liveOrder,
-                                                                              );
-                                                                            },
-                                                                  text: !isOrderAvailable
-                                                                      ? 'Закрыть'
-                                                                      : isTakingOrder
-                                                                          ? 'Принимаем заказ...'
-                                                                          : 'Взять заказ',
-                                                                  options:
-                                                                      FFButtonOptions(
-                                                                    height: 44,
-                                                                    color: !isOrderAvailable &&
-                                                                            !isAssignedToCurrentDriver
-                                                                        ? Colors
-                                                                            .white
-                                                                            .withValues(alpha: 0.12)
-                                                                        : isTakingOrder
-                                                                            ? Colors.white.withValues(alpha: 0.12)
-                                                                            : _mtaxiMint,
-                                                                    textStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleSmall
-                                                                        .override(
-                                                                          color:
-                                                                              ctaTextColor,
-                                                                          fontWeight:
-                                                                              FontWeight.w800,
-                                                                        ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            12),
-                                                                  ),
-                                                                );
-                                                              },
-                                                            ),
-                                                          ),
-                                                        ],
+                                                      child: OrderPreview(
+                                                        order: {
+                                                          ...liveOrder
+                                                              .snapshotData,
+                                                          'price':
+                                                              liveOrder.price,
+                                                          'ot': liveOrder.ot,
+                                                          'kuda':
+                                                              liveOrder.kuda,
+                                                          'fromPoint': liveOrder
+                                                                      .otCoords ==
+                                                                  null
+                                                              ? null
+                                                              : {
+                                                                  'lat': liveOrder
+                                                                      .otCoords!
+                                                                      .latitude,
+                                                                  'lng': liveOrder
+                                                                      .otCoords!
+                                                                      .longitude
+                                                                },
+                                                          'toPoint': liveOrder
+                                                                      .kudaCoords ==
+                                                                  null
+                                                              ? null
+                                                              : {
+                                                                  'lat': liveOrder
+                                                                      .kudaCoords!
+                                                                      .latitude,
+                                                                  'lng': liveOrder
+                                                                      .kudaCoords!
+                                                                      .longitude
+                                                                }
+                                                        },
+                                                        unavailable:
+                                                            !isOrderAvailable,
+                                                        busy: _takingOrderIds
+                                                            .contains(liveOrder
+                                                                .reference.id),
+                                                        onOffer: () =>
+                                                            proposeDriverPrice(
+                                                                context,
+                                                                liveOrder
+                                                                    .reference
+                                                                    .path,
+                                                                initialPrice:
+                                                                    liveOrder
+                                                                        .price
+                                                                        .toInt()),
+                                                        onAccept: () async {
+                                                          if (isAssignedToCurrentDriver) {
+                                                            Navigator.pop(
+                                                                context);
+                                                            await _openAcceptedDriverOrder(
+                                                                liveOrder
+                                                                    .reference);
+                                                          } else if (isOrderAvailable) {
+                                                            await _acceptAndOpenDriverOrder(
+                                                                parentContext,
+                                                                liveOrder);
+                                                          }
+                                                        },
                                                       ),
                                                     ),
                                                   ),
@@ -1826,8 +1724,9 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                                           context)
                                                       .bodyMedium
                                                       .override(
-                                                        font: GoogleFonts
-                                                            .readexPro(
+                                                        font: TextStyle(
+                                                          fontFamily:
+                                                              'Noto Sans',
                                                           fontWeight:
                                                               FlutterFlowTheme.of(
                                                                       context)

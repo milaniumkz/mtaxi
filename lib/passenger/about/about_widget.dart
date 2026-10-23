@@ -2,12 +2,12 @@ import '/backend/app_content/app_content.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'about_model.dart';
 export 'about_model.dart';
 
-const _mtaxiOrange = Color(0xFFFF6500);
-const _mtaxiText = Color(0xFF1E1525);
+const _mtaxiOrange = Color(0xFFE6BD63);
+const _mtaxiText = Color(0xFF1B242B);
 
 class AboutWidget extends StatefulWidget {
   const AboutWidget({super.key});
@@ -42,8 +42,8 @@ class _AboutWidgetState extends State<AboutWidget> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
-    final appBarBg = isDark ? const Color(0xFF13191D) : const Color(0xFFFF6500);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
+    final appBarBg = isDark ? const Color(0xFF13191D) : const Color(0xFFE6BD63);
     final textColor = isDark ? Colors.white : Colors.white;
     return GestureDetector(
       onTap: () {
@@ -60,7 +60,8 @@ class _AboutWidgetState extends State<AboutWidget> {
           title: Text(
             'О приложении',
             style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.outfit(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight:
                         FlutterFlowTheme.of(context).headlineMedium.fontWeight,
                     fontStyle:
@@ -123,7 +124,9 @@ class _AboutWidgetState extends State<AboutWidget> {
         child: Text(
           text,
           style: FlutterFlowTheme.of(context).bodyMedium.override(
-                font: GoogleFonts.readexPro(),
+                font: TextStyle(
+                  fontFamily: 'Noto Sans',
+                ),
                 color: textColor,
                 lineHeight: 1.45,
                 letterSpacing: 0.0,

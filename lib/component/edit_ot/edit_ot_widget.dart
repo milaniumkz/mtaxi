@@ -5,13 +5,13 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/custom_code/actions/index.dart' as actions;
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'edit_ot_model.dart';
 export 'edit_ot_model.dart';
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiText = Color(0xFF1B242B);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class EditOtWidget extends StatefulWidget {
   const EditOtWidget({super.key});
@@ -110,7 +110,8 @@ class _EditOtWidgetState extends State<EditOtWidget> {
                     'ort4s3os' /* Введите адрес откуда вас забра... */,
                   ),
                   style: FlutterFlowTheme.of(context).headlineMedium.override(
-                        font: GoogleFonts.outfit(
+                        font: TextStyle(
+                          fontFamily: 'Noto Sans',
                           fontWeight: FlutterFlowTheme.of(context)
                               .headlineMedium
                               .fontWeight,
@@ -154,7 +155,8 @@ class _EditOtWidgetState extends State<EditOtWidget> {
                       onSelected: onSelected,
                       textStyle:
                           FlutterFlowTheme.of(context).bodyMedium.override(
-                                font: GoogleFonts.readexPro(
+                                font: TextStyle(
+                                  fontFamily: 'Noto Sans',
                                   fontWeight: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontWeight,
@@ -223,7 +225,8 @@ class _EditOtWidgetState extends State<EditOtWidget> {
                         ),
                         hintStyle:
                             FlutterFlowTheme.of(context).labelMedium.override(
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .labelMedium
                                         .fontWeight,
@@ -274,7 +277,8 @@ class _EditOtWidgetState extends State<EditOtWidget> {
                         fillColor: surface2,
                       ),
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            font: GoogleFonts.readexPro(
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
                               fontWeight: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontWeight,
@@ -333,7 +337,8 @@ class _EditOtWidgetState extends State<EditOtWidget> {
                         color: _mtaxiMint,
                         textStyle:
                             FlutterFlowTheme.of(context).titleMedium.override(
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .titleMedium
                                         .fontWeight,

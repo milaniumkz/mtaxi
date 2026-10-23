@@ -7,15 +7,15 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:provider/provider.dart';
 import 'settings_model.dart';
 export 'settings_model.dart';
 
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiOrange = Color(0xFFFF6500);
+const _mtaxiText = Color(0xFF1B242B);
+const _mtaxiMuted = Color(0xFF5C6862);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiOrange = Color(0xFFE6BD63);
 
 class SettingsWidget extends StatefulWidget {
   const SettingsWidget({super.key});
@@ -213,7 +213,7 @@ class _SettingsWidgetState extends State<SettingsWidget> {
         ? FFAppState().CityCountry.trim()
         : valueOrDefault(currentUserDocument?.city, '').trim();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final darkSurface =
         isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : _mtaxiText;
@@ -237,7 +237,8 @@ class _SettingsWidgetState extends State<SettingsWidget> {
               kkText: 'Параметрлер',
             ),
             style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.outfit(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight:
                         FlutterFlowTheme.of(context).headlineMedium.fontWeight,
                     fontStyle:
@@ -303,7 +304,8 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
@@ -346,7 +348,8 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
@@ -389,7 +392,8 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
@@ -480,7 +484,8 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
@@ -522,7 +527,8 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
@@ -634,7 +640,8 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                             style: FlutterFlowTheme.of(context)
                                                 .bodyMedium
                                                 .override(
-                                                  font: GoogleFonts.readexPro(
+                                                  font: TextStyle(
+                                                    fontFamily: 'Noto Sans',
                                                     fontWeight:
                                                         FlutterFlowTheme.of(
                                                                 context)

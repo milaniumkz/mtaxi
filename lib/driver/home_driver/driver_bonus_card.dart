@@ -1,9 +1,13 @@
+import '/design/bonus_progress.dart';
+import '/design/mtaxi_theme.dart';
+import '/flutter_flow/internationalization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '/backend/backend_calls/backend_calls.dart';
 
 class DriverBonusCard extends StatefulWidget {
-  const DriverBonusCard({super.key});
+  const DriverBonusCard({super.key, this.detailed = false});
+  final bool detailed;
 
   @override
   State<DriverBonusCard> createState() => _DriverBonusCardState();
@@ -51,46 +55,42 @@ class _DriverBonusCardState extends State<DriverBonusCard> {
 
   @override
   Widget build(BuildContext context) {
-    final bonus = _bonus;
-    final enabled = bonus?['enabled'] == true;
-    final count = (bonus?['completedOrders'] as num?)?.toInt() ?? 0;
-    final target = (bonus?['targetOrders'] as num?)?.toInt() ?? 0;
-    final balance = (bonus?['balance'] as num?) ?? 0;
-    final reward = (bonus?['reward'] as num?) ?? 0;
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    String tr(String ru, String kk) =>
+        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    return Padding(
+        padding: widget.detailed
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Бонусы: ${balance.toStringAsFixed(0)} ₸',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
-            if (_failed)
-              TextButton(
-                  onPressed: _refresh,
-                  child: const Text('Не удалось обновить бонусы. Повторить'))
-            else if (bonus == null)
-              const Text('Загружаем условия акции…')
-            else if (enabled) ...[
-              Text(
-                  'Сегодня: $count из $target заказов — ${reward.toStringAsFixed(0)} ₸'),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                  value: target > 0
-                      ? (count / target).clamp(0.0, 1.0).toDouble()
-                      : 0),
-              if (bonus['awarded'] == true)
-                const Text('Бонус за сегодня начислен!'),
-              const Text('Прогресс обнуляется в 00:00 по времени Казахстана.'),
-            ] else
-              const Text('Сейчас акция отключена'),
-            const Text(
-                'Бонусы сохраняются и оплачивают комиссию сервиса. Вывод недоступен.'),
-          ],
-        ),
-      ),
-    );
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_bonus != null)
+                BonusProgress(data: _bonus!, detailed: widget.detailed)
+              else
+                MTaxiCard(
+                    child: Text(_failed
+                        ? tr('Бонусы временно недоступны',
+                            'Бонустар уақытша қолжетімсіз')
+                        : tr('Загружаем условия акции…',
+                            'Акция шарттары жүктелуде…'))),
+              if (_failed)
+                TextButton(
+                    onPressed: _refresh,
+                    child: Text(tr('Не удалось обновить. Повторить',
+                        'Жаңарту мүмкін болмады. Қайталау'))),
+              if (!widget.detailed && _bonus != null)
+                TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (context) => Scaffold(
+                                appBar: AppBar(
+                                    title: Text(tr('Бонусы водителя',
+                                        'Жүргізуші бонустары'))),
+                                body: const SingleChildScrollView(
+                                    padding: EdgeInsets.all(22),
+                                    child: DriverBonusCard(detailed: true))))),
+                    child: Text(tr('Условия акции', 'Акция шарттары'))),
+            ]));
   }
 }

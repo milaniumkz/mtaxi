@@ -1,3 +1,4 @@
+import '/design/mtaxi_theme.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/auth/backend_auth/backend_user_provider.dart';
 import '/backend/backend.dart';
@@ -321,9 +322,7 @@ class _LoginWidgetState extends State<LoginWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF28D8C6)
-        : const Color(0xFFFF6B00);
+    const color = MTaxiDesign.gold;
     return Scaffold(
       body: SafeArea(
           child: Center(
@@ -337,20 +336,43 @@ class _LoginWidgetState extends State<LoginWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('MTaxi',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 42,
-                              fontWeight: FontWeight.w800,
-                              color: color)),
-                      const SizedBox(height: 24),
+                      const MTaxiBrand(),
+                      const SizedBox(height: 36),
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                                color: MTaxiDesign.gold.withValues(alpha: .22),
+                                borderRadius: BorderRadius.circular(20)),
+                            child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 7),
+                                child: Text(
+                                    _register
+                                        ? _tr('Начнём знакомство', 'Танысайық')
+                                        : _tr('С возвращением',
+                                            'Қайта қош келдіңіз'),
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700))),
+                          )),
+                      const SizedBox(height: 18),
                       Text(
                           _register
-                              ? _tr('Регистрация', 'Тіркелу')
-                              : _tr('Вход', 'Кіру'),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineSmall),
-                      const SizedBox(height: 24),
+                              ? _tr('Создать аккаунт', 'Аккаунт құру')
+                              : _tr('Поехали\nпо вашим делам.',
+                                  'Істеріңіз бойынша\nжолға шығайық.'),
+                          style: const TextStyle(
+                              fontSize: 31,
+                              fontWeight: FontWeight.w700,
+                              height: 1.18)),
+                      const SizedBox(height: 12),
+                      Text(_register
+                          ? _tr('Укажите номер телефона и придумайте пароль.',
+                              'Телефон нөмірін көрсетіп, құпиясөз жасаңыз.')
+                          : _tr('Такси рядом. Войдите, чтобы заказать поездку.',
+                              'Такси жақын жерде. Сапарға тапсырыс беру үшін кіріңіз.')),
+                      const SizedBox(height: 28),
                       TextFormField(
                           key: const ValueKey('login-phone'),
                           controller: _phone,
@@ -361,7 +383,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                               labelText:
                                   _tr('Номер телефона', 'Телефон нөмірі'),
                               hintText: '+7 7XX XXX XX XX',
-                              border: const OutlineInputBorder()),
+                              border: null),
                           validator: (_) => _normalizedPhone() == null
                               ? _tr('Введите номер +7 и 10 цифр',
                                   '+7 және 10 цифрды енгізіңіз')
@@ -388,10 +410,11 @@ class _LoginWidgetState extends State<LoginWidget> {
                           },
                           decoration: InputDecoration(
                               labelText: _tr('Пароль', 'Құпиясөз'),
+                              counterText: '',
                               helperText: _register
                                   ? _tr('От 8 до 128 символов', '8–128 таңба')
                                   : null,
-                              border: const OutlineInputBorder(),
+                              border: null,
                               suffixIcon: IconButton(
                                   tooltip: _tr('Показать или скрыть пароль',
                                       'Құпиясөзді көрсету немесе жасыру'),
@@ -421,12 +444,13 @@ class _LoginWidgetState extends State<LoginWidget> {
                             decoration: InputDecoration(
                                 labelText: _tr('Повторите пароль',
                                     'Құпиясөзді қайталаңыз'),
-                                border: const OutlineInputBorder()),
+                                border: null),
                             validator: (value) => value != _password.text
                                 ? _tr('Пароли не совпадают',
                                     'Құпиясөздер сәйкес емес')
                                 : null),
                         CheckboxListTile(
+                            controlAffinity: ListTileControlAffinity.leading,
                             contentPadding: EdgeInsets.zero,
                             value: _accepted,
                             onChanged: _busy
@@ -455,6 +479,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                       FilledButton(
                           style: FilledButton.styleFrom(
                               backgroundColor: color,
+                              foregroundColor: MTaxiDesign.ink,
                               minimumSize: const Size.fromHeight(52)),
                           onPressed: _busy ? null : _submit,
                           child: _busy
@@ -486,6 +511,26 @@ class _LoginWidgetState extends State<LoginWidget> {
                                 ? _tr('Уже есть аккаунт? Войти',
                                     'Аккаунтыңыз бар ма? Кіру')
                                 : _tr('Создать аккаунт', 'Аккаунт құру'))),
+                      const SizedBox(height: 16),
+                      Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          children: [
+                            TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => setAppLanguage(context, 'ru'),
+                                child: const Text('RU')),
+                            TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => setAppLanguage(context, 'kk'),
+                                child: const Text('ҚАЗ')),
+                            TextButton(
+                                onPressed: _busy ? null : _recovery,
+                                child: Text(
+                                    _tr('Нужна помощь?', 'Көмек керек пе?'))),
+                          ]),
                     ],
                   ))),
         ),

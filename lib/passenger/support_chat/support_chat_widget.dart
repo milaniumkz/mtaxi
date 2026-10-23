@@ -11,15 +11,15 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/upload_data.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 import 'support_chat_model.dart';
 export 'support_chat_model.dart';
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiOrange = Color(0xFFFF6500);
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiOrange = Color(0xFFE6BD63);
+const _mtaxiText = Color(0xFF1B242B);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class _PendingSupportMessage {
   const _PendingSupportMessage({
@@ -135,7 +135,7 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
     final surface2 = isDark ? const Color(0xFF243437) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : _mtaxiText;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
     final whatsAppPhone = (data['whatsAppPhone'] ?? '').toString().trim();
     final callPhone = (data['callPhone'] ?? '').toString().trim();
     if (whatsAppPhone.isEmpty && callPhone.isEmpty) {
@@ -160,7 +160,8 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
             Text(
               'Связаться со службой поддержки',
               style: FlutterFlowTheme.of(context).titleSmall.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight:
                           FlutterFlowTheme.of(context).titleSmall.fontWeight,
                       fontStyle:
@@ -887,12 +888,12 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
     final normalizedImageUrl = (imageUrl ?? '').trim();
     final bubbleColor = isMine
         ? _mtaxiOrange
-        : (isDark ? const Color(0xFF13191D) : const Color(0xFFF3F6F8));
+        : (isDark ? const Color(0xFF13191D) : const Color(0xFFF0F3EC));
     final textColor =
-        isMine ? Colors.white : (isDark ? Colors.white : _mtaxiText);
+        isMine ? const Color(0xFF1B242B) : (isDark ? Colors.white : _mtaxiText);
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -951,10 +952,8 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
                 ),
                 style: FlutterFlowTheme.of(context).bodySmall.override(
                       color: failed
-                          ? const Color(0xFFFFD1D1)
-                          : (isMine
-                              ? Colors.white.withValues(alpha: 0.72)
-                              : mutedColor),
+                          ? const Color(0xFF993F32)
+                          : (isMine ? const Color(0xFF1B242B) : mutedColor),
                     ),
               ),
               if (failed) ...[
@@ -962,9 +961,7 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
                 Text(
                   'Проверьте интернет и отправьте ещё раз',
                   style: FlutterFlowTheme.of(context).bodySmall.override(
-                        color: isMine
-                            ? Colors.white.withValues(alpha: 0.72)
-                            : mutedColor,
+                        color: isMine ? const Color(0xFF1B242B) : mutedColor,
                       ),
                 ),
               ],
@@ -983,7 +980,7 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
       children: [
         ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(30, 46, 30, 16),
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
           itemCount: messages.length + _pendingMessages.length,
           itemBuilder: (context, index) {
             if (index < messages.length) {
@@ -1035,12 +1032,12 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : _mtaxiText;
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
     if (!_loading && _chatRef == null) {
       _scheduleEnsureChatRetry();
     }
@@ -1059,7 +1056,8 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
           title: Text(
             'Служба поддержки',
             style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.outfit(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight:
                         FlutterFlowTheme.of(context).headlineMedium.fontWeight,
                     fontStyle:
@@ -1068,13 +1066,12 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
                   color: textColor,
                   fontSize: 22.0,
                   letterSpacing: 0.0,
-                  fontWeight:
-                      FlutterFlowTheme.of(context).headlineMedium.fontWeight,
+                  fontWeight: FontWeight.w700,
                   fontStyle:
                       FlutterFlowTheme.of(context).headlineMedium.fontStyle,
                 ),
           ),
-          centerTitle: true,
+          centerTitle: false,
           elevation: 0.0,
         ),
         body: AuthUserStreamWidget(

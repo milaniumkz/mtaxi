@@ -1,14 +1,15 @@
+import '/design/mtaxi_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
+
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'set_role_model.dart';
 export 'set_role_model.dart';
 
-const _mtaxiOrange = Color(0xFFFF6B00);
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiText = Color(0xFF171D22);
+const _mtaxiOrange = Color(0xFFE6BD63);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiText = Color(0xFF1B242B);
 const _mtaxiMuted = Color(0xFF5B6670);
 
 class SetRoleWidget extends StatefulWidget {
@@ -69,86 +70,40 @@ class _SetRoleWidgetState extends State<SetRoleWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
-    final appBarBg = isDark ? _mtaxiMint : const Color(0xFFFFFFFF);
-    final appBarText = isDark ? Colors.white : _mtaxiText;
-    final ctaColor = isDark ? _mtaxiMint : _mtaxiOrange;
-    final ctaTextColor = isDark ? const Color(0xFF071718) : Colors.white;
-    final textColor = isDark ? Colors.white : _mtaxiText;
+    String tr(String ru, String kk) =>
+        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
     return Scaffold(
-      backgroundColor: pageBg,
-      appBar: AppBar(
-        backgroundColor: appBarBg,
-        elevation: 0.0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Выбор роли',
-          style: GoogleFonts.readexPro(
-            color: appBarText,
-            fontSize: 21.0,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24.0, 46.0, 24.0, 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Кем будете пользоваться?',
-                style: GoogleFonts.readexPro(
-                  color: textColor,
-                  fontSize: 23.0,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 38.0),
-              _RoleCard(
-                title: FFLocalizations.of(context).getText(
-                  'clmphjaf' /* Пассажир */,
-                ),
-                subtitle: 'Заказать такси, доставку или межгород',
-                selected: _selectedRole == 'passenger',
-                onTap: () => setState(() => _selectedRole = 'passenger'),
-              ),
-              const SizedBox(height: 24.0),
-              _RoleCard(
-                title: FFLocalizations.of(context).getText(
-                  '4ibkabcs' /* Водитель */,
-                ),
-                subtitle: 'Принимать заказы и управлять балансом',
-                selected: _selectedRole == 'driver',
-                onTap: () => setState(() => _selectedRole = 'driver'),
-              ),
-              const Spacer(),
-              FFButtonWidget(
-                onPressed: () async => _selectRole(_selectedRole),
-                text: 'Продолжить',
-                options: FFButtonOptions(
-                  width: double.infinity,
-                  height: 54.0,
-                  padding: EdgeInsets.zero,
-                  iconPadding: EdgeInsets.zero,
-                  color: ctaColor,
-                  textStyle: GoogleFonts.readexPro(
-                    color: ctaTextColor,
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  elevation: 0.0,
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+        appBar: AppBar(
+            title: Text(tr('Как будете пользоваться?', 'Қалай пайдаланасыз?'))),
+        body: SafeArea(
+            child: ListView(padding: const EdgeInsets.all(22), children: [
+          const MTaxiBrand(),
+          const SizedBox(height: 32),
+          Text(tr('Куда отправимся?', 'Қайда барамыз?'),
+              style:
+                  const TextStyle(fontSize: 31, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Text(tr('Выберите роль. Её можно изменить в профиле.',
+              'Рөлді таңдаңыз. Оны профильде өзгертуге болады.')),
+          const SizedBox(height: 28),
+          _RoleCard(
+              title: tr('Пассажир', 'Жолаушы'),
+              subtitle: tr('Заказывать такси и доставку',
+                  'Такси мен жеткізуге тапсырыс беру'),
+              selected: _selectedRole == 'passenger',
+              onTap: () => setState(() => _selectedRole = 'passenger')),
+          const SizedBox(height: 16),
+          _RoleCard(
+              title: tr('Водитель', 'Жүргізуші'),
+              subtitle: tr('Принимать заказы и управлять счётом',
+                  'Тапсырыстарды қабылдау және шотты басқару'),
+              selected: _selectedRole == 'driver',
+              onTap: () => setState(() => _selectedRole = 'driver')),
+          const SizedBox(height: 32),
+          FilledButton(
+              onPressed: () => _selectRole(_selectedRole),
+              child: Text(tr('Продолжить', 'Жалғастыру'))),
+        ])));
   }
 }
 
@@ -175,14 +130,14 @@ class _RoleCard extends StatelessWidget {
     final borderColor =
         isDark ? const Color(0xFF2C3A3F) : const Color(0xFFD8DEE6);
     return InkWell(
-      borderRadius: BorderRadius.circular(8.0),
+      borderRadius: BorderRadius.circular(20.0),
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 110.0),
         padding: const EdgeInsets.fromLTRB(24.0, 24.0, 18.0, 20.0),
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: BorderRadius.circular(8.0),
+          borderRadius: BorderRadius.circular(20.0),
           border: Border.all(
             color: selected ? selectedColor : borderColor,
             width: 1.0,
@@ -207,7 +162,8 @@ class _RoleCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.readexPro(
+                    style: TextStyle(
+                      fontFamily: 'Noto Sans',
                       color: textColor,
                       fontSize: 18.0,
                       fontWeight: FontWeight.w800,
@@ -216,7 +172,8 @@ class _RoleCard extends StatelessWidget {
                   const SizedBox(height: 8.0),
                   Text(
                     subtitle,
-                    style: GoogleFonts.readexPro(
+                    style: TextStyle(
+                      fontFamily: 'Noto Sans',
                       color: mutedColor,
                       fontSize: 13.0,
                       height: 1.25,

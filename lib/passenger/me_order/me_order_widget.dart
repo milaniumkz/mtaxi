@@ -1,345 +1,261 @@
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend_calls/backend_calls.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
+import '/design/mtaxi_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'me_order_model.dart';
-export 'me_order_model.dart';
-
-const _mtaxiOrange = Color(0xFFFF6500);
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
 
 class MeOrderWidget extends StatefulWidget {
-  const MeOrderWidget({super.key});
-
+  const MeOrderWidget({super.key, this.driver});
+  final bool? driver;
   static String routeName = 'meOrder';
   static String routePath = '/meOrder';
-
   @override
   State<MeOrderWidget> createState() => _MeOrderWidgetState();
 }
 
 class _MeOrderWidgetState extends State<MeOrderWidget> {
-  late MeOrderModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
-
-  bool _looksLikeCoordinateLabel(String value) {
-    final normalized = value.trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final compact = normalized
-        .replaceFirst(
-          RegExp(r'^(координаты|coordinates)\s*:\s*', caseSensitive: false),
-          '',
-        )
-        .trim();
-    return RegExp(
-      r'^[-+]?\d{1,2}(?:\.\d+)?\s*,\s*[-+]?\d{1,3}(?:\.\d+)?$',
-    ).hasMatch(compact);
-  }
-
-  String _safeOrderAddress(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return 'Адрес не указан';
-    }
-    if (_looksLikeCoordinateLabel(trimmed)) {
-      return 'Адрес уточняется';
-    }
-    return trimmed;
-  }
-
-  DateTime? _dateFromBackendOrder(Map<String, dynamic> data) {
-    final raw = data['createdAt'] ?? data['date'] ?? data['updatedAt'];
-    if (raw is DateTime) return raw;
-    return DateTime.tryParse(raw?.toString() ?? '');
-  }
-
-  double _asDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  int _asInt(dynamic value) {
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  String _statusLabel(int status) {
-    if (status == 0) {
-      return 'Ожидание водителя';
-    } else if (status == 1) {
-      return 'Водитель принял заказ';
-    } else if (status == 2) {
-      return 'Водитель в пути';
-    } else if (status == 3) {
-      return 'Водитель приехал';
-    } else if (status == 4) {
-      return 'Вы в пути';
-    }
-    return 'Завершен';
-  }
-
-  Future<List<_OrderHistoryItem>> _loadBackendOrders() async {
-    final response = await makeCloudCall('listMyOrders', {
-      'includeClosed': true,
-      'limit': 200,
-    });
-    final orders =
-        (response['orders'] as List? ?? const []).whereType<Map>().map((item) {
-      final data = Map<String, dynamic>.from(item);
-      return _OrderHistoryItem(
-        ot: data['ot']?.toString() ?? '',
-        kuda: data['kuda']?.toString() ?? '',
-        price: _asDouble(data['price']),
-        status: _asInt(data['status']),
-        date: _dateFromBackendOrder(data),
-      );
-    }).toList()
-          ..sort((a, b) {
-            final aDate = a.date;
-            final bDate = b.date;
-            if (aDate == null && bDate == null) return 0;
-            if (aDate == null) return 1;
-            if (bDate == null) return -1;
-            return bDate.compareTo(aDate);
-          });
-    return orders;
-  }
-
+  late Future<List<Map<String, dynamic>>> _orders;
+  int _filter = 0;
+  String tr(String ru, String kk) =>
+      FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => MeOrderModel());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    _orders = _load();
   }
 
-  @override
-  void dispose() {
-    _model.dispose();
-
-    super.dispose();
+  Future<List<Map<String, dynamic>>> _load() async {
+    final response = await makeCloudCall(
+        'listMyOrders', {'includeClosed': true, 'limit': 200});
+    if (response['success'] != true || response['orders'] is! List)
+      throw StateError('History unavailable');
+    final driver = widget.driver ??
+        (!FFAppState().isPassengerModeForced &&
+            UserModeResolver.canOpenDriverScreens(currentUserDocument));
+    final uid = currentUserUid.isNotEmpty
+        ? currentUserUid
+        : currentUserDocument?.reference.id;
+    return (response['orders'] as List)
+        .whereType<Map>()
+        .where((order) =>
+            uid == null || order[driver ? 'driverId' : 'passengerId'] == uid)
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDriverMode = UserModeResolver.canOpenDriverScreens(
-      currentUserDocument,
-    );
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
-    final appBarBg = isDark ? const Color(0xFF13191D) : const Color(0xFFFF6500);
-    final appBarText = isDark ? Colors.white : Colors.white;
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: pageBg,
-        appBar: AppBar(
-          backgroundColor: appBarBg,
-          iconTheme: IconThemeData(color: appBarText),
-          automaticallyImplyLeading: true,
-          title: Text(
-            isDriverMode ? 'История водителя' : 'Мои заказы',
-            style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.outfit(
-                    fontWeight:
-                        FlutterFlowTheme.of(context).headlineMedium.fontWeight,
-                    fontStyle:
-                        FlutterFlowTheme.of(context).headlineMedium.fontStyle,
-                  ),
-                  color: appBarText,
-                  fontSize: 22.0,
-                  letterSpacing: 0.0,
-                  fontWeight:
-                      FlutterFlowTheme.of(context).headlineMedium.fontWeight,
-                  fontStyle:
-                      FlutterFlowTheme.of(context).headlineMedium.fontStyle,
-                ),
-          ),
-          actions: [],
-          centerTitle: true,
-          elevation: 0.0,
-        ),
-        body: SafeArea(
-          top: true,
-          child: FutureBuilder<List<_OrderHistoryItem>>(
-            future: _loadBackendOrders(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return _loadingIndicator(context);
-              }
-              return _ordersList(snapshot.data ?? const []);
-            },
-          ),
-        ),
-      ),
-    );
+  void _retry() => setState(() => _orders = _load());
+  int _status(Map order) => (order['status'] as num?)?.toInt() ?? -1;
+  String _label(int status) => switch (status) {
+        0 => tr('Поиск водителя', 'Жүргізуші ізделуде'),
+        1 || 2 => tr('Водитель в пути', 'Жүргізуші жолда'),
+        3 => tr('Водитель на месте', 'Жүргізуші келді'),
+        4 => tr('Поездка началась', 'Сапар басталды'),
+        5 => tr('Завершена', 'Аяқталды'),
+        6 => tr('Отменена', 'Болдырылмады'),
+        7 => tr('Водитель не найден', 'Жүргізуші табылмады'),
+        _ => tr('Статус уточняется', 'Күй нақтылануда'),
+      };
+  String _address(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) return tr('Адрес не указан', 'Мекенжай көрсетілмеген');
+    if (RegExp(
+            r'^(?:(?:координаты|coordinates)\s*:\s*)?[-+]?\d{1,2}(?:\.\d+)?\s*,\s*[-+]?\d{1,3}(?:\.\d+)?$',
+            caseSensitive: false)
+        .hasMatch(text)) return tr('Адрес уточняется', 'Мекенжай нақтылануда');
+    return text;
   }
 
-  Widget _loadingIndicator(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: 50.0,
-        height: 50.0,
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(
-            _mtaxiOrange,
-          ),
-        ),
-      ),
-    );
+  Widget _route(Map order) => Column(children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.radio_button_checked,
+              color: MTaxiDesign.teal, size: 18),
+          const SizedBox(width: 12),
+          Expanded(child: Text(_address(order['ot'])))
+        ]),
+        const Padding(
+            padding: EdgeInsets.only(left: 8),
+            child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(height: 16, child: VerticalDivider(width: 1)))),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.location_on_outlined, size: 18),
+          const SizedBox(width: 12),
+          Expanded(child: Text(_address(order['kuda'])))
+        ]),
+      ]);
+  String _fare(Map order) => order['price'] is num
+      ? formatAppCurrency((order['price'] as num).toDouble())
+      : '—';
+  String _date(Map order) {
+    final date = DateTime.tryParse(
+        (order['createdAt'] ?? order['date'] ?? '').toString());
+    return date == null
+        ? tr('Дата не указана', 'Күні көрсетілмеген')
+        : dateTimeFormat('d MMM, HH:mm', date.toLocal(),
+            locale: FFLocalizations.of(context).languageCode);
   }
 
-  Widget _ordersList(List<_OrderHistoryItem> orders) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
-    if (orders.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Заказов пока нет',
-            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                  color: mutedColor,
-                ),
-          ),
-        ),
-      );
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ...orders.map(_orderCard),
-        ],
-      ),
-    );
-  }
-
-  Widget _orderCard(_OrderHistoryItem order) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final textColor = isDark ? Colors.white : _mtaxiText;
-    final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
-    final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+  Widget _badge(Map order) => DecoratedBox(
       decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _mtaxiOrange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.route_rounded,
-                  color: _mtaxiOrange,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '${_safeOrderAddress(order.ot)} - ${_safeOrderAddress(order.kuda)}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        color: textColor,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.0,
-                      ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                formatAppCurrency(order.price),
-                style: FlutterFlowTheme.of(context).titleMedium.override(
-                      color: _mtaxiOrange,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _mtaxiOrange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _statusLabel(order.status),
-                  style: FlutterFlowTheme.of(context).bodySmall.override(
-                        color: _mtaxiOrange,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ),
-            ],
-          ),
-          if (order.date != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${dateTimeFormat(
-                "d/M/y",
-                order.date,
-                locale: FFLocalizations.of(context).languageCode,
-              )} ${dateTimeFormat(
-                "Hm",
-                order.date,
-                locale: FFLocalizations.of(context).languageCode,
-              )}',
-              style: FlutterFlowTheme.of(context).bodySmall.override(
-                    color: mutedColor,
-                    letterSpacing: 0.0,
-                  ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _OrderHistoryItem {
-  const _OrderHistoryItem({
-    required this.ot,
-    required this.kuda,
-    required this.price,
-    required this.status,
-    required this.date,
-  });
-
-  final String ot;
-  final String kuda;
-  final double price;
-  final int status;
-  final DateTime? date;
+          color: MTaxiDesign.teal.withValues(alpha: .1),
+          borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Text(_label(_status(order)),
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.secondary))));
+  void _details(Map<String, dynamic> order) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (context) => Scaffold(
+                appBar: AppBar(
+                    title: Text(tr('Детали поездки', 'Сапар мәліметтері'))),
+                body: ListView(padding: const EdgeInsets.all(22), children: [
+                  Text(_date(order),
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 16),
+                  Align(alignment: Alignment.centerLeft, child: _badge(order)),
+                  const SizedBox(height: 24),
+                  MTaxiCard(child: _route(order)),
+                  const SizedBox(height: 16),
+                  MTaxiCard(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(tr('Стоимость поездки', 'Сапар құны')),
+                        const SizedBox(height: 8),
+                        Text(_fare(order),
+                            style: const TextStyle(
+                                fontSize: 31, fontWeight: FontWeight.w700)),
+                        if ((order['driverName'] ?? '')
+                            .toString()
+                            .trim()
+                            .isNotEmpty) ...[
+                          const Divider(height: 28),
+                          Text(order['driverName'].toString()),
+                          Text([order['driverCar'], order['driverPlate']]
+                              .where((e) =>
+                                  e != null && e.toString().trim().isNotEmpty)
+                              .join(' · '))
+                        ],
+                        if (order['paymentMode'] != null) ...[
+                          const Divider(height: 28),
+                          Text(order['paymentMode'] == 'wallet'
+                              ? tr('Оплата со счёта приложения',
+                                  'Қосымша шотынан төлеу')
+                              : tr('Оплата наличными', 'Қолма-қол төлеу'))
+                        ],
+                        if (order['passengerBonusUsed'] is num &&
+                            (order['passengerBonusUsed'] as num) > 0)
+                          Text(tr(
+                              'Использовано бонусов: ${order['passengerBonusUsed']} ₸',
+                              'Пайдаланылған бонустар: ${order['passengerBonusUsed']} ₸')),
+                      ])),
+                  const SizedBox(height: 24),
+                  OutlinedButton.icon(
+                      onPressed: () =>
+                          context.pushNamed(SupportChatWidget.routeName),
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: Text(
+                          tr('Обратиться в поддержку', 'Қолдауға жүгіну'))),
+                ]),
+              )));
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: Text(tr('История поездок', 'Сапарлар тарихы'))),
+        body: Column(children: [
+          SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+              child: Row(children: [
+                for (var i = 0; i < 3; i++)
+                  Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                          selected: _filter == i,
+                          selectedColor: MTaxiDesign.gold,
+                          label: Text([
+                            tr('Все', 'Барлығы'),
+                            tr('Завершённые', 'Аяқталған'),
+                            tr('Отменённые', 'Болдырылмаған')
+                          ][i]),
+                          onSelected: (_) => setState(() => _filter = i)))
+              ])),
+          Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _orders,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done)
+                      return MTaxiFeedback(
+                          title: tr('Загружаем поездки', 'Сапарлар жүктелуде'),
+                          message: '',
+                          loading: true);
+                    if (snapshot.hasError)
+                      return MTaxiFeedback(
+                          title: tr('История недоступна', 'Тарих қолжетімсіз'),
+                          message: tr('Проверьте подключение к сети.',
+                              'Желіге қосылуды тексеріңіз.'),
+                          onRetry: _retry);
+                    final orders = (snapshot.data ?? [])
+                        .where((e) =>
+                            _filter == 0 ||
+                            (_filter == 1
+                                ? _status(e) == 5
+                                : [6, 7].contains(_status(e))))
+                        .toList();
+                    if (orders.isEmpty)
+                      return MTaxiFeedback(
+                          title: tr('Здесь пока нет поездок',
+                              'Мұнда әзірге сапар жоқ'),
+                          message: tr('Ваши поездки появятся в истории.',
+                              'Сапарларыңыз тарихта пайда болады.'),
+                          icon: Icons.route_outlined);
+                    return RefreshIndicator(
+                        onRefresh: () async {
+                          _retry();
+                          await _orders;
+                        },
+                        child: ListView.separated(
+                            padding: const EdgeInsets.all(22),
+                            itemCount: orders.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, i) {
+                              final order = orders[i];
+                              return Semantics(
+                                  button: true,
+                                  child: InkWell(
+                                      borderRadius: BorderRadius.circular(20),
+                                      onTap: () => _details(order),
+                                      child: MTaxiCard(
+                                          child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                            Text(_date(order),
+                                                style: const TextStyle(
+                                                    fontSize: 12)),
+                                            const SizedBox(height: 16),
+                                            _route(order),
+                                            const SizedBox(height: 18),
+                                            Wrap(
+                                                spacing: 16,
+                                                runSpacing: 8,
+                                                crossAxisAlignment:
+                                                    WrapCrossAlignment.center,
+                                                children: [
+                                                  Text(_fare(order),
+                                                      style: const TextStyle(
+                                                          fontSize: 22,
+                                                          fontWeight:
+                                                              FontWeight.w700)),
+                                                  _badge(order)
+                                                ]),
+                                          ]))));
+                            }));
+                  })),
+        ]),
+      );
 }

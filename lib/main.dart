@@ -1,3 +1,6 @@
+import '/design/bottom_navigation.dart';
+import '/trips/wallet_page.dart';
+import '/design/mtaxi_theme.dart';
 import 'dart:async';
 
 import 'package:provider/provider.dart';
@@ -28,7 +31,7 @@ import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/flutter_flow_widgets.dart';
 import 'flutter_flow/internationalization.dart';
 import 'package:flutter/foundation.dart';
-import 'package:floating_bottom_navigation_bar/floating_bottom_navigation_bar.dart';
+
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'component/force_update_gate/force_update_gate_widget.dart';
@@ -587,7 +590,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         needsDriverRegistration(user)) {
       return false;
     }
-    return hasCompletedPassengerProfile(user) ||
+    // Passengers may enter pickup manually; driver GPS checks stay enforced.
+    return !FFAppState().isPassengerModeForced &&
         UserModeResolver.userHasApprovedDriverAccess(user);
   }
 
@@ -966,14 +970,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         Locale('ru'),
         Locale('kk'),
       ],
-      theme: ThemeData(
-        brightness: Brightness.light,
-        useMaterial3: false,
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        useMaterial3: false,
-      ),
+      theme: MTaxiDesign.theme(Brightness.light),
+      darkTheme: MTaxiDesign.theme(Brightness.dark),
       themeMode: _themeMode,
       builder: (context, child) {
         final l10n = FFLocalizations.of(context);
@@ -1075,6 +1073,8 @@ class NavBarPage extends StatefulWidget {
 /// This is the private State class that goes with NavBarPage.
 class _NavBarPageState extends State<NavBarPage> {
   String _currentPageName = 'HomePage';
+  final Map<String, Widget> _tabPages = {};
+  bool? _tabsDriverMode;
   late Widget? _currentPage;
   bool _checkedActiveOrder = false;
   String? _lastRestoredPassengerOrderPath;
@@ -1200,34 +1200,7 @@ class _NavBarPageState extends State<NavBarPage> {
         }
 
         if (needsRoleSelection(currentUserDocument)) {
-          return Scaffold(
-            backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-            body: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 24.0,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        FFLocalizations.of(context).getVariableText(
-                          ruText: 'Выберите режим',
-                          kkText: 'Режимді таңдаңыз',
-                        ),
-                        style: FlutterFlowTheme.of(context).headlineSmall,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16.0),
-                      const SetRoleWidget(),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
+          return const SetRoleWidget();
         }
 
         if (isAdminUser(currentUserDocument)) {
@@ -1252,7 +1225,11 @@ class _NavBarPageState extends State<NavBarPage> {
                 ? null
                 : activePassengerOrderRef;
         final currentLocation = GoRouterState.of(context).uri.toString().trim();
-        final paymentIsActive = PaymentSessionGuard.isPaymentActive;
+        final primaryTabSelected = _currentPageName == 'HomePage' ||
+            _currentPageName == 'driverOrders';
+        final paymentIsActive = PaymentSessionGuard.isPaymentActive ||
+            !primaryTabSelected ||
+            widget.page != null;
         final shouldHoldPassengerOrderRoute =
             !isAdminUser(currentUserDocument) &&
                 !isDriverMode &&
@@ -1331,18 +1308,28 @@ class _NavBarPageState extends State<NavBarPage> {
                     kkText: '10 км радиуста тапсырыс жоқ',
                   ),
                 ),
+                'driverWallet': const WalletPage(driver: true),
+                'driverHistory': const MeOrderWidget(driver: true),
                 'driverProfile': ProfileWidget(),
               }
             : {
                 'HomePage': HomePageWidget(),
+                'wallet': const WalletPage(),
+                'history': const MeOrderWidget(driver: false),
                 'profile': ProfileWidget(),
               };
 
+        if (_tabsDriverMode != isDriverMode) {
+          _tabPages.clear();
+          _tabsDriverMode = isDriverMode;
+        }
         if (!tabs.containsKey(_currentPageName)) {
           _currentPageName = tabs.keys.first;
           _currentPage = null;
         }
 
+        _tabPages.putIfAbsent(
+            _currentPageName, () => _currentPage ?? tabs[_currentPageName]!);
         final currentIndex = tabs.keys.toList().indexOf(_currentPageName);
 
         final MediaQueryData queryData = MediaQuery.of(context);
@@ -1370,14 +1357,6 @@ class _NavBarPageState extends State<NavBarPage> {
               return;
             }
 
-            if (_currentPageName == 'HomePage') {
-              setState(() {
-                _currentPageName = 'profile';
-                _currentPage = null;
-              });
-              return;
-            }
-
             if (_currentPageName != 'HomePage') {
               setState(() {
                 _currentPageName = 'HomePage';
@@ -1390,141 +1369,26 @@ class _NavBarPageState extends State<NavBarPage> {
                 !widget.disableResizeToAvoidBottomInset && !keyboardManagedPage,
             body: MediaQuery(
                 data: pageMediaQuery,
-                child: _currentPage ?? tabs[_currentPageName]!),
-            extendBody: true,
-            bottomNavigationBar: FloatingNavbar(
-              currentIndex: currentIndex,
-              onTap: (i) => safeSetState(() {
-                _currentPage = null;
-                _currentPageName = tabs.keys.toList()[i];
-              }),
-              backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-              selectedItemColor: FlutterFlowTheme.of(context).primary,
-              unselectedItemColor: FlutterFlowTheme.of(context).secondaryText,
-              selectedBackgroundColor: Color(0x00000000),
-              borderRadius: 8.0,
-              itemBorderRadius: 8.0,
-              margin: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-              padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-              width: MediaQuery.sizeOf(context).width * 1.0,
-              elevation: 0.0,
-              items: isDriverMode
-                  ? [
-                      FloatingNavbarItem(
-                        customWidget: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.list_alt,
-                              color: currentIndex == 0
-                                  ? FlutterFlowTheme.of(context).primary
-                                  : FlutterFlowTheme.of(context).secondaryText,
-                              size: 24.0,
-                            ),
-                            Text(
-                              FFLocalizations.of(context).getVariableText(
-                                ruText: 'Заказы',
-                                kkText: 'Тапсырыстар',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: currentIndex == 0
-                                    ? FlutterFlowTheme.of(context).primary
-                                    : FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                fontSize: 11.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      FloatingNavbarItem(
-                        customWidget: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.person,
-                              color: currentIndex == 1
-                                  ? FlutterFlowTheme.of(context).primary
-                                  : FlutterFlowTheme.of(context).secondaryText,
-                              size: 24.0,
-                            ),
-                            Text(
-                              FFLocalizations.of(context).getVariableText(
-                                ruText: 'Профиль',
-                                kkText: 'Профиль',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: currentIndex == 1
-                                    ? FlutterFlowTheme.of(context).primary
-                                    : FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                fontSize: 11.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ]
-                  : [
-                      FloatingNavbarItem(
-                        customWidget: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.search,
-                              color: currentIndex == 0
-                                  ? FlutterFlowTheme.of(context).primary
-                                  : FlutterFlowTheme.of(context).secondaryText,
-                              size: 24.0,
-                            ),
-                            Text(
-                              FFLocalizations.of(context).getVariableText(
-                                ruText: 'Главная',
-                                kkText: 'Басты',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: currentIndex == 0
-                                    ? FlutterFlowTheme.of(context).primary
-                                    : FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                fontSize: 11.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      FloatingNavbarItem(
-                        customWidget: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.person,
-                              color: currentIndex == 1
-                                  ? FlutterFlowTheme.of(context).primary
-                                  : FlutterFlowTheme.of(context).secondaryText,
-                              size: 24.0,
-                            ),
-                            Text(
-                              FFLocalizations.of(context).getText(
-                                'jfo9zw67' /* Профиль */,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: currentIndex == 1
-                                    ? FlutterFlowTheme.of(context).primary
-                                    : FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                fontSize: 11.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    ],
-            ),
+                child: IndexedStack(index: currentIndex, children: [
+                  for (final name in tabs.keys)
+                    KeyedSubtree(
+                        key: ValueKey(
+                            '${isDriverMode ? 'driver' : 'passenger'}:$name'),
+                        child: MTaxiTabActivity(
+                            active: name == _currentPageName,
+                            child: _tabPages[name] ?? const SizedBox.shrink())),
+                ])),
+            extendBody: false,
+            bottomNavigationBar: queryData.viewInsets.bottom > 0
+                ? null
+                : MTaxiBottomNavigation(
+                    index: currentIndex,
+                    driver: isDriverMode,
+                    onTap: (i) => safeSetState(() {
+                      _currentPage = null;
+                      _currentPageName = tabs.keys.elementAt(i);
+                    }),
+                  ),
           ),
         );
       },

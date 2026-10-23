@@ -1,3 +1,5 @@
+import '/design/bottom_navigation.dart';
+import '/design/map_attribution.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -10,7 +12,7 @@ CameraFit navigationRouteFit(List<LatLng> points, double height) =>
       bounds: LatLngBounds.fromPoints(points),
       maxZoom: 17,
       minZoom: 3,
-      padding: EdgeInsets.fromLTRB(24, height * .12, 24, height * .32),
+      padding: EdgeInsets.fromLTRB(24, height * .18, 24, height * .60),
     );
 
 /// Driver positions are published by the active trip screen with GPS accuracy.
@@ -27,6 +29,7 @@ class TripNavigation extends StatefulWidget {
 class _TripNavigationState extends State<TripNavigation> {
   final _map = MapController();
   final _tts = FlutterTts();
+  bool _tabActive = true;
   Timer? _timer;
   bool _busy = false, _voice = false, _ready = false;
   Map<String, dynamic>? _trip;
@@ -44,19 +47,32 @@ class _TripNavigationState extends State<TripNavigation> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = MTaxiTabActivity.isActive(context);
+    if (!active && _tabActive) _tts.stop();
+    _tabActive = active;
+  }
+
+  @override
   void initState() {
     super.initState();
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if ((ModalRoute.of(context)?.isCurrent ?? true) &&
+          (WidgetsBinding.instance.lifecycleState == null ||
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed)) _refresh();
+    });
   }
 
   Future<void> _refresh() async {
-    if (_busy) return;
+    if (_busy || !_tabActive) return;
     _busy = true;
     try {
       final trip = await makeCloudCall(
           'getTripTracking', {'orderDocPath': widget.orderDocPath});
-      if (!mounted) return;
+      if (!mounted || !_tabActive) return;
       if (trip['success'] != true) {
         setState(() => _message = 'Маршрут недоступен');
         return;
@@ -70,7 +86,9 @@ class _TripNavigationState extends State<TripNavigation> {
         setState(() => _message = 'Ожидаем свежую геопозицию водителя');
         return;
       }
-      if (_ready && widget.isDriver) _map.move(position, _map.camera.zoom);
+      if (_ready && widget.isDriver)
+        _map.move(position, _map.camera.zoom,
+            offset: Offset(0, -_map.camera.nonRotatedSize.y * .26));
       if (target != null &&
           (_routedAt == null ||
               _routedStatus != status ||
@@ -81,7 +99,7 @@ class _TripNavigationState extends State<TripNavigation> {
           'from': {'lat': position.latitude, 'lng': position.longitude},
           'to': {'lat': target.latitude, 'lng': target.longitude}
         });
-        if (!mounted) return;
+        if (!mounted || !_tabActive) return;
         if (result['success'] == true) {
           final coordinates =
               (result['coordinates'] as List? ?? []).whereType<List>();
@@ -94,10 +112,10 @@ class _TripNavigationState extends State<TripNavigation> {
             _route = points;
             _steps = (result['steps'] as List? ?? []).whereType<Map>().toList();
             _step = _steps.length > 1 ? 1 : 0;
-            final minutes =
-                ((result['durationSeconds'] as num? ?? 0) / 60).ceil();
-            _message =
-                '${status < 4 ? 'До посадки' : 'До назначения'} ≈ $minutes мин · без учёта пробок';
+            final duration = result['durationSeconds'];
+            _message = duration is num && duration.isFinite && duration >= 0
+                ? '${status < 4 ? 'До посадки' : 'До назначения'} ≈ ${(duration / 60).ceil()} мин · без учёта пробок'
+                : 'Маршрут построен. Время уточняется';
           });
           if (_ready && !widget.isDriver && points.length > 1)
             _map.fitCamera(
@@ -170,7 +188,7 @@ class _TripNavigationState extends State<TripNavigation> {
             'locale': voice['locale'].toString()
           });
       }
-      if (!mounted) return;
+      if (!mounted || !_tabActive) return;
       setState(() => _voice = true);
       _spoken = '';
       await _tts.speak('Голосовые подсказки включены');
@@ -216,7 +234,7 @@ class _TripNavigationState extends State<TripNavigation> {
                 Polyline(
                     points: _route,
                     strokeWidth: 5,
-                    color: Theme.of(context).colorScheme.primary)
+                    color: const Color(0xFF188B83))
               ]),
             MarkerLayer(markers: [
               if (pickup != null)
@@ -225,24 +243,23 @@ class _TripNavigationState extends State<TripNavigation> {
                     width: 40,
                     height: 40,
                     child: const Icon(Icons.person_pin_circle,
-                        color: Colors.green, size: 36)),
+                        color: const Color(0xFF188B83), size: 36)),
               if (destination != null)
                 Marker(
                     point: destination,
                     width: 40,
                     height: 40,
-                    child: const Icon(Icons.flag, color: Colors.red, size: 32)),
+                    child: const Icon(Icons.flag,
+                        color: const Color(0xFF188B83), size: 32)),
               if (position != null)
                 Marker(
                     point: position,
                     width: 44,
                     height: 44,
                     child: const Icon(Icons.local_taxi,
-                        color: Colors.deepPurple, size: 38)),
+                        color: const Color(0xFF1B242B), size: 38)),
             ]),
-            const RichAttributionWidget(attributions: [
-              TextSourceAttribution('OpenStreetMap contributors')
-            ]),
+            const MTaxiMapAttribution(),
           ]),
       Positioned(
           top: 90,

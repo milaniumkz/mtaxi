@@ -1,3 +1,6 @@
+import '/design/bottom_navigation.dart';
+import '/trips/trip_receipt.dart';
+import '/design/trip_panel.dart';
 import '/trips/trip_navigation.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
@@ -13,7 +16,7 @@ import 'dart:async';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
@@ -21,11 +24,9 @@ import 'home_driver_order_model.dart';
 export 'home_driver_order_model.dart';
 
 const _mtaxiPageBg = Color(0xFF12051B);
-const _mtaxiMint = Color(0xFF28D8C6);
+const _mtaxiMint = Color(0xFF126E68);
 const _mtaxiMuted = Color(0xFFB8AFC4);
-const _mtaxiLightText = Color(0xFF17111D);
 const _mtaxiLightMuted = Color(0xFF7C7484);
-const _mtaxiOrange = Color(0xFFFF6500);
 
 class _DriverAlertEvent {
   const _DriverAlertEvent({
@@ -72,6 +73,9 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   int? _pendingOrderStatus;
   Timer? _pendingStatusRollbackTimer;
   bool _leavingOrderScreen = false;
+  bool _tabActive = true;
+  bool _receiptShowing = false;
+  final Set<String> _shownReceipts = {};
   final List<_DriverAlertEvent> _pendingDriverAlerts = [];
   bool _recoveringActiveDriverOrder = false;
   DateTime? _lastLocationWriteAt;
@@ -320,146 +324,20 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
         style: FlutterFlowTheme.of(context).bodySmall,
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          _formatPhone(phone),
-          style: FlutterFlowTheme.of(context).bodySmall.override(
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: FFButtonWidget(
-                onPressed: () => _callPhone(phone),
-                text: _tr(ru: 'Позвонить', kk: 'Қоңырау'),
-                icon: const Icon(Icons.call, size: 16),
-                options: FFButtonOptions(
-                  height: 34,
-                  color: _mtaxiMint,
-                  textStyle: FlutterFlowTheme.of(context).bodySmall.override(
-                        color: _mtaxiPageBg,
-                        fontWeight: FontWeight.w700,
-                      ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FFButtonWidget(
-                onPressed: () => _openWhatsApp(phone),
-                text: 'WhatsApp',
-                icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                options: FFButtonOptions(
-                  height: 34,
-                  color: const Color(0xFF25D366),
-                  textStyle: FlutterFlowTheme.of(context).bodySmall.override(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  String _orderComment(OrderRecord order) {
-    final raw =
-        (order.snapshotData['comment'] ?? order.comment).toString().trim();
-    return raw;
-  }
-
-  String _orderDeliveryItem(OrderRecord order) {
-    return (order.snapshotData['deliveryItem'] ??
-            order.snapshotData['delivery_item'] ??
-            order.snapshotData['deliveryItemText'] ??
-            order.snapshotData['whatDelivery'] ??
-            order.snapshotData['what_deliver'] ??
-            order.snapshotData['item'] ??
-            '')
-        .toString()
-        .trim();
-  }
-
-  String _orderType(OrderRecord order) {
-    final raw =
-        (order.snapshotData['type'] ?? 'taxi').toString().trim().toLowerCase();
-    if (raw == 'delivery' || raw == 'intercity') return raw;
-    return 'taxi';
-  }
-
-  String _orderTypeLabel(OrderRecord order) {
-    switch (_orderType(order)) {
-      case 'delivery':
-        return _tr(ru: 'Доставка', kk: 'Жеткізу');
-      case 'intercity':
-        return _tr(ru: 'Межгород', kk: 'Қалааралық');
-      default:
-        return _tr(ru: 'Такси', kk: 'Такси');
-    }
-  }
-
-  String _safeOrderAddress(String value, String fallback) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return fallback;
-    }
-    if (_looksLikeCoordinateLabel(trimmed)) {
-      return _tr(ru: 'Адрес уточняется', kk: 'Мекенжай нақтылануда');
-    }
-    return trimmed;
-  }
-
-  bool _looksLikeCoordinateLabel(String value) {
-    final normalized = value.trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final compact = normalized
-        .replaceFirst(
-          RegExp(r'^(координаты|coordinates)\s*:\s*', caseSensitive: false),
-          '',
-        )
-        .trim();
-    return RegExp(
-      r'^[-+]?\d{1,2}(?:\.\d+)?\s*,\s*[-+]?\d{1,3}(?:\.\d+)?$',
-    ).hasMatch(compact);
-  }
-
-  String _orderCustomerName({
-    UsersRecord? user,
-    required Map<String, dynamic> orderData,
-  }) {
-    final userName = buildDisplayNameFromData(
-      user?.snapshotData ?? const <String, dynamic>{},
-      fallback: user?.displayName ?? '',
-    );
-    if (userName.isNotEmpty) return userName;
-    final fallbackKeys = [
-      'customerName',
-      'customer_name',
-      'clientName',
-      'userName',
-      'name',
-      'display_name',
-    ];
-    for (final key in fallbackKeys) {
-      final value = normalizeDisplayText(orderData[key]);
-      if (value.isNotEmpty) return value;
-    }
-    return _tr(
-      ru: 'Пассажир',
-      kk: 'Жолаушы',
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(_formatPhone(phone), style: FlutterFlowTheme.of(context).bodySmall),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton.icon(
+            onPressed: () => _callPhone(phone),
+            icon: const Icon(Icons.call_outlined, size: 18),
+            label: Text(_tr(ru: 'Позвонить', kk: 'Қоңырау'))),
+        OutlinedButton.icon(
+            onPressed: () => _openWhatsApp(phone),
+            icon: const Icon(Icons.chat_bubble_outline, size: 18),
+            label: const Text('WhatsApp')),
+      ]),
+    ]);
   }
 
   Future<void> _showDriverStatusAlert(OrderRecord order) async {
@@ -499,7 +377,17 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
     if (!mounted) {
       return;
     }
+    if (_receiptShowing) return;
     _pendingDriverAlerts.clear();
+    if (status == 5 && _shownReceipts.add(orderRef.path)) {
+      _receiptShowing = true;
+      try {
+        await showTripReceipt(context, orderRef.path, driver: true);
+      } finally {
+        _receiptShowing = false;
+      }
+      if (!mounted) return;
+    }
     FFAppState().markDriverOrderClosedLocally(orderRef);
     UserModeResolver.setTransientRoleState(_postTripDriverRoleState());
     if (!_leavingOrderScreen) {
@@ -889,12 +777,6 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       _pendingOrderStatus = nextStatus;
     });
 
-    final shouldLeaveImmediately = nextStatus == 5;
-    if (shouldLeaveImmediately) {
-      UserModeResolver.setTransientRoleState(_postTripDriverRoleState());
-      unawaited(_leaveOrderScreen());
-    }
-
     final response = await makeCloudCall(
       'advanceDriverOrderStatus',
       {
@@ -940,13 +822,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
         _statusActionTarget = null;
         _pendingOrderStatus = null;
       });
-      if (!shouldLeaveImmediately) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.isNotEmpty ? error : fallbackError),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.isNotEmpty ? error : fallbackError)));
       return;
     }
 
@@ -965,8 +842,9 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
         : 'DRIVER_ON_TRIP';
     UserModeResolver.setTransientRoleState(nextRoleState);
 
-    if (!shouldLeaveImmediately &&
-        (nextStatus == 5 || response['navigateHome'] == true)) {
+    if (nextStatus == 5) {
+      await _showDriverClosureAlert(status: 5, orderRef: order.reference);
+    } else if (response['navigateHome'] == true) {
       await _leaveOrderScreen();
     } else {
       FFAppState().syncLegacyOrderRefs(
@@ -977,26 +855,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
     }
   }
 
-  String _statusButtonText({
-    required int targetStatus,
-    required String idleRu,
-    required String idleKk,
-    required String loadingRu,
-    required String loadingKk,
-  }) {
-    if (_statusActionTarget == targetStatus) {
-      return _tr(
-        ru: loadingRu,
-        kk: loadingKk,
-      );
-    }
-    return _tr(
-      ru: idleRu,
-      kk: idleKk,
-    );
-  }
-
   Future<void> _resolveLocation() async {
+    if (!_tabActive) return;
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -1033,6 +893,12 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tabActive = MTaxiTabActivity.isActive(context);
+  }
+
+  @override
   void initState() {
     super.initState();
     _openedAt = DateTime.now();
@@ -1045,7 +911,13 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       _model.instantTimer = InstantTimer.periodic(
         duration: const Duration(seconds: 1),
         callback: (timer) async {
+          if (!_tabActive ||
+              !(ModalRoute.of(context)?.isCurrent ?? true) ||
+              (WidgetsBinding.instance.lifecycleState != null &&
+                  WidgetsBinding.instance.lifecycleState !=
+                      AppLifecycleState.resumed)) return;
           await _resolveLocation();
+          if (!_tabActive || !mounted) return;
           final nextLocation = currentUserLocationValue;
           if (nextLocation != null && _shouldSyncDriverLocation(nextLocation)) {
             await makeCloudCall(
@@ -1082,11 +954,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final surfaceAlt =
-        isDark ? const Color(0xFF243437) : const Color(0xFFF4F7F8);
-    final textColor = isDark ? Colors.white : _mtaxiLightText;
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiLightMuted;
     final borderColor =
         isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EDF1);
@@ -1198,7 +1067,6 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                   _maybeHandleCompletedOrder(order);
                   final effectiveRealtimeStatus =
                       _effectiveDriverRealtimeStatus(order);
-                  final orderType = _orderType(order);
                   final isCurrentDriverOrder = _isCurrentDriverOrder(order);
                   final localDriverOrderRef = _effectiveDriverOrderRef();
                   if (effectiveRealtimeStatus >= 5) {
@@ -1334,286 +1202,74 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                                 child: Padding(
                                   padding:
                                       const EdgeInsets.fromLTRB(20, 30, 20, 20),
-                                  child: SingleChildScrollView(
-                                    child: Column(
+                                  child: Column(
+                                      mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
                                       children: [
-                                        Text(
-                                          '${_tr(ru: 'Тип', kk: 'Түрі')}: ${_orderTypeLabel(order)}',
-                                          style: FlutterFlowTheme.of(context)
-                                              .titleMedium
-                                              .override(
-                                                font: GoogleFonts.readexPro(
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                                color: textColor,
-                                                fontSize: 18.0,
-                                                letterSpacing: 0.0,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 20),
-                                        Text(
-                                          '${_tr(ru: 'Откуда', kk: 'Қайдан')}: ${_safeOrderAddress(order.ot, _tr(ru: 'не указано', kk: 'көрсетілмеген'))}',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: FlutterFlowTheme.of(context)
-                                              .titleSmall
-                                              .override(
-                                                color: textColor,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          '${_tr(ru: 'Куда', kk: 'Қайда')}: ${_safeOrderAddress(order.kuda, _tr(ru: 'не указано', kk: 'көрсетілмеген'))}',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: FlutterFlowTheme.of(context)
-                                              .titleSmall
-                                              .override(
-                                                color: textColor,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 24),
-                                        Text(
-                                          '${_tr(ru: 'Стоимость', kk: 'Құны')}: ${formatAppCurrency(order.price)}',
-                                          style: FlutterFlowTheme.of(context)
-                                              .titleMedium
-                                              .override(
-                                                color: textColor,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                        Text(
-                                            'Наличными получить: ${order.snapshotData['cashToDriver'] ?? order.price} ₸'),
-                                        if ((order.snapshotData[
-                                                        'passengerBonusUsed'] ??
-                                                    0) +
-                                                (order.snapshotData[
-                                                        'passengerWalletUsed'] ??
-                                                    0) >
-                                            0)
-                                          Text(
-                                              'На денежный баланс после завершения: ${(order.snapshotData['passengerBonusUsed'] ?? 0) + (order.snapshotData['passengerWalletUsed'] ?? 0)} ₸'),
-                                        const SizedBox(height: 14),
-                                        if (canShowPassengerContacts &&
-                                            ((order.snapshotData[
-                                                        'customerPhone'] ??
-                                                    '')
-                                                .toString()
-                                                .isNotEmpty))
-                                          Container(
-                                            padding: const EdgeInsets.all(8),
-                                            margin: const EdgeInsets.only(
-                                                bottom: 6),
-                                            decoration: BoxDecoration(
-                                              color: surfaceAlt,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                  color: borderColor),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                CircleAvatar(
-                                                  radius: 18,
-                                                  backgroundColor: _mtaxiMint
-                                                      .withValues(alpha: 0.18),
-                                                  child: const Icon(
-                                                      Icons.person,
-                                                      color: _mtaxiMint),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        _orderCustomerName(
-                                                          user: null,
-                                                          orderData: order
-                                                              .snapshotData,
-                                                        ),
-                                                        style: FlutterFlowTheme
-                                                                .of(context)
-                                                            .titleSmall
-                                                            .override(
-                                                              font: GoogleFonts
-                                                                  .readexPro(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w700,
-                                                              ),
-                                                              color: textColor,
-                                                              fontSize: 15.0,
-                                                              letterSpacing:
-                                                                  0.0,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
-                                                            ),
-                                                      ),
-                                                      const SizedBox(height: 2),
-                                                      Builder(
-                                                          builder: (context) {
-                                                        final customerPhone =
-                                                            (order.snapshotData[
-                                                                        'customerPhone'] ??
-                                                                    '')
-                                                                .toString();
-                                                        return _buildPassengerContactActions(
-                                                          customerPhone,
-                                                        );
-                                                      }),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                        Flexible(
+                                            child: SingleChildScrollView(
+                                          child: TripPanel(
+                                            order: {
+                                              ...order.snapshotData,
+                                              'ot': order.ot,
+                                              'kuda': order.kuda,
+                                              'price': order.price
+                                            },
+                                            status: effectiveStatus,
+                                            driver: true,
+                                            showActions: false,
+                                            busy: _statusActionInFlight,
+                                            contacts: canShowPassengerContacts
+                                                ? _buildPassengerContactActions(
+                                                    (order.snapshotData[
+                                                                'customerPhone'] ??
+                                                            '')
+                                                        .toString())
+                                                : const SizedBox.shrink(),
+                                            onAdvance: () => _advanceOrderStatus(
+                                                order,
+                                                nextStatus: effectiveStatus + 1,
+                                                fallbackError: _tr(
+                                                    ru: 'Не удалось подтвердить действие',
+                                                    kk: 'Әрекет расталмады')),
                                           ),
-                                        if (orderType != 'delivery' &&
-                                            _orderComment(order)
-                                                .isNotEmpty) ...[
-                                          Text(
-                                            '${_tr(ru: 'Комментарий', kk: 'Пікір')}: ${_orderComment(order)}',
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .override(color: mutedColor),
-                                          ),
-                                        ],
-                                        if (_orderDeliveryItem(order)
-                                            .isNotEmpty) ...[
-                                          Text(
-                                            '${_tr(ru: 'Что доставить', kk: 'Не жеткізу керек')}: ${_orderDeliveryItem(order)}',
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .override(color: mutedColor),
-                                          ),
-                                        ],
-                                        const SizedBox(height: 22),
-                                        if (effectiveStatus == 2)
-                                          FFButtonWidget(
-                                            showLoadingIndicator: false,
+                                        )),
+                                        const SizedBox(height: 12),
+                                        FilledButton(
+                                            style: FilledButton.styleFrom(
+                                                backgroundColor:
+                                                    const Color(0xFF1B242B),
+                                                foregroundColor: Colors.white),
                                             onPressed: _statusActionInFlight
                                                 ? null
-                                                : () async {
-                                                    await _advanceOrderStatus(
-                                                      order,
-                                                      nextStatus: 3,
-                                                      fallbackError: _tr(
-                                                        ru: 'Не удалось отметить прибытие',
-                                                        kk: 'Келгеніңізді белгілеу мүмкін болмады',
-                                                      ),
-                                                    );
-                                                  },
-                                            text: _statusButtonText(
-                                              targetStatus: 3,
-                                              idleRu: 'Я на месте',
-                                              idleKk: 'Мен орнымдамын',
-                                              loadingRu: 'Отмечаем...',
-                                              loadingKk: 'Белгілеп жатырмыз...',
-                                            ),
-                                            options: FFButtonOptions(
-                                              height: 44.0,
-                                              color: _mtaxiOrange,
-                                              textStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .override(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                      ),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                          ),
-                                        if (effectiveStatus == 3)
-                                          FFButtonWidget(
-                                            showLoadingIndicator: false,
-                                            onPressed: _statusActionInFlight
-                                                ? null
-                                                : () async {
-                                                    await _advanceOrderStatus(
-                                                      order,
-                                                      nextStatus: 4,
-                                                      fallbackError: _tr(
-                                                        ru: 'Не удалось начать поездку',
-                                                        kk: 'Сапарды бастау мүмкін болмады',
-                                                      ),
-                                                    );
-                                                  },
-                                            text: _statusButtonText(
-                                              targetStatus: 4,
-                                              idleRu: 'Начать поездку',
-                                              idleKk: 'Сапарды бастау',
-                                              loadingRu: 'Запускаем...',
-                                              loadingKk: 'Бастап жатырмыз...',
-                                            ),
-                                            options: FFButtonOptions(
-                                              height: 44.0,
-                                              color: const Color(0xFF3FCBC0),
-                                              textStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .override(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                      ),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                          ),
-                                        if (effectiveStatus == 4)
-                                          FFButtonWidget(
-                                            showLoadingIndicator: false,
-                                            onPressed: _statusActionInFlight
-                                                ? null
-                                                : () async {
-                                                    await _advanceOrderStatus(
-                                                      order,
-                                                      nextStatus: 5,
-                                                      fallbackError: _tr(
-                                                        ru: 'Не удалось завершить заказ',
-                                                        kk: 'Тапсырысты аяқтау мүмкін болмады',
-                                                      ),
-                                                    );
-                                                  },
-                                            text: _statusButtonText(
-                                              targetStatus: 5,
-                                              idleRu: 'Завершить',
-                                              idleKk: 'Аяқтау',
-                                              loadingRu: 'Завершаем...',
-                                              loadingKk: 'Аяқтап жатырмыз...',
-                                            ),
-                                            options: FFButtonOptions(
-                                              height: 44.0,
-                                              color: const Color(0xFF2B9A8E),
-                                              textStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .override(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                      ),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
+                                                : () => _advanceOrderStatus(
+                                                    order,
+                                                    nextStatus:
+                                                        effectiveStatus + 1,
+                                                    fallbackError: _tr(
+                                                        ru:
+                                                            'Не удалось подтвердить действие',
+                                                        kk:
+                                                            'Әрекет расталмады')),
+                                            child: Text(_statusActionInFlight
+                                                ? _tr(
+                                                    ru: 'Подтверждаем…',
+                                                    kk: 'Расталуда…')
+                                                : effectiveStatus == 2
+                                                    ? _tr(
+                                                        ru: 'Я на месте',
+                                                        kk: 'Мен келдім')
+                                                    : effectiveStatus == 3
+                                                        ? _tr(
+                                                            ru:
+                                                                'Начать поездку',
+                                                            kk:
+                                                                'Сапарды бастау')
+                                                        : _tr(
+                                                            ru: 'Завершить поездку',
+                                                            kk: 'Сапарды аяқтау'))),
+                                      ]),
                                 ),
                               ),
                             ),

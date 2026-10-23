@@ -10,13 +10,13 @@ import '/passenger/seach_driver/seach_driver_widget.dart';
 import 'dart:async';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'city_to_city_model.dart';
 export 'city_to_city_model.dart';
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiText = Color(0xFF1B242B);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class _IntercityTariffCacheEntry {
   const _IntercityTariffCacheEntry({
@@ -276,12 +276,12 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
   Widget build(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : _mtaxiText;
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
 
     Future<void> submitOrder() async {
       if (!_isMeaningfulOrderAddress(_model.textController1.text)) {
@@ -483,7 +483,8 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
           title: Text(
             'Межгород',
             style: FlutterFlowTheme.of(context).titleLarge.override(
-                  font: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+                  font: TextStyle(
+                      fontFamily: 'Noto Sans', fontWeight: FontWeight.w800),
                   color: textColor,
                   fontWeight: FontWeight.w800,
                 ),
@@ -597,7 +598,8 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
                               labelStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.normal,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .bodyMedium
@@ -617,7 +619,8 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
                               hintStyle: FlutterFlowTheme.of(context)
                                   .bodyLarge
                                   .override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.normal,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .bodyLarge
@@ -665,7 +668,8 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
                             style: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .override(
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FontWeight.normal,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
@@ -744,7 +748,9 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
                               style: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .override(
-                                    font: GoogleFonts.readexPro(),
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
+                                    ),
                                     color: mutedColor,
                                     letterSpacing: 0.0,
                                   ),
@@ -784,7 +790,8 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
                   disabledColor: surface,
                   disabledTextColor: mutedColor,
                   textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                        font: GoogleFonts.readexPro(
+                        font: TextStyle(
+                          fontFamily: 'Noto Sans',
                           fontWeight: FlutterFlowTheme.of(context)
                               .titleSmall
                               .fontWeight,
@@ -793,7 +800,7 @@ class _CityToCityWidgetState extends State<CityToCityWidget>
                         ),
                         color: isDark
                             ? const Color(0xFF13191D)
-                            : const Color(0xFFEFF2F6),
+                            : const Color(0xFFFCFCFA),
                         letterSpacing: 0.0,
                         fontWeight: FontWeight.w800,
                         fontStyle:

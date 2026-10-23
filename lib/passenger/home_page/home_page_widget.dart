@@ -12,7 +12,7 @@ import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:latlong2/latlong.dart' as latlng;
 import 'package:provider/provider.dart';
 import 'home_page_model.dart';
@@ -402,9 +402,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
-    final ctaColor = isDark ? const Color(0xFF28D8C6) : const Color(0xFFFF6B00);
-    final ctaTextColor = isDark ? const Color(0xFF071718) : Colors.white;
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
+    final ctaColor = isDark ? const Color(0xFF28D8C6) : const Color(0xFFE6BD63);
+    const ctaTextColor = Color(0xFF1B242B);
     final entryActiveOrderRef = _entryActiveOrderRef ??
         getEffectivePassengerOrderRef(currentUserDocument);
     if (!_entryOrderCheckDone) {
@@ -425,21 +425,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
         !FFAppState().shouldIgnorePassengerOrderRef(entryActiveOrderRef)) {
       return SeachDriverWidget(orderDocPath: entryActiveOrderRef.path);
     }
-    if (currentUserLocationValue == null) {
-      return Container(
-        color: pageBg,
-        child: Center(
-          child: SizedBox(
-            width: 50.0,
-            height: 50.0,
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(ctaColor),
-            ),
-          ),
-        ),
-      );
-    }
-
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final bottomSafeInset = MediaQuery.paddingOf(context).bottom;
     final canSubmitOrder = !_creatingOrder;
@@ -776,7 +761,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
               disabledColor: ctaColor.withValues(alpha: 0.55),
               disabledTextColor: ctaTextColor.withValues(alpha: 0.75),
               textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight: FontWeight.w800,
                       fontStyle:
                           FlutterFlowTheme.of(context).titleSmall.fontStyle,

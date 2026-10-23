@@ -57,6 +57,7 @@ OrderRecord orderRecordFromBackendJson(Map<String, dynamic> json) {
     'passengerBonusUsed': _parseBackendDouble(json['passengerBonusUsed']) ?? 0,
     'passengerWalletUsed':
         _parseBackendDouble(json['passengerWalletUsed']) ?? 0,
+    'paymentMode': json['paymentMode'],
     'driverCar': json['driverCar'] ?? '',
     'driverPlate': json['driverPlate'] ?? '',
     'distanceKm': _parseBackendDouble(json['distanceKm']),

@@ -1,9 +1,16 @@
+import 'trip_receipt.dart';
+import '/design/offer_card.dart';
+import '/design/mtaxi_theme.dart';
+import '/flutter_flow/internationalization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '/backend/backend_calls/backend_calls.dart';
 
-Future<void> proposeDriverPrice(BuildContext context, String path) async {
-  final price = TextEditingController(text: '500');
+Future<void> proposeDriverPrice(BuildContext context, String path,
+    {int initialPrice = 500}) async {
+  final price =
+      TextEditingController(text: initialPrice.clamp(500, 10000000).toString());
+  var submitted = false;
   final result = await showDialog<int>(
       context: context,
       builder: (dialog) => AlertDialog(
@@ -22,9 +29,12 @@ Future<void> proposeDriverPrice(BuildContext context, String path) async {
                     child: const Text('Отмена')),
                 FilledButton(
                     onPressed: () {
+                      if (submitted) return;
                       final v = int.tryParse(price.text);
-                      if (v != null && v >= 500 && v <= 10000000)
+                      if (v != null && v >= 500 && v <= 10000000) {
+                        submitted = true;
                         Navigator.pop(dialog, v);
+                      }
                     },
                     child: const Text('Предложить'))
               ]));
@@ -51,6 +61,7 @@ class _PassengerOffersState extends State<PassengerOffers> {
   final Set<String> _seen = {};
   List<Map<String, dynamic>> _offers = [];
   bool _busy = false, _dialog = false;
+  bool _responding = false, _failed = false;
   @override
   void initState() {
     super.initState();
@@ -70,12 +81,19 @@ class _PassengerOffersState extends State<PassengerOffers> {
     try {
       final r = await makeCloudCall(
           'listOrderOffers', {'orderDocPath': widget.orderDocPath});
-      if (!mounted || r['success'] != true) return;
+      if (!mounted) return;
+      if (r['success'] != true) {
+        setState(() => _failed = true);
+        return;
+      }
       final offers = (r['offers'] as List? ?? [])
           .whereType<Map>()
           .map((x) => Map<String, dynamic>.from(x))
           .toList();
-      setState(() => _offers = offers);
+      setState(() {
+        _offers = offers;
+        _failed = false;
+      });
       if (!_dialog) {
         for (final offer in offers) {
           if (_seen.add(offer['id'].toString())) {
@@ -84,87 +102,104 @@ class _PassengerOffersState extends State<PassengerOffers> {
           }
         }
       }
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
     } finally {
       _busy = false;
     }
   }
 
-  String _details(Map<String, dynamic> o) =>
-      '${o['driverName']}\n${o['price']} ₸ · ${o['etaMinutes'] == null ? 'Время подачи уточняется' : '≈${o['etaMinutes']} мин до вас'}\n${o['rating'] == null ? 'Пока нет оценок' : 'Рейтинг: ${(o['rating'] as num).toStringAsFixed(1)} ★ (${o['ratingCount']})'} · ${o['completedTrips'] ?? 0} поездок\n${o['driverCar'] ?? ''} ${o['driverPlate'] ?? ''}';
   Future<void> _show(Map<String, dynamic> offer) async {
+    if (_dialog || _responding) return;
     _dialog = true;
-    final accept = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-                title: const Text('Предложение водителя'),
-                content: Text(_details(offer)),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(dialog, false),
-                      child: const Text('Отклонить')),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(dialog, true),
-                      child: Text('Принять за ${offer['price']} ₸'))
-                ]));
+    final accept = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (dialog) => SingleChildScrollView(
+          padding: const EdgeInsets.all(22),
+          child: DriverOfferCard(
+              offer: offer,
+              onAccept: () => Navigator.pop(dialog, true),
+              onDecline: () => Navigator.pop(dialog, false))),
+    );
     _dialog = false;
     if (accept == null || !mounted) return;
-    final r = await makeCloudCall('respondOrderOffer', {
-      'orderDocPath': widget.orderDocPath,
-      'offerId': offer['id'],
-      'accept': accept
-    });
-    if (!mounted) return;
-    if (r['success'] != true)
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text(r['error']?.toString() ?? 'Предложение больше недоступно')));
+    setState(() => _responding = true);
+    try {
+      final result = await makeCloudCall('respondOrderOffer', {
+        'orderDocPath': widget.orderDocPath,
+        'offerId': offer['id'],
+        'accept': accept
+      });
+      if (!mounted) return;
+      if (result['success'] != true)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['error']?.toString() ??
+                'Предложение больше недоступно. Обновите заказ.')));
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Ответ не получен. Проверяем состояние заказа; цена не считается принятой до подтверждения сервера.')));
+    } finally {
+      if (mounted) setState(() => _responding = false);
+    }
     await _refresh();
   }
 
   @override
-  Widget build(BuildContext context) => Card(
-      child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 190),
-              child: SingleChildScrollView(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(
-                    _offers.isEmpty
-                        ? 'Ожидаем предложения водителей'
-                        : 'Предложения: ${_offers.length}',
-                    style: Theme.of(context).textTheme.titleMedium),
-                for (final offer in _offers)
-                  ListTile(
-                      dense: true,
-                      title:
-                          Text('${offer['driverName']} · ${offer['price']} ₸'),
+  Widget build(BuildContext context) {
+    String tr(String ru, String kk) =>
+        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    return MTaxiCard(
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+          Text(
+              _offers.isEmpty
+                  ? tr('Ожидаем предложения водителей',
+                      'Жүргізуші ұсыныстарын күтудеміз')
+                  : tr('Предложения водителей', 'Жүргізуші ұсыныстары'),
+              style:
+                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          if (_responding)
+            const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator()),
+          if (_failed)
+            TextButton(
+                onPressed: _refresh,
+                child: Text(tr(
+                    'Связь потеряна. Обновить', 'Байланыс үзілді. Жаңарту'))),
+          if (_offers.isNotEmpty)
+            ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: SingleChildScrollView(
+                    child: Column(children: [
+                  for (final offer in _offers)
+                    ListTile(
+                      enabled: !_responding,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const CircleAvatar(
+                          backgroundColor: MTaxiDesign.surface,
+                          foregroundColor: MTaxiDesign.ink,
+                          child: Icon(Icons.person_outline)),
+                      title: Text(
+                          '${offer['driverName'] ?? tr('Водитель', 'Жүргізуші')} · ${offer['price']} ₸'),
                       subtitle: Text(offer['etaMinutes'] == null
-                          ? 'Уточняется время подачи'
-                          : 'Подача ≈${offer['etaMinutes']} мин'),
+                          ? tr('Время подачи уточняется',
+                              'Келу уақыты нақтылануда')
+                          : tr('До вас ≈${offer['etaMinutes']} мин',
+                              'Сізге дейін ≈${offer['etaMinutes']} мин')),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _show(offer)),
-              ])))));
+                      onTap: () => _show(offer),
+                    )
+                ]))),
+        ]));
+  }
 }
 
-Future<void> showTripRating(BuildContext context, String orderDocPath) async {
-  final stars = await showDialog<int>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-            title: const Text('Как прошла поездка?'),
-            content: Wrap(alignment: WrapAlignment.center, children: [
-              for (int n = 1; n <= 5; n++)
-                TextButton(
-                    onPressed: () => Navigator.pop(dialog, n),
-                    child: Text('$n ★'))
-            ]),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(dialog),
-                  child: const Text('Позже'))
-            ],
-          ));
-  if (stars != null)
-    await makeCloudCall(
-        'rateTripDriver', {'orderDocPath': orderDocPath, 'stars': stars});
-}
+Future<void> showTripRating(BuildContext context, String orderDocPath) =>
+    showTripReceipt(context, orderDocPath);
