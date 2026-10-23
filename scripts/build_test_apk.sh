@@ -3,6 +3,7 @@ set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backend_url="${1:?Pass the actual deployed HTTPS backend URL}"
 . "$root_dir/scripts/remote_backend_url_guard.sh"
+. "$root_dir/scripts/apk_signing_certificate.sh"
 backend_url="$(mtaxi_validate_remote_backend_url "$backend_url" 'Test APK build failed')"
 export MTAXI_TEST_KEYSTORE="${MTAXI_TEST_KEYSTORE:-$HOME/.android/debug.keystore}"
 if [[ ! -f "$MTAXI_TEST_KEYSTORE" ]]; then
@@ -33,9 +34,13 @@ signed_apk="build/app/outputs/flutter-apk/app-profile-persistent.apk"
   --out "$signed_apk" build/app/outputs/flutter-apk/app-profile.apk
 keytool -exportcert -keystore "$MTAXI_TEST_KEYSTORE" -storepass android -alias androiddebugkey -file "$certificate_file" >/dev/null
 expected_certificate="$(sha256sum "$certificate_file" | cut -d ' ' -f 1)"
-actual_certificate="$("$apksigner_bin" verify --print-certs "$signed_apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+if ! actual_certificate="$("$apksigner_bin" verify --print-certs "$signed_apk" | mtaxi_apk_certificate_sha256)"; then
+  printf 'Cannot verify one unique APK signing certificate; publication refused\n' >&2
+  exit 1
+fi
 if [[ "$actual_certificate" != "$expected_certificate" ]]; then
   printf 'APK signing certificate differs from the persistent test key; publication refused\n' >&2
+  printf 'Expected certificate: %s; APK certificate: %s\n' "$expected_certificate" "$actual_certificate" >&2
   exit 1
 fi
 printf 'Verified persistent APK signing certificate SHA256: %s\n' "$actual_certificate"
