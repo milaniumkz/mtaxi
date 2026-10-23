@@ -1,3 +1,4 @@
+import 'ledger_presentation.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend_calls/backend_calls.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -6,11 +7,10 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/admin/admin_utils.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-const _mtaxiPageBg = Color(0xFF12051B);
+const _mtaxiPageBg = Color(0xFFF4F7F8);
 const _mtaxiSurface = Color(0xFFFFFFFF);
-const _mtaxiMint = Color(0xFF28D8C6);
+const _mtaxiMint = Color(0xFF126E68);
 
 class AdminMoneyStatsWidget extends StatefulWidget {
   const AdminMoneyStatsWidget({super.key});
@@ -136,14 +136,15 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
       if (type.contains('refund')) {
         refundedCount++;
       }
-      final positive = type == 'driver_top_up' ||
-          type.contains('refund') ||
-          type == 'withdrawal_rejected';
+      final direction = ledgerDirection(entry);
       operations.add(_MoneyOperation(
         date: date,
         title: _backendOperationTitle(type),
         subtitle: [
           (entry['userId'] ?? '').toString(),
+          if (entry['wallet'] == 'bonus') 'Бонусный счёт',
+          if (entry['bonusAmount'] is num && entry['cashAmount'] is num)
+            'Деньгами: ${formatAppCurrency(_asDouble(entry['cashAmount']))} · бонусами: ${formatAppCurrency(_asDouble(entry['bonusAmount']))}',
           (entry['orderId'] ??
                   entry['paymentId'] ??
                   entry['withdrawalId'] ??
@@ -151,7 +152,7 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
               .toString(),
         ].where((item) => item.trim().isNotEmpty).join(' • '),
         amount: amount,
-        positive: positive,
+        direction: direction,
       ));
     }
     operations.sort((a, b) => (b.date ?? DateTime.fromMillisecondsSinceEpoch(0))
@@ -191,6 +192,18 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
 
   String _backendOperationTitle(String type) {
     switch (type) {
+      case 'driver_welcome_bonus':
+        return 'Приветственный бонус водителю';
+      case 'daily_driver_bonus':
+        return 'Награда за суточную акцию';
+      case 'passenger_cashback':
+        return 'Бонус пассажиру за поездку';
+      case 'passenger_trip_payment':
+        return 'Оплата поездки водителю';
+      case 'passenger_trip_reserve':
+        return 'Резерв на поездку';
+      case 'passenger_trip_refund':
+        return 'Возврат резерва поездки';
       case 'driver_top_up':
         return 'Пополнение';
       case 'payment_failed':
@@ -215,7 +228,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
     return Scaffold(
       backgroundColor: _mtaxiPageBg,
       appBar: AppBar(
-        backgroundColor: _mtaxiPageBg,
+        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF12051B),
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -227,7 +241,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
         title: Text(
           'Статистика денег',
           style: FlutterFlowTheme.of(context).headlineMedium.override(
-                font: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
+                font: TextStyle(
+                    fontFamily: 'Noto Sans', fontWeight: FontWeight.w600),
                 color: Colors.white,
                 letterSpacing: 0.0,
                 fontWeight: FontWeight.w600,
@@ -307,7 +322,7 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
       label: Text(label),
       onSelected: (_) => _setPeriod(value),
       selectedColor: FlutterFlowTheme.of(context).primary,
-      labelStyle: TextStyle(color: selected ? Colors.white : null),
+      labelStyle: TextStyle(color: selected ? const Color(0xFF1B242B) : null),
     );
   }
 
@@ -498,9 +513,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
         children: [
           Text(
             'Текущие балансы водителей',
-            style: FlutterFlowTheme.of(context)
-                .bodyLarge
-                .override(fontWeight: FontWeight.w700),
+            style: FlutterFlowTheme.of(context).bodyLarge.override(
+                color: const Color(0xFF1B242B), fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text('Всего на балансах: ${formatAppCurrency(stats.driverBalances)}'),
@@ -540,9 +554,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
         children: [
           Text(
             'Последние операции за период',
-            style: FlutterFlowTheme.of(context)
-                .bodyLarge
-                .override(fontWeight: FontWeight.w700),
+            style: FlutterFlowTheme.of(context).bodyLarge.override(
+                color: const Color(0xFF1B242B), fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           if (stats.operations.isEmpty)
@@ -554,18 +567,30 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(
-                  item.positive ? Icons.arrow_downward : Icons.arrow_upward,
-                  color: item.positive ? Colors.green : Colors.red,
+                  item.direction == 0
+                      ? Icons.remove
+                      : item.positive
+                          ? Icons.arrow_downward
+                          : Icons.arrow_upward,
+                  color: item.direction == 0
+                      ? Colors.grey
+                      : item.positive
+                          ? Colors.green
+                          : Colors.red,
                 ),
                 title: Text(item.title),
                 subtitle: Text(
                   '${item.subtitle}\n${item.date == null ? '' : dateTimeFormat('d.MM HH:mm', item.date, locale: FFLocalizations.of(context).languageCode)}',
                 ),
                 trailing: Text(
-                  '${item.positive ? '+' : '-'}${formatAppCurrency(item.amount)}',
+                  '${item.direction == 0 ? '' : item.positive ? '+' : '-'}${formatAppCurrency(item.amount)}',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: item.positive ? Colors.green : Colors.red,
+                    color: item.direction == 0
+                        ? Colors.grey
+                        : item.positive
+                            ? Colors.green
+                            : Colors.red,
                   ),
                 ),
               ),
@@ -596,9 +621,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: FlutterFlowTheme.of(context)
-                .titleMedium
-                .override(fontWeight: FontWeight.w700),
+            style: FlutterFlowTheme.of(context).titleMedium.override(
+                color: const Color(0xFF1B242B), fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(subtitle, style: FlutterFlowTheme.of(context).bodySmall),
@@ -666,14 +690,15 @@ class _MoneyOperation {
     required this.title,
     required this.subtitle,
     required this.amount,
-    required this.positive,
+    required this.direction,
   });
 
   final DateTime? date;
   final String title;
   final String subtitle;
   final double amount;
-  final bool positive;
+  final int direction;
+  bool get positive => direction > 0;
 }
 
 class _DriverBalance {

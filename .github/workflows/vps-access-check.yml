@@ -1,0 +1,39 @@
+name: Bootstrap MTaxi test VPS
+on:
+  push:
+    branches: [codex/free-staging-20261021]
+    paths:
+      - .github/workflows/vps-access-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mtaxi-vps
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: 89.126.192.185
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check password secret
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS" || { echo 'Add repository Actions secret VPS_SSH_PASSWORD'; exit 1; }
+      - name: Install SSH password helper
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+      - name: Pin observed SSH host key
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+      - name: Provision inspected Ubuntu server and HTTPS
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "root@$VPS_HOST" 'bash -s' < deploy/bootstrap_vps.sh

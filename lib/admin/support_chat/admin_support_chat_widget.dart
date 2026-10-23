@@ -9,12 +9,11 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/upload_data.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '/admin/admin_utils.dart';
 import 'admin_support_chat_model.dart';
 export 'admin_support_chat_model.dart';
 
-const _mtaxiPageBg = Color(0xFF12051B);
+const _mtaxiPageBg = Color(0xFFF4F7F8);
 const _mtaxiSurface = Color(0xFFFFFFFF);
 const _mtaxiMint = Color(0xFF28D8C6);
 
@@ -660,6 +659,11 @@ class _AdminSupportChatWidgetState extends State<AdminSupportChatWidget> {
     if (pending) return 'Ожидает';
     if (message == null) return '';
     if (!isMine) return 'Получено';
+    if (message.snapshotData['backendSource'] == true) {
+      return message.snapshotData['readByUser'] == true
+          ? 'Прочитано'
+          : 'Отправлено';
+    }
     final currentPath = _currentAdminPath;
     if (message.readBy.any((ref) => ref.path != currentPath)) {
       return 'Прочитано';
@@ -741,8 +745,7 @@ class _AdminSupportChatWidgetState extends State<AdminSupportChatWidget> {
     DateTime? timestamp,
   }) {
     final normalizedImageUrl = (imageUrl ?? '').trim();
-    final bubbleColor =
-        isMine ? FlutterFlowTheme.of(context).primary : _mtaxiSurface;
+    final bubbleColor = isMine ? const Color(0xFF126E68) : _mtaxiSurface;
     final textColor =
         isMine ? Colors.white : FlutterFlowTheme.of(context).primaryText;
 
@@ -937,7 +940,8 @@ class _AdminSupportChatWidgetState extends State<AdminSupportChatWidget> {
       key: scaffoldKey,
       backgroundColor: _mtaxiSurface,
       appBar: AppBar(
-        backgroundColor: _mtaxiPageBg,
+        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF12051B),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -949,7 +953,8 @@ class _AdminSupportChatWidgetState extends State<AdminSupportChatWidget> {
         title: Text(
           'Диалог с пользователем',
           style: FlutterFlowTheme.of(context).headlineMedium.override(
-                font: GoogleFonts.readexPro(
+                font: TextStyle(
+                  fontFamily: 'Noto Sans',
                   fontWeight: FontWeight.w600,
                   fontStyle:
                       FlutterFlowTheme.of(context).headlineMedium.fontStyle,
@@ -1065,6 +1070,7 @@ class _AdminSupportChatWidgetState extends State<AdminSupportChatWidget> {
                           child: Row(
                             children: [
                               IconButton(
+                                tooltip: 'Прикрепить фото',
                                 onPressed:
                                     _isUploadingImage ? null : _sendImage,
                                 icon: _isUploadingImage
@@ -1096,6 +1102,7 @@ class _AdminSupportChatWidgetState extends State<AdminSupportChatWidget> {
                               ),
                               const SizedBox(width: 8),
                               IconButton(
+                                tooltip: 'Отправить сообщение',
                                 onPressed: _sendMessage,
                                 icon: const Icon(Icons.send),
                                 color: _mtaxiMint,

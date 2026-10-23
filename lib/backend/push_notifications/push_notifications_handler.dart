@@ -8,6 +8,7 @@ import '/backend/backend_calls/backend_calls.dart';
 import '/backend/order_state_compat.dart';
 import 'push_deep_link_router.dart';
 import 'push_notification_inbox.dart';
+import '../firebase/firebase_config.dart';
 import '../../flutter_flow/flutter_flow_util.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -342,7 +343,7 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
   }
 
   Future handleOpenedPushNotification() async {
-    if (isWeb) {
+    if (isWeb && !firebaseWebPushEnabled) {
       return;
     }
 

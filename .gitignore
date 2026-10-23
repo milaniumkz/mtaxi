@@ -24,6 +24,7 @@ node_modules/
 **/Pods/
 **/.symlinks/
 **/.gradle/
+**/.kotlin/
 **/ephemeral/
 *.log
 .playwright-mcp/
@@ -46,3 +47,5 @@ backups/
 
 /android/app/google-services.json
 /ios/Runner/GoogleService-Info.plist
+/web/firebase-config.js
+/.firebase-web-config.local.json

@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import '../backend_calls/backend_calls.dart';
+import '../firebase/firebase_config.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,10 +14,11 @@ const _apnsTokenRetryDelay = Duration(milliseconds: 500);
 const _fcmStateSyncMinInterval = Duration(hours: 6);
 
 bool get supportsFcmTokenStateSync =>
-    !kIsWeb && (Platform.isIOS || Platform.isAndroid);
+    kIsWeb ? firebaseWebPushEnabled : (Platform.isIOS || Platform.isAndroid);
 
 String? get currentFcmDeviceType {
   if (!supportsFcmTokenStateSync) return null;
+  if (kIsWeb) return 'Web';
   return Platform.isIOS ? 'iOS' : 'Android';
 }
 
@@ -35,15 +37,17 @@ Future<void> syncFcmTokenStateForUserPath({
   try {
     final messaging = FirebaseMessaging.instance;
     await messaging.setAutoInitEnabled(true);
-    final settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-      announcement: false,
-      carPlay: false,
-      criticalAlert: false,
-    );
+    final settings = kIsWeb
+        ? await messaging.getNotificationSettings()
+        : await messaging.requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+            provisional: false,
+            announcement: false,
+            carPlay: false,
+            criticalAlert: false,
+          );
     final status = settings.authorizationStatus;
     if (status != AuthorizationStatus.authorized &&
         status != AuthorizationStatus.provisional) {
@@ -52,7 +56,7 @@ Future<void> syncFcmTokenStateForUserPath({
     }
 
     String? apnsToken;
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       for (var attempt = 0; attempt < _apnsTokenRetryAttempts; attempt++) {
         apnsToken = await messaging.getAPNSToken();
         if (apnsToken != null && apnsToken.isNotEmpty) {
@@ -61,7 +65,8 @@ Future<void> syncFcmTokenStateForUserPath({
         await Future.delayed(_apnsTokenRetryDelay);
       }
     }
-    final token = await messaging.getToken();
+    final token =
+        await messaging.getToken(vapidKey: kIsWeb ? firebaseWebVapidKey : null);
     final deviceType = currentFcmDeviceType;
     if (token == null || token.isEmpty || deviceType == null) {
       return;

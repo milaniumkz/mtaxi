@@ -2,12 +2,12 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/backend/app_content/app_content.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'politika_model.dart';
 export 'politika_model.dart';
 
-const _mtaxiOrange = Color(0xFFFF6500);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiOrange = Color(0xFFE6BD63);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class PolitikaWidget extends StatefulWidget {
   const PolitikaWidget({super.key});
@@ -42,8 +42,8 @@ class _PolitikaWidgetState extends State<PolitikaWidget> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
-    final appBarBg = isDark ? const Color(0xFF13191D) : const Color(0xFFFF6500);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
+    final appBarBg = isDark ? const Color(0xFF13191D) : const Color(0xFFE6BD63);
     final appBarText = isDark ? Colors.white : Colors.white;
     final bodyText = isDark ? const Color(0xFFCBD3D8) : _mtaxiMuted;
     return GestureDetector(
@@ -63,7 +63,8 @@ class _PolitikaWidgetState extends State<PolitikaWidget> {
               '4a9cqlwr' /* Политика и условия */,
             ),
             style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.outfit(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight:
                         FlutterFlowTheme.of(context).headlineMedium.fontWeight,
                     fontStyle:
@@ -113,7 +114,9 @@ class _PolitikaWidgetState extends State<PolitikaWidget> {
                       text.isEmpty ? 'Политика не заполнена' : text,
                       textAlign: TextAlign.start,
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            font: GoogleFonts.readexPro(),
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
+                            ),
                             color: bodyText,
                             lineHeight: 1.45,
                             letterSpacing: 0.0,

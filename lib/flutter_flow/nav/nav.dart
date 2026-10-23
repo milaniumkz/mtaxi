@@ -162,9 +162,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: HomePageWidget.routeName,
           path: HomePageWidget.routePath,
-          builder: (context, params) => params.isEmpty
-              ? NavBarPage(initialPage: 'HomePage')
-              : HomePageWidget(),
+          builder: (context, params) => NavBarPage(initialPage: 'HomePage'),
         ),
         FFRoute(
           name: LoginWidget.routeName,
@@ -269,12 +267,14 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: SeachDriverWidget.routeName,
           path: SeachDriverWidget.routePath,
-          builder: (context, params) => SeachDriverWidget(
-            orderDocPath: params.getParam<String>(
-              'orderDocPath',
-              ParamType.String,
-            ),
-          ),
+          builder: (context, params) => NavBarPage(
+              initialPage: 'HomePage',
+              page: SeachDriverWidget(
+                orderDocPath: params.getParam<String>(
+                  'orderDocPath',
+                  ParamType.String,
+                ),
+              )),
         ),
         FFRoute(
           name: SetProfileDriverWidget.routeName,
@@ -289,12 +289,14 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: HomeDriverOrderWidget.routeName,
           path: HomeDriverOrderWidget.routePath,
-          builder: (context, params) => HomeDriverOrderWidget(
-            orderDocPath: params.getParam<String>(
-              'orderDocPath',
-              ParamType.String,
-            ),
-          ),
+          builder: (context, params) => NavBarPage(
+              initialPage: 'driverOrders',
+              page: HomeDriverOrderWidget(
+                orderDocPath: params.getParam<String>(
+                  'orderDocPath',
+                  ParamType.String,
+                ),
+              )),
         ),
         FFRoute(
           name: AdminHomeWidget.routeName,

@@ -63,7 +63,7 @@ function validatePassengerRegistration(data = {}, auth) {
   if (!city) {
     return { success: false, code: "PROFILE_CITY_REQUIRED", error: "Выберите населенный пункт" };
   }
-  if (!password) {
+  if (!password && !hasUserPassword(auth.user)) {
     return { success: false, code: "PASSWORD_REQUIRED", error: "Придумайте пароль" };
   }
   return null;
@@ -84,7 +84,7 @@ function validateDriverRegistration(data = {}, auth) {
   if (!city) {
     return { success: false, code: "DRIVER_CITY_REQUIRED", error: "Выберите населенный пункт" };
   }
-  if (!password) {
+  if (!password && !hasUserPassword(auth.user)) {
     return { success: false, code: "PASSWORD_REQUIRED", error: "Придумайте пароль" };
   }
   if (!gosNomer) {
@@ -97,8 +97,8 @@ function validatePasswordUpdate(data = {}, auth) {
   const authError = requireAuth(auth);
   if (authError) return authError;
   const password = normalizeString(data.password);
-  if (password.length < 4) {
-    return { success: false, code: "PASSWORD_TOO_SHORT", error: "Пароль должен быть минимум 4 символа" };
+  if (password.length < 8 || password.length > 128) {
+    return { success: false, code: "PASSWORD_TOO_SHORT", error: "Пароль должен содержать от 8 до 128 символов" };
   }
   return null;
 }
@@ -115,9 +115,9 @@ function savePassengerProfileInStore(store, data, auth) {
   user.lastName = name.lastName;
   user.city = normalizeString(data.city);
   user.photoUrl = normalizeString(data.photoUrl);
-  user.phone = normalizePhone(data.phoneNumber || user.phone);
+  // The login identifier cannot be changed through a profile submission.
   user.userId = normalizeString(data.userId || user.userId);
-  setUserPassword(user, normalizeString(data.password));
+  if (normalizeString(data.password)) setUserPassword(user, normalizeString(data.password));
   user.role = "passenger";
   user.isDriver = user.isDriver === true;
   user.activeMode = "passenger";
@@ -146,10 +146,10 @@ function saveDriverProfileInStore(store, data, auth) {
   user.firstName = firstName;
   user.lastName = lastName;
   user.displayName = displayName;
-  user.phone = normalizePhone(data.phoneNumber || user.phone);
+  // The login identifier cannot be changed through a profile submission.
   user.city = normalizeString(data.city);
   user.userId = normalizeString(data.userId || user.userId);
-  setUserPassword(user, normalizeString(data.password));
+  if (normalizeString(data.password)) setUserPassword(user, normalizeString(data.password));
   user.isDriver = true;
   user.role = "driver";
   user.statusDriver = "pending";
@@ -213,8 +213,14 @@ function updatePreferencesInStore(store, data, auth) {
   if (data.coords && typeof data.coords === "object") {
     const latitude = asNumber(data.coords.latitude ?? data.coords.lat);
     const longitude = asNumber(data.coords.longitude ?? data.coords.lng);
-    if (latitude != null && longitude != null) {
+    if (latitude != null && longitude != null && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) {
       user.coords = { latitude, longitude };
+      user.coordsUpdatedAt = new Date().toISOString();
+      user.coordsAccuracy = asNumber(data.coords.accuracy);
+      const { observeDriverPosition } = require('./trip_automation');
+      const { advanceDriverOrderStatusInStore } = require('./orders');
+      observeDriverPosition(store, user, { latitude, longitude, accuracy: asNumber(data.coords.accuracy) },
+        status => advanceDriverOrderStatusInStore(store, { user }, user.activeDriverOrderId, status));
     }
   }
   user.updatedAt = new Date().toISOString();
@@ -232,7 +238,7 @@ function setPasswordInStore(store, data, auth) {
   if (!user) {
     return { success: false, code: "USER_NOT_FOUND", error: "Пользователь не найден" };
   }
-  setUserPassword(user, normalizeString(data.password));
+  if (normalizeString(data.password)) setUserPassword(user, normalizeString(data.password));
   user.updatedAt = new Date().toISOString();
   return {
     success: true,
@@ -275,6 +281,7 @@ function deleteCurrentAccountDeepInStore(store, _data, auth) {
   if (!user) {
     return { success: false, code: "USER_NOT_FOUND", error: "Пользователь не найден" };
   }
+  if ((store.orders || []).some(o => (o.userId === user.id || o.driverId === user.id) && [2,3,4].includes(Number(o.status)))) return { success:false,code:"ACTIVE_TRIP_ACCOUNT_DELETE_DENIED",error:"Завершите или отмените активную поездку перед удалением аккаунта" };
   const userId = user.id;
   const userPath = `users/${userId}`;
   const phone = normalizePhone(user.phone);

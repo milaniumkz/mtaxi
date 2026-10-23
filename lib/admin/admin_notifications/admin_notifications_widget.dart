@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '/admin/admin_utils.dart';
 import '/auth/backend_auth/auth_util.dart';
@@ -9,9 +8,9 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
 
-const _mtaxiPageBg = Color(0xFF12051B);
+const _mtaxiPageBg = Color(0xFFF4F7F8);
 const _mtaxiSurface = Color(0xFFFFFFFF);
-const _mtaxiMint = Color(0xFF28D8C6);
+const _mtaxiMint = Color(0xFF126E68);
 
 class AdminNotificationsWidget extends StatefulWidget {
   const AdminNotificationsWidget({super.key});
@@ -177,7 +176,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
     return Scaffold(
       backgroundColor: _mtaxiPageBg,
       appBar: AppBar(
-        backgroundColor: _mtaxiPageBg,
+        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF12051B),
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -189,7 +189,9 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
         title: Text(
           'Рассылка уведомлений',
           style: FlutterFlowTheme.of(context).headlineMedium.override(
-                font: GoogleFonts.readexPro(
+                color: Colors.white,
+                font: TextStyle(
+                  fontFamily: 'Noto Sans',
                   fontWeight: FontWeight.w600,
                   fontStyle:
                       FlutterFlowTheme.of(context).headlineMedium.fontStyle,
@@ -225,7 +227,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
                           'Новая рассылка',
                           style:
                               FlutterFlowTheme.of(context).bodyLarge.override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.w700,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .bodyLarge
@@ -244,7 +247,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
                           style: FlutterFlowTheme.of(context)
                               .bodySmall
                               .override(
-                                font: GoogleFonts.readexPro(
+                                font: TextStyle(
+                                  fontFamily: 'Noto Sans',
                                   fontWeight: FlutterFlowTheme.of(context)
                                       .bodySmall
                                       .fontWeight,
@@ -361,7 +365,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
                             textStyle: FlutterFlowTheme.of(context)
                                 .titleSmall
                                 .override(
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .titleSmall
                                         .fontWeight,
@@ -389,7 +394,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
                   Text(
                     'Последние рассылки',
                     style: FlutterFlowTheme.of(context).bodyLarge.override(
-                          font: GoogleFonts.readexPro(
+                          font: TextStyle(
+                            fontFamily: 'Noto Sans',
                             fontWeight: FontWeight.w700,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyLarge
@@ -463,7 +469,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
                   child: Text(
                     (data['notification_title'] ?? '').toString(),
                     style: FlutterFlowTheme.of(context).bodyLarge.override(
-                          font: GoogleFonts.readexPro(
+                          font: TextStyle(
+                            fontFamily: 'Noto Sans',
                             fontWeight: FontWeight.w700,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyLarge
@@ -489,7 +496,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
                   child: Text(
                     _statusLabel(status),
                     style: FlutterFlowTheme.of(context).bodySmall.override(
-                          font: GoogleFonts.readexPro(
+                          font: TextStyle(
+                            fontFamily: 'Noto Sans',
                             fontWeight: FontWeight.w600,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodySmall
@@ -559,7 +567,8 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
               Text(
                 error,
                 style: FlutterFlowTheme.of(context).bodySmall.override(
-                      font: GoogleFonts.readexPro(
+                      font: TextStyle(
+                        fontFamily: 'Noto Sans',
                         fontWeight:
                             FlutterFlowTheme.of(context).bodySmall.fontWeight,
                         fontStyle:

@@ -14,14 +14,14 @@ import '/flutter_flow/upload_data.dart';
 import 'dart:async';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:webviewx_plus/webviewx_plus.dart';
 import 'set_profile_model.dart';
 export 'set_profile_model.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiMuted = Color(0xFF73677C);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiMuted = Color(0xFF5C6862);
 
 class SetProfileWidget extends StatefulWidget {
   const SetProfileWidget({super.key});
@@ -47,6 +47,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
   final _passwordFieldKey = GlobalKey();
   final _passwordRepeatFieldKey = GlobalKey();
   bool _isSubmittingRegistration = false;
+  bool get _needsPassword =>
+      currentUserDocument?.snapshotData['hasPassword'] != true;
 
   String _tr({
     required String ru,
@@ -68,6 +70,7 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
   }
 
   String? _passwordRepeatFieldError() {
+    if (!_needsPassword) return null;
     final password = _model.passwordController?.text ?? '';
     final repeat = _model.passwordRepeatController?.text ?? '';
     if (repeat.trim().isEmpty) {
@@ -262,11 +265,11 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
       );
       return;
     }
-    if (password.isEmpty) {
+    if (_needsPassword && password.length < 8) {
       _scrollFieldIntoView(_passwordFieldKey);
       await _showSaveErrorDialog(
         _tr(
-          ru: 'Придумайте пароль',
+          ru: 'Пароль должен быть минимум 8 символов',
           kk: 'Құпиясөз ойлап табыңыз',
         ),
       );
@@ -415,12 +418,12 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final textColor = isDark ? Colors.white : const Color(0xFF1E1525);
+    final textColor = isDark ? Colors.white : const Color(0xFF1B242B);
     final appBarBg = isDark ? _mtaxiMint : surface;
     final appBarText = isDark ? Colors.white : textColor;
-    final ctaTextColor = isDark ? const Color(0xFF071718) : Colors.white;
+    const ctaTextColor = Color(0xFF1B242B);
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     return GestureDetector(
       onTap: () {
@@ -443,7 +446,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
               kk: 'Жолаушыны тіркеу',
             ),
             style: FlutterFlowTheme.of(context).titleLarge.override(
-                  font: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+                  font: TextStyle(
+                      fontFamily: 'Noto Sans', fontWeight: FontWeight.w800),
                   color: appBarText,
                   fontWeight: FontWeight.w800,
                 ),
@@ -499,7 +503,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                       style: FlutterFlowTheme.of(context)
                                           .bodySmall
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodySmall
@@ -768,8 +773,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                         context)
                                                     .labelMedium
                                                     .override(
-                                                      font:
-                                                          GoogleFonts.readexPro(
+                                                      font: TextStyle(
+                                                        fontFamily: 'Noto Sans',
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
                                                                     context)
@@ -801,8 +806,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                         context)
                                                     .labelMedium
                                                     .override(
-                                                      font:
-                                                          GoogleFonts.readexPro(
+                                                      font: TextStyle(
+                                                        fontFamily: 'Noto Sans',
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
                                                                     context)
@@ -882,34 +887,36 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                         .fromSTEB(14.0, 18.0,
                                                             14.0, 14.0),
                                               ),
-                                              style: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font: GoogleFonts.readexPro(
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                    letterSpacing: 0.0,
-                                                    fontWeight:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodyMedium
-                                                            .fontWeight,
-                                                    fontStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodyMedium
-                                                            .fontStyle,
-                                                  ),
+                                              style:
+                                                  FlutterFlowTheme.of(context)
+                                                      .bodyMedium
+                                                      .override(
+                                                        font: TextStyle(
+                                                          fontFamily:
+                                                              'Noto Sans',
+                                                          fontWeight:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontWeight,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
+                                                        letterSpacing: 0.0,
+                                                        fontWeight:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .fontWeight,
+                                                        fontStyle:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .fontStyle,
+                                                      ),
                                               validator: _model
                                                   .textController1Validator
                                                   .asValidator(context),
@@ -978,8 +985,9 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                   context)
                                                               .bodyMedium
                                                               .override(
-                                                                font: GoogleFonts
-                                                                    .readexPro(
+                                                                font: TextStyle(
+                                                                  fontFamily:
+                                                                      'Noto Sans',
                                                                   fontWeight: FlutterFlowTheme.of(
                                                                           context)
                                                                       .bodyMedium
@@ -1069,8 +1077,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                     context)
                                                                 .labelMedium
                                                                 .override(
-                                                                  font: GoogleFonts
-                                                                      .readexPro(
+                                                                  font:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'Noto Sans',
                                                                     fontWeight: FlutterFlowTheme.of(
                                                                             context)
                                                                         .labelMedium
@@ -1099,8 +1109,10 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                     context)
                                                                 .labelMedium
                                                                 .override(
-                                                                  font: GoogleFonts
-                                                                      .readexPro(
+                                                                  font:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'Noto Sans',
                                                                     fontWeight: FlutterFlowTheme.of(
                                                                             context)
                                                                         .labelMedium
@@ -1193,8 +1205,9 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                                   context)
                                                               .bodyMedium
                                                               .override(
-                                                                font: GoogleFonts
-                                                                    .readexPro(
+                                                                font: TextStyle(
+                                                                  fontFamily:
+                                                                      'Noto Sans',
                                                                   fontWeight: FlutterFlowTheme.of(
                                                                           context)
                                                                       .bodyMedium
@@ -1224,242 +1237,270 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                               },
                                             ),
                                           ),
-                                          Padding(
-                                            padding: const EdgeInsetsDirectional
-                                                .fromSTEB(8.0, 0.0, 8.0, 8.0),
-                                            child: TextFormField(
-                                              key: _passwordFieldKey,
-                                              controller:
-                                                  _model.passwordController,
-                                              focusNode:
-                                                  _model.passwordFocusNode,
-                                              onTap: () => _scrollFieldIntoView(
-                                                  _passwordFieldKey),
-                                              autofocus: false,
-                                              obscureText:
-                                                  !_model.passwordVisibility,
-                                              decoration: InputDecoration(
-                                                labelText: _tr(
-                                                  ru: 'Придумайте пароль',
-                                                  kk: 'Құпиясөз ойлап табыңыз',
+                                          if (_needsPassword)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      8.0, 0.0, 8.0, 8.0),
+                                              child: TextFormField(
+                                                key: _passwordFieldKey,
+                                                controller:
+                                                    _model.passwordController,
+                                                focusNode:
+                                                    _model.passwordFocusNode,
+                                                onTap: () =>
+                                                    _scrollFieldIntoView(
+                                                        _passwordFieldKey),
+                                                autofocus: false,
+                                                obscureText:
+                                                    !_model.passwordVisibility,
+                                                decoration: InputDecoration(
+                                                  labelText: _tr(
+                                                    ru: 'Пароль должен быть минимум 8 символов',
+                                                    kk: 'Құпиясөз ойлап табыңыз',
+                                                  ),
+                                                  floatingLabelBehavior:
+                                                      FloatingLabelBehavior
+                                                          .always,
+                                                  labelStyle: FlutterFlowTheme
+                                                          .of(context)
+                                                      .labelMedium
+                                                      .override(
+                                                        font: TextStyle(
+                                                          fontFamily:
+                                                              'Noto Sans',
+                                                        ),
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .primaryText,
+                                                        letterSpacing: 0.0,
+                                                      ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .primary,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  errorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedErrorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  contentPadding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(14.0, 18.0,
+                                                          14.0, 14.0),
+                                                  suffixIcon: InkWell(
+                                                    onTap: () => safeSetState(
+                                                      () => _model
+                                                              .passwordVisibility =
+                                                          !_model
+                                                              .passwordVisibility,
+                                                    ),
+                                                    focusNode: FocusNode(
+                                                        skipTraversal: true),
+                                                    child: Icon(
+                                                      _model.passwordVisibility
+                                                          ? Icons
+                                                              .visibility_outlined
+                                                          : Icons
+                                                              .visibility_off_outlined,
+                                                      size: 22.0,
+                                                    ),
+                                                  ),
                                                 ),
-                                                floatingLabelBehavior:
-                                                    FloatingLabelBehavior
-                                                        .always,
-                                                labelStyle:
+                                                style:
                                                     FlutterFlowTheme.of(context)
-                                                        .labelMedium
+                                                        .bodyMedium
                                                         .override(
-                                                          font: GoogleFonts
-                                                              .readexPro(),
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
+                                                          font: TextStyle(
+                                                            fontFamily:
+                                                                'Noto Sans',
+                                                          ),
                                                           letterSpacing: 0.0,
                                                         ),
-                                                enabledBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primary,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                errorBorder: OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedErrorBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                contentPadding:
-                                                    const EdgeInsetsDirectional
-                                                        .fromSTEB(
-                                                        14.0, 18.0, 14.0, 14.0),
-                                                suffixIcon: InkWell(
-                                                  onTap: () => safeSetState(
-                                                    () => _model
-                                                            .passwordVisibility =
-                                                        !_model
-                                                            .passwordVisibility,
-                                                  ),
-                                                  focusNode: FocusNode(
-                                                      skipTraversal: true),
-                                                  child: Icon(
-                                                    _model.passwordVisibility
-                                                        ? Icons
-                                                            .visibility_outlined
-                                                        : Icons
-                                                            .visibility_off_outlined,
-                                                    size: 22.0,
-                                                  ),
-                                                ),
+                                                keyboardType: TextInputType
+                                                    .visiblePassword,
+                                                validator: _model
+                                                    .passwordControllerValidator
+                                                    .asValidator(context),
                                               ),
-                                              style: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font:
-                                                        GoogleFonts.readexPro(),
-                                                    letterSpacing: 0.0,
-                                                  ),
-                                              keyboardType:
-                                                  TextInputType.visiblePassword,
-                                              validator: _model
-                                                  .passwordControllerValidator
-                                                  .asValidator(context),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsetsDirectional
-                                                .fromSTEB(8.0, 0.0, 8.0, 0.0),
-                                            child: TextFormField(
-                                              key: _passwordRepeatFieldKey,
-                                              controller: _model
-                                                  .passwordRepeatController,
-                                              focusNode: _model
-                                                  .passwordRepeatFocusNode,
-                                              onTap: () => _scrollFieldIntoView(
-                                                  _passwordRepeatFieldKey),
-                                              autofocus: false,
-                                              obscureText: !_model
-                                                  .passwordRepeatVisibility,
-                                              decoration: InputDecoration(
-                                                labelText: _tr(
-                                                  ru: 'Повторите пароль',
-                                                  kk: 'Құпиясөзді қайталаңыз',
+                                          if (_needsPassword)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      8.0, 0.0, 8.0, 0.0),
+                                              child: TextFormField(
+                                                key: _passwordRepeatFieldKey,
+                                                controller: _model
+                                                    .passwordRepeatController,
+                                                focusNode: _model
+                                                    .passwordRepeatFocusNode,
+                                                onTap: () =>
+                                                    _scrollFieldIntoView(
+                                                        _passwordRepeatFieldKey),
+                                                autofocus: false,
+                                                obscureText: !_model
+                                                    .passwordRepeatVisibility,
+                                                decoration: InputDecoration(
+                                                  labelText: _tr(
+                                                    ru: 'Повторите пароль',
+                                                    kk: 'Құпиясөзді қайталаңыз',
+                                                  ),
+                                                  floatingLabelBehavior:
+                                                      FloatingLabelBehavior
+                                                          .always,
+                                                  labelStyle: FlutterFlowTheme
+                                                          .of(context)
+                                                      .labelMedium
+                                                      .override(
+                                                        font: TextStyle(
+                                                          fontFamily:
+                                                              'Noto Sans',
+                                                        ),
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .primaryText,
+                                                        letterSpacing: 0.0,
+                                                      ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .primary,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  errorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  focusedErrorBorder:
+                                                      OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .error,
+                                                      width: 2.0,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.0),
+                                                  ),
+                                                  contentPadding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(14.0, 18.0,
+                                                          14.0, 14.0),
+                                                  suffixIcon: InkWell(
+                                                    onTap: () => safeSetState(
+                                                      () => _model
+                                                              .passwordRepeatVisibility =
+                                                          !_model
+                                                              .passwordRepeatVisibility,
+                                                    ),
+                                                    focusNode: FocusNode(
+                                                        skipTraversal: true),
+                                                    child: Icon(
+                                                      _model.passwordRepeatVisibility
+                                                          ? Icons
+                                                              .visibility_outlined
+                                                          : Icons
+                                                              .visibility_off_outlined,
+                                                      size: 22.0,
+                                                    ),
+                                                  ),
                                                 ),
-                                                floatingLabelBehavior:
-                                                    FloatingLabelBehavior
-                                                        .always,
-                                                labelStyle:
+                                                style:
                                                     FlutterFlowTheme.of(context)
-                                                        .labelMedium
+                                                        .bodyMedium
                                                         .override(
-                                                          font: GoogleFonts
-                                                              .readexPro(),
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
+                                                          font: TextStyle(
+                                                            fontFamily:
+                                                                'Noto Sans',
+                                                          ),
                                                           letterSpacing: 0.0,
                                                         ),
-                                                enabledBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primary,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                errorBorder: OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                focusedErrorBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 2.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8.0),
-                                                ),
-                                                contentPadding:
-                                                    const EdgeInsetsDirectional
-                                                        .fromSTEB(
-                                                        14.0, 18.0, 14.0, 14.0),
-                                                suffixIcon: InkWell(
-                                                  onTap: () => safeSetState(
-                                                    () => _model
-                                                            .passwordRepeatVisibility =
-                                                        !_model
-                                                            .passwordRepeatVisibility,
-                                                  ),
-                                                  focusNode: FocusNode(
-                                                      skipTraversal: true),
-                                                  child: Icon(
-                                                    _model.passwordRepeatVisibility
-                                                        ? Icons
-                                                            .visibility_outlined
-                                                        : Icons
-                                                            .visibility_off_outlined,
-                                                    size: 22.0,
-                                                  ),
-                                                ),
+                                                keyboardType: TextInputType
+                                                    .visiblePassword,
+                                                validator: _model
+                                                    .passwordRepeatControllerValidator
+                                                    .asValidator(context),
                                               ),
-                                              style: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font:
-                                                        GoogleFonts.readexPro(),
-                                                    letterSpacing: 0.0,
-                                                  ),
-                                              keyboardType:
-                                                  TextInputType.visiblePassword,
-                                              validator: _model
-                                                  .passwordRepeatControllerValidator
-                                                  .asValidator(context),
                                             ),
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -1492,7 +1533,8 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                 textStyle: FlutterFlowTheme.of(context)
                                     .titleSmall
                                     .override(
-                                      font: GoogleFonts.readexPro(
+                                      font: TextStyle(
+                                        fontFamily: 'Noto Sans',
                                         fontWeight: FlutterFlowTheme.of(context)
                                             .titleSmall
                                             .fontWeight,

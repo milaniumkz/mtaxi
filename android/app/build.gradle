@@ -55,7 +55,11 @@ android {
 
     packaging {
         jniLibs {
-            keepDebugSymbols += ["**/*.so"]
+            // Keep symbols only when explicitly requested for native debugging.
+            // Shipping them made a universal test APK exceed 1 GB.
+            if (project.hasProperty("mtaxiKeepNativeSymbols")) {
+                keepDebugSymbols += ["**/*.so"]
+            }
         }
     }
 
@@ -69,6 +73,15 @@ android {
     }
 
    signingConfigs {
+       debug {
+           def testKeystore = System.getenv('MTAXI_TEST_KEYSTORE')
+           if (testKeystore) {
+               storeFile file(testKeystore)
+               storePassword 'android'
+               keyAlias 'androiddebugkey'
+               keyPassword 'android'
+           }
+       }
        release {
            keyAlias keystoreProperties['keyAlias']
            keyPassword keystoreProperties['keyPassword']
@@ -78,6 +91,9 @@ android {
    }
 
     buildTypes {
+        profile {
+            signingConfig signingConfigs.debug
+        }
         release {
             signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

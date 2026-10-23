@@ -1,3 +1,4 @@
+import '/trips/passenger_wallet.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/app_city_tariffs/app_city_tariffs.dart';
 import '/backend/app_settings/app_settings.dart';
@@ -11,7 +12,7 @@ import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:latlong2/latlong.dart' as latlng;
 import 'package:provider/provider.dart';
 import 'home_page_model.dart';
@@ -59,6 +60,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   DocumentReference? _entryActiveOrderRef;
   int _quoteRequestId = 0;
   Timer? _localPriceDebounce;
+  StreamSubscription<AppRuntimeSettings>? _settingsSubscription;
+  bool _intercityEnabled = false;
 
   bool get _shouldPreservePassengerOrderState {
     final activeOrderRef = getEffectivePassengerOrderRef(currentUserDocument);
@@ -318,6 +321,21 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => HomePageModel());
+    _settingsSubscription = watchAppRuntimeSettings().listen((settings) {
+      if (!mounted) return;
+      setState(() {
+        _intercityEnabled = settings.intercityEnabled;
+        if (!_intercityEnabled && FFAppState().serviceType == 'intercity') {
+          FFAppState().serviceType = 'taxi';
+          FFAppState().taxi = true;
+          FFAppState().delivery = false;
+          FFAppState().kudaString = '';
+          FFAppState().kudaCoords = null;
+          _intercityFixedPrice = null;
+          FFAppState().update(() {});
+        }
+      });
+    });
 
     getCurrentUserLocation(
       defaultLocation: _fallbackPassengerLocation,
@@ -357,6 +375,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   @override
   void dispose() {
     _localPriceDebounce?.cancel();
+    _settingsSubscription?.cancel();
     _model.dispose();
 
     super.dispose();
@@ -383,9 +402,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
-    final ctaColor = isDark ? const Color(0xFF28D8C6) : const Color(0xFFFF6B00);
-    final ctaTextColor = isDark ? const Color(0xFF071718) : Colors.white;
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
+    final ctaColor = isDark ? const Color(0xFF28D8C6) : const Color(0xFFE6BD63);
+    const ctaTextColor = Color(0xFF1B242B);
     final entryActiveOrderRef = _entryActiveOrderRef ??
         getEffectivePassengerOrderRef(currentUserDocument);
     if (!_entryOrderCheckDone) {
@@ -406,21 +425,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
         !FFAppState().shouldIgnorePassengerOrderRef(entryActiveOrderRef)) {
       return SeachDriverWidget(orderDocPath: entryActiveOrderRef.path);
     }
-    if (currentUserLocationValue == null) {
-      return Container(
-        color: pageBg,
-        child: Center(
-          child: SizedBox(
-            width: 50.0,
-            height: 50.0,
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(ctaColor),
-            ),
-          ),
-        ),
-      );
-    }
-
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final bottomSafeInset = MediaQuery.paddingOf(context).bottom;
     final canSubmitOrder = !_creatingOrder;
@@ -438,10 +442,12 @@ class _HomePageWidgetState extends State<HomePageWidget> {
           top: true,
           bottom: false,
           child: custom_widgets.DeliveryTaxiMap(
-            key: ValueKey('delivery_taxi_map_${FFAppState().serviceType}'),
+            key: ValueKey(
+                'delivery_taxi_map_${FFAppState().serviceType}_$_intercityEnabled'),
+            intercityEnabled: _intercityEnabled,
             width: MediaQuery.sizeOf(context).width * 1.0,
             height: MediaQuery.sizeOf(context).height,
-            priceText: FFAppState().price,
+            priceText: 'от 500 ₸',
             initialServiceType: FFAppState().serviceType,
             cityName: _effectiveCity,
             initialFromCoords: currentUserLocationValue == null
@@ -578,7 +584,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                       );
                       return;
                     }
-                    final price = double.tryParse(FFAppState().price);
+                    final fare = await choosePassengerFare(context);
+                    if (fare == null || !mounted) return;
+                    final price = fare.price.toDouble();
                     final orderType = serviceType;
                     final orderComment =
                         isDelivery ? '' : FFAppState().comment.trim();
@@ -647,7 +655,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 ? fromCity
                                 : _effectiveCity;
                           }(),
-                          if (price != null) 'price': price,
+                          'price': price,
+                          'paymentMode': fare.wallet ? 'wallet' : 'cash',
+                          'usePassengerBonuses': fare.bonuses,
                           'comment': orderComment,
                           'deliveryItem': deliveryItem,
                           'replaceExistingActiveOrder': false,
@@ -749,7 +759,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
               disabledColor: ctaColor.withValues(alpha: 0.55),
               disabledTextColor: ctaTextColor.withValues(alpha: 0.75),
               textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight: FontWeight.w800,
                       fontStyle:
                           FlutterFlowTheme.of(context).titleSmall.fontStyle,

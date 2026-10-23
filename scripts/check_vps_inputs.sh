@@ -92,16 +92,7 @@ for cors_origin in "${cors_origins[@]}"; do
   esac
 done
 
-require_remote_url MTAXI_SMS_HTTP_URL
-case "$(normalize "${MTAXI_SMS_HTTP_METHOD:-}" | tr '[:lower:]' '[:upper:]')" in
-  GET|POST|PUT|PATCH) ;;
-  *) fail "MTAXI_SMS_HTTP_METHOD must be GET, POST, PUT or PATCH" ;;
-esac
-require_value MTAXI_SMS_HTTP_BODY_TEMPLATE
-case "$MTAXI_SMS_HTTP_BODY_TEMPLATE" in
-  *'{{phone}}'*'{{message}}'*|*'{{phone}}'*'{{code}}'*) ;;
-  *) fail "MTAXI_SMS_HTTP_BODY_TEMPLATE must contain {{phone}} and {{message}} or {{code}}" ;;
-esac
+# Phone + password authentication does not require an SMS provider.
 
 require_remote_url MTAXI_PAYMENT_URL_TEMPLATE
 case "$MTAXI_PAYMENT_URL_TEMPLATE" in

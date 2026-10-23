@@ -295,8 +295,7 @@ async function validateProductionDeploy({
     "MTAXI_PAYMENT_URL_TEMPLATE",
     "MTAXI_PAYMENT_CALLBACK_SECRET",
     "MTAXI_SMS_PROVIDER",
-    "MTAXI_SMS_HTTP_URL",
-    "MTAXI_FCM_ENABLED",
+      "MTAXI_FCM_ENABLED",
     "MTAXI_ALLOW_SIMULATED_PUSH",
     "FIREBASE_SERVICE_ACCOUNT_JSON",
     "MTAXI_MAINTENANCE_INTERVAL_SEC",
@@ -350,7 +349,7 @@ async function validateProductionDeploy({
       envContract.store === "PostgreSQL in production" &&
       envContract.productionValues.NODE_ENV === "production" &&
       envContract.productionValues.MTAXI_STORE === "postgres" &&
-      envContract.productionValues.MTAXI_SMS_PROVIDER === "http" &&
+      envContract.productionValues.MTAXI_SMS_PROVIDER === "disabled" &&
       envContract.productionValues.MTAXI_PAYMENT_PROVIDER === "redirect" &&
       envContract.productionValues.MTAXI_FCM_ENABLED === "true" &&
       envContract.missingInExample.length === 0 &&

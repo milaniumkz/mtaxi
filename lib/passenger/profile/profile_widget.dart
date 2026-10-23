@@ -1,8 +1,11 @@
+import '/design/mtaxi_theme.dart';
+import '/design/driver_approval.dart';
 import 'dart:async';
 
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/backend_session.dart';
+import '/backend/backend_user_adapter.dart';
 import '/backend/backend_support_chat.dart';
 import '/backend/backend_calls/backend_calls.dart';
 import '/backend/uploads/storage.dart';
@@ -13,13 +16,13 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/upload_data.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'profile_model.dart';
 export 'profile_model.dart';
 
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
-const _mtaxiOrange = Color(0xFFFF6B00);
+const _mtaxiText = Color(0xFF1B242B);
+const _mtaxiMuted = Color(0xFF5C6862);
+const _mtaxiOrange = Color(0xFFE6BD63);
 
 class ProfileWidget extends StatefulWidget {
   const ProfileWidget({super.key});
@@ -36,14 +39,30 @@ class _ProfileWidgetState extends State<ProfileWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isSwitchingRoleState = false;
+  bool _isSigningOut = false;
   final Set<String> _optimisticallyReadSupportChatPaths = {};
   final Set<String> _optimisticallyReadSupportChatKeys = {};
 
   String get _currentUserPath => currentUserDocument?.reference.path ?? '';
 
+  Future<void> _signOut() async {
+    if (_isSigningOut) return;
+    setState(() => _isSigningOut = true);
+    final router = GoRouter.of(context);
+    router.prepareAuthEvent(true);
+    try {
+      await authManager.signOut();
+      router.clearRedirectLocation();
+      if (mounted) context.go(LoginWidget.routePath);
+    } finally {
+      if (mounted) setState(() => _isSigningOut = false);
+    }
+  }
+
   Future<void> _refreshCurrentUserRecord() async {
     final response = await makeCloudCall('getSessionBootstrap', {});
-    await saveBackendUserFromResponse(response);
+    currentUserDocument =
+        await applyBackendUserResponse(response) ?? currentUserDocument;
   }
 
   bool get _hasDriverAccount => userHasDriverAccount(currentUserDocument);
@@ -76,90 +95,49 @@ class _ProfileWidgetState extends State<ProfileWidget> {
     return authoritativeRoleState == targetRoleState;
   }
 
-  Future<bool> _waitForRoleStateApplied(
-    String targetRoleState, {
-    Duration timeout = const Duration(seconds: 6),
-  }) async {
-    if (_matchesAuthoritativeTargetRoleState(targetRoleState)) {
-      return true;
-    }
-
-    final stopwatch = Stopwatch()..start();
-    while (stopwatch.elapsed < timeout) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      if (!mounted) {
-        return false;
-      }
-      if (_matchesAuthoritativeTargetRoleState(targetRoleState)) {
-        return true;
-      }
-    }
-    return _matchesAuthoritativeTargetRoleState(targetRoleState);
-  }
-
-  Future<void> _switchRoleState({
-    required String targetRoleState,
-    required String routePath,
-  }) async {
-    if (_isSwitchingRoleState) {
-      return;
-    }
-
-    safeSetState(() {
-      _isSwitchingRoleState = true;
-    });
-
-    if (targetRoleState == 'PASSENGER') {
-      FFAppState().forcePassengerMode();
-    } else {
-      FFAppState().clearForcedPassengerMode();
-    }
-    UserModeResolver.setTransientRoleState(targetRoleState);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      context.go(routePath);
-    });
+  Future<void> _switchRoleState(
+      {required String targetRoleState, required String routePath}) async {
+    if (_isSwitchingRoleState) return;
+    setState(() => _isSwitchingRoleState = true);
     try {
-      unawaited(
-        makeCloudCall(
-          'updateUserPreferences',
-          {
-            'userDocPath': currentUserDocument?.reference.path,
-            'targetRoleState': targetRoleState,
-          },
-        ).then((response) async {
-          final success = response['success'] == true;
-          final code = (response['code'] ?? '').toString().trim().toLowerCase();
-          if (success ||
-              code == 'unavailable' ||
-              code == 'deadline-exceeded' ||
-              response['timeout'] == true) {
-            if (success) {
-              await saveBackendUserFromResponse(response);
-            }
-            await _waitForRoleStateApplied(targetRoleState);
-            return;
-          }
-          debugPrint(
-            'updateUserPreferences background error: ${(response['error'] ?? '').toString().trim()}',
-          );
-        }).catchError((Object error, StackTrace stackTrace) {
-          debugPrint('updateUserPreferences background exception: $error');
-        }),
-      );
-    } finally {
+      var response = await makeCloudCall('updateUserPreferences', {
+        'userDocPath': currentUserDocument?.reference.path,
+        'targetRoleState': targetRoleState,
+      });
+      if (response['success'] != true) {
+        if (response['timeout'] == true ||
+            ['unavailable', 'deadline-exceeded']
+                .contains(response['code']?.toString().toLowerCase())) {
+          response = await makeCloudCall('getSessionBootstrap', {});
+        } else {
+          throw StateError(
+              response['error']?.toString() ?? 'Не удалось переключить режим');
+        }
+      }
+      if (response['success'] != true || response['user'] is! Map) {
+        throw StateError('Не удалось подтвердить режим на сервере. Повторите.');
+      }
+      currentUserDocument =
+          await applyBackendUserResponse(response) ?? currentUserDocument;
       if (!_matchesAuthoritativeTargetRoleState(targetRoleState)) {
-        // Keep transient mode while the authoritative user doc catches up.
+        throw StateError(
+            'Сервер не подтвердил переключение режима. Повторите.');
       }
-      if (mounted) {
-        safeSetState(() {
-          _isSwitchingRoleState = false;
-        });
+      if (!mounted) return;
+      if (targetRoleState == 'PASSENGER') {
+        FFAppState().forcePassengerMode();
       } else {
-        _isSwitchingRoleState = false;
+        FFAppState().clearForcedPassengerMode();
       }
+      UserModeResolver.clearTransientRoleState();
+      context.go(routePath);
+      FFAppState().update(() {});
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error.toString().replaceFirst('Bad state: ', ''))));
+    } finally {
+      if (mounted) setState(() => _isSwitchingRoleState = false);
     }
   }
 
@@ -555,7 +533,7 @@ class _ProfileWidgetState extends State<ProfileWidget> {
     final surfaceAlt =
         isDark ? const Color(0xFF243437) : const Color(0xFFF6F2F8);
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
     Widget segment({
       required IconData icon,
       required String title,
@@ -584,14 +562,15 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: FlutterFlowTheme.of(context).bodyMedium.override(
-                          font: GoogleFonts.readexPro(
+                          font: TextStyle(
+                            fontFamily: 'Noto Sans',
                             fontWeight: FontWeight.w700,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
                           ),
                           color: active
-                              ? Colors.white
+                              ? MTaxiDesign.ink
                               : enabled
                                   ? FlutterFlowTheme.of(context).primaryText
                                   : FlutterFlowTheme.of(context).secondaryText,
@@ -631,7 +610,8 @@ class _ProfileWidgetState extends State<ProfileWidget> {
             child: Text(
               'Текущий режим: $currentModeTitle',
               style: FlutterFlowTheme.of(context).bodySmall.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight: FontWeight.w600,
                       fontStyle:
                           FlutterFlowTheme.of(context).bodySmall.fontStyle,
@@ -736,12 +716,12 @@ class _ProfileWidgetState extends State<ProfileWidget> {
     final balanceTitle = hasDriverDebt ? 'К оплате:' : 'Баланс:';
     final balanceValue = _formatMoneyValue(driverBalance);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
+    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFFCFCFA);
     final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : _mtaxiText;
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -753,112 +733,70 @@ class _ProfileWidgetState extends State<ProfileWidget> {
         body: SingleChildScrollView(
           primary: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24.0, 58.0, 24.0, 110.0),
+            padding: EdgeInsets.fromLTRB(
+                22, MediaQuery.paddingOf(context).top + 24, 22, 28),
             child: Column(
               mainAxisSize: MainAxisSize.max,
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                InkWell(
-                  splashColor: Colors.transparent,
-                  focusColor: Colors.transparent,
-                  hoverColor: Colors.transparent,
-                  highlightColor: Colors.transparent,
-                  onTap: _canChangeProfilePhoto(roleState)
-                      ? _changeProfilePhoto
-                      : null,
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.zero,
-                    decoration: const BoxDecoration(
-                      color: Colors.transparent,
-                    ),
-                    child: Stack(
-                      children: [
-                        Align(
-                          alignment: AlignmentDirectional(0.0, 0.0),
-                          child: Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                0.0, 12.0, 0.0, 0.0),
-                            child: Container(
-                              width: 100.0,
-                              height: 100.0,
-                              decoration: BoxDecoration(
-                                color: surface,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: surface, width: 2),
-                              ),
-                              child: Padding(
-                                padding: EdgeInsets.all(2.0),
-                                child: AuthUserStreamWidget(
-                                  builder: (context) {
-                                    final imageUrl =
-                                        _effectiveProfileImageUrlForMode(
-                                      roleState,
-                                    );
-                                    if (imageUrl.isEmpty) {
-                                      return Icon(
-                                        Icons.person,
-                                        size: 24.0,
-                                        color: mutedColor,
-                                      );
-                                    }
-                                    return ClipRRect(
-                                      borderRadius: BorderRadius.circular(50.0),
-                                      child: Image.network(
-                                        imageUrl,
-                                        width: 100.0,
-                                        height: 100.0,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                Icon(
-                                          Icons.person,
-                                          size: 24.0,
-                                          color: mutedColor,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: _canChangeProfilePhoto(roleState)
+                          ? _changeProfilePhoto
+                          : null,
+                      child: Container(
+                          width: 65,
+                          height: 65,
+                          decoration: BoxDecoration(
+                              color: surface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: borderColor)),
+                          child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: _effectiveProfileImageUrlForMode(roleState)
+                                      .isEmpty
+                                  ? Icon(Icons.person_outline,
+                                      size: 32, color: mutedColor)
+                                  : Image.network(
+                                      _effectiveProfileImageUrlForMode(
+                                          roleState),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Icon(
+                                          Icons.person_outline,
+                                          color: mutedColor))))),
+                  const SizedBox(width: 16),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(currentUserDisplayName,
+                            style: const TextStyle(
+                                fontSize: 25, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text(currentUserDocument?.phoneNumber ?? '')
+                      ])),
+                ]),
+                if (isDriverRegistrationPendingReview()) ...[
+                  const SizedBox(height: 20),
+                  MTaxiCard(
+                      child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.verified_user_outlined),
+                          title: const Text('Анкета на проверке'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                  builder: (approvalContext) => DriverApproval(
+                                      onProfile: () =>
+                                          Navigator.pop(approvalContext),
+                                      onSupport: () =>
+                                          approvalContext.pushNamed(
+                                              SupportChatWidget.routeName)))))),
+                ],
                 Column(
                   mainAxisSize: MainAxisSize.max,
                   children: [
-                    Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 22.0),
-                      child: AuthUserStreamWidget(
-                        builder: (context) => Text(
-                          currentUserDisplayName,
-                          textAlign: TextAlign.center,
-                          style: FlutterFlowTheme.of(context)
-                              .headlineSmall
-                              .override(
-                                font: GoogleFonts.outfit(
-                                  fontWeight: FlutterFlowTheme.of(context)
-                                      .headlineSmall
-                                      .fontWeight,
-                                  fontStyle: FlutterFlowTheme.of(context)
-                                      .headlineSmall
-                                      .fontStyle,
-                                ),
-                                color: textColor,
-                                letterSpacing: 0.0,
-                                fontWeight: FontWeight.w800,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .headlineSmall
-                                    .fontStyle,
-                              ),
-                        ),
-                      ),
-                    ),
                     if (isDriverMode)
                       Row(
                         mainAxisSize: MainAxisSize.max,
@@ -874,7 +812,8 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                                     style: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .override(
-                                          font: GoogleFonts.readexPro(
+                                          font: TextStyle(
+                                            fontFamily: 'Noto Sans',
                                             fontWeight: FontWeight.bold,
                                             fontStyle:
                                                 FlutterFlowTheme.of(context)
@@ -900,7 +839,8 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight: FontWeight.w800,
                                               fontStyle:
                                                   FlutterFlowTheme.of(context)
@@ -940,7 +880,8 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                                       textStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .override(
-                                            font: GoogleFonts.readexPro(
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .titleSmall
@@ -950,7 +891,7 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                                                       .titleSmall
                                                       .fontStyle,
                                             ),
-                                            color: Colors.white,
+                                            color: MTaxiDesign.ink,
                                             letterSpacing: 0.0,
                                             fontWeight:
                                                 FlutterFlowTheme.of(context)
@@ -994,6 +935,12 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                         ),
                         onTap: () => context.pushNamed(MeOrderWidget.routeName),
                       ),
+                      _ProfileMenuItem(
+                          icon: Icons.settings_outlined,
+                          title: FFLocalizations.of(context).getVariableText(
+                              ruText: 'Настройки', kkText: 'Баптаулар'),
+                          onTap: () =>
+                              context.pushNamed(SettingsWidget.routeName)),
                       _ProfileMenuItem(
                         icon: Icons.policy_sharp,
                         title: FFLocalizations.of(context).getVariableText(
@@ -1045,6 +992,14 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                           );
                         },
                       ),
+                      TextButton.icon(
+                        onPressed: _isSigningOut ? null : _signOut,
+                        icon: const Icon(Icons.logout),
+                        label: Text(FFLocalizations.of(context).getVariableText(
+                          ruText: 'Выйти из аккаунта',
+                          kkText: 'Аккаунттан шығу',
+                        )),
+                      ),
                     ],
                   ),
                 ),
@@ -1082,9 +1037,19 @@ class _ProfileMenuItem extends StatelessWidget {
       highlightColor: Colors.transparent,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 13),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
           children: [
+            Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF2C383D)
+                        : const Color(0xFFF0F3EC),
+                    borderRadius: BorderRadius.circular(14)),
+                child: Icon(icon, color: textColor)),
+            const SizedBox(width: 12),
             if (badgeCount > 0)
               Container(
                 constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
@@ -1099,7 +1064,7 @@ class _ProfileMenuItem extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: FlutterFlowTheme.of(context).labelSmall.override(
                         color: Colors.white,
-                        fontSize: 9.0,
+                        fontSize: 12.0,
                       ),
                 ),
               ),
@@ -1107,7 +1072,8 @@ class _ProfileMenuItem extends StatelessWidget {
               child: Text(
                 title,
                 style: FlutterFlowTheme.of(context).bodyMedium.override(
-                      font: GoogleFonts.readexPro(
+                      font: TextStyle(
+                        fontFamily: 'Noto Sans',
                         fontWeight:
                             FlutterFlowTheme.of(context).bodyMedium.fontWeight,
                         fontStyle:

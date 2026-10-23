@@ -58,8 +58,14 @@ const seed = {
     nightMultiplier: 1.5,
     orderCommissionPercent: 10,
     pendingOrderLifetimeMin: 15,
+    driverBonusEnabled: true,
+    driverBonusTargetOrders: 10,
+    driverBonusReward: 1000,
   },
   cityPrices: [
+    ...['Жетекши', 'Железинка', 'Теренколь', 'Иртышск'].map(title => ({
+      title, priceDay: 500, priceNight: 500,
+    })),
     {
       title: "Белоусовка",
       priceDay: 1000,
@@ -131,11 +137,18 @@ async function writeStoreAsync(data) {
   writeStore(data);
 }
 
-async function withStoreAsync(mutator) {
-  const data = await readStoreAsync();
-  const result = await mutator(data);
-  await writeStoreAsync(data);
-  return result;
+let mutationQueue = Promise.resolve();
+function withStoreAsync(mutator) {
+  // Serialize server mutations so concurrent confirmations and order completions
+  // cannot overwrite each other's balances or reward markers.
+  const operation = mutationQueue.then(async () => {
+    const data = await readStoreAsync();
+    const result = await mutator(data);
+    await writeStoreAsync(data);
+    return result;
+  });
+  mutationQueue = operation.catch(() => {});
+  return operation;
 }
 
 function newId(prefix) {

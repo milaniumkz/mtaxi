@@ -46,11 +46,8 @@ MTAXI_MAINTENANCE_ORDER_LIMIT=100
 MTAXI_MAINTENANCE_PUSH_LIMIT=100
 MTAXI_PAYMENT_PROVIDER=redirect
 MTAXI_PAYMENT_URL_TEMPLATE=https://pay-provider.example/start?invoice={{paymentId}}&amount={{amount}}
-MTAXI_SMS_PROVIDER=http
+MTAXI_SMS_PROVIDER=disabled
 MTAXI_SMS_DEV_RETURN_CODE=false
-MTAXI_SMS_HTTP_URL=https://sms-provider.example/send
-MTAXI_SMS_HTTP_METHOD=POST
-MTAXI_SMS_HTTP_BODY_TEMPLATE={"phone":"{{phone}}","message":"{{message}}","code":"{{code}}"}
 MTAXI_ALLOW_LOCAL_SMS=false
 MTAXI_FCM_ENABLED=true
 MTAXI_ALLOW_SIMULATED_PUSH=false
@@ -60,7 +57,6 @@ MTAXI_ALLOW_SIMULATED_PUSH=false
 
 ```bash
 MTAXI_PUBLIC_BASE_URL=https://api.mtaxi.kz \
-MTAXI_SMS_HTTP_URL=https://sms-provider.example/send \
 MTAXI_PAYMENT_URL_TEMPLATE='https://pay-provider.example/start?invoice={{paymentId}}&amount={{amount}}' \
 GOOGLE_APPLICATION_CREDENTIALS=/etc/mtaxi/firebase-service-account.json \
 ./scripts/generate_production_env.sh server/.env
@@ -75,7 +71,7 @@ set +a
 ./scripts/generate_production_env.sh server/.env
 ```
 
-Скрипт сам генерирует `MTAXI_TOKEN_SECRET`, `POSTGRES_PASSWORD` и `MTAXI_PAYMENT_CALLBACK_SECRET`, но все равно нужно проверить SMS, payment, admin и FCM значения перед запуском.
+Скрипт сам генерирует `MTAXI_TOKEN_SECRET`, `POSTGRES_PASSWORD` и `MTAXI_PAYMENT_CALLBACK_SECRET`, но все равно нужно проверить payment, admin и FCM значения перед запуском.
 
 `MTAXI_PUBLIC_BASE_URL` на сервере должен быть `https://...`; `http://...` разрешен только для локальной разработки через отдельный dev-флаг.
 Все значения `replace-with...`, `change-this...` и `mtaxi_change_me` перед запуском заменить на реальные секреты.
@@ -84,9 +80,9 @@ set +a
 `MTAXI_PAYMENT_URL_TEMPLATE` должен быть внешним `https://` URL, не localhost/LAN/private (`10.*`, `100.64.0.0/10`, `169.254.*`, `172.16.0.0/12`, `192.168.*`, `::1`, `fc*`, `fd*`, `fe80::/10`).
 Если шаблон содержит `{{publicBaseUrl}}`, итоговая ссылка оплаты проверяется с реальным `MTAXI_PUBLIC_BASE_URL`; локальный или `http://` API URL не пройдет preflight.
 
-SMS отправляет backend. В production нельзя оставлять `MTAXI_SMS_PROVIDER=local`: это режим только для локальной разработки.
-`MTAXI_SMS_HTTP_URL` должен быть внешним `https://` URL, не localhost/LAN/private и не `http://`.
-В production нельзя включать `MTAXI_SMS_DEV_RETURN_CODE=true`, иначе SMS-код вернется клиенту в ответе API.
+Вход и регистрация используют номер телефона и пароль. SMS-провайдер не нужен.
+Оставьте `MTAXI_SMS_PROVIDER=disabled`. Старые SMS-эндпоинты всегда отклоняют запросы.
+Восстановление доступа выполняет администратор после проверки личности.
 
 Если включаем реальные push:
 
@@ -118,7 +114,7 @@ Production preflight не пропустит Firebase env для данных/Au
 Она создаст новую пустую `output/mtaxi-vps-handoff-*` с source archive, `.sha256`, `HANDOFF_MANIFEST.json`, `HANDOFF_STATUS.md`, `READINESS_REPORT.json`, `API_CONTRACT.json`, `ENV_CONTRACT.json`, `verify_vps_handoff.sh` и коротким `DEPLOY_NEXT_STEPS.md`.
 `READINESS_REPORT.json` фиксирует текущие 99%, backend-only архитектуру, FCM-only Firebase и список внешних условий для финальных 100%.
 `API_CONTRACT.json` фиксирует все backend callable-функции и сверку вызовов клиента с `server/src/call_router.js`.
-`ENV_CONTRACT.json` фиксирует production env: PostgreSQL, реальные SMS/payment provider и Firebase только для FCM push.
+`ENV_CONTRACT.json` фиксирует production env: PostgreSQL, парольный вход без SMS, реальный payment provider и Firebase только для FCM push.
 Отдельно отчет можно проверить командой: `./scripts/verify_backend_migration_status.sh READINESS_REPORT.json`.
 Если указать свою папку, она должна быть пустой: упаковщик не собирает handoff поверх старых файлов.
 Упаковщик проверяет папку дважды: текущим verifier из исходников и bundled verifier из самой handoff-папки, который будет запускаться на VPS. Проверить готовую папку можно отдельно:
@@ -155,7 +151,7 @@ docker compose -f docker-compose.production.yml logs -f backend
 
 `docker-compose.production.yml` использует `server/.env`, `NODE_ENV=production`, PostgreSQL volume и backend healthcheck `/readyz`.
 Пароль PostgreSQL должен быть задан в `server/.env` как `POSTGRES_PASSWORD`; `DATABASE_URL` должен использовать тот же пароль.
-`docker-compose.backend.yml` оставлен как локальный compose (`NODE_ENV=development`) с local SMS/payment/simulated push.
+`docker-compose.backend.yml` оставлен как локальный compose (`NODE_ENV=development`) с local payment/simulated push.
 Локальная dev-проверка при необходимости: `docker compose -f docker-compose.backend.yml up -d --build`.
 
 Для автозапуска на VPS установить systemd/nginx-шаблоны:

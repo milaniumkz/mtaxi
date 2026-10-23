@@ -1,3 +1,5 @@
+import '/design/map_attribution.dart';
+import '/design/mtaxi_theme.dart';
 // ignore_for_file: unused_import, unused_element, unnecessary_import, deprecated_member_use
 
 // Automatic FlutterFlow imports
@@ -61,6 +63,7 @@ class DeliveryTaxiMap extends StatefulWidget {
   final latlng.LatLng? initialToCoords;
   final String? priceText;
   final String? cityName;
+  final bool intercityEnabled;
   final bool enableAutoLocation;
   final bool enableRemoteGeocoding;
   final bool enableTileLayer;
@@ -96,6 +99,7 @@ class DeliveryTaxiMap extends StatefulWidget {
     this.initialToCoords,
     this.priceText = '',
     this.cityName = '',
+    this.intercityEnabled = false,
     this.enableAutoLocation = true,
     this.enableRemoteGeocoding = true,
     this.enableTileLayer = true,
@@ -124,6 +128,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   bool _isRouteLoading = false;
   double _currentZoom = 17.0;
   String _serviceType = 'taxi';
+  bool _editorOpen = false;
   String _activeField = 'from';
   Timer? _fromDebounce;
   Timer? _toDebounce;
@@ -195,7 +200,10 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
     super.initState();
     _mapController = MapController();
 
-    _serviceType = widget.initialServiceType ?? 'taxi';
+    _serviceType =
+        !widget.intercityEnabled && widget.initialServiceType == 'intercity'
+            ? 'taxi'
+            : widget.initialServiceType ?? 'taxi';
     _fromController.text = widget.initialFromAddress ?? '';
     _toController.text = widget.initialToAddress ?? '';
     _commentController.text = widget.initialComment ?? '';
@@ -204,7 +212,6 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
     _toLocation = widget.initialToCoords;
 
     if (_fromLocation != null) {
-      _userLocation = _fromLocation;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _fromLocation == null) return;
         _mapController.move(_fromLocation!, 17.0);
@@ -279,7 +286,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       debugPrint('Ошибка получения геолокации: $e');
       if (!mounted) return;
       setState(() {
-        _userLocation = _defaultCenter;
+        _userLocation = null;
       });
     } finally {
       if (!mounted) return;
@@ -1395,6 +1402,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   }
 
   void _changeServiceType(String type) {
+    if (type == 'intercity' && !widget.intercityEnabled) return;
     setState(() {
       _serviceType = type;
       if (type != 'intercity') {
@@ -1518,6 +1526,252 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the existing, administratively gated intercity flow intact.
+    if (_serviceType == 'intercity') return _buildLegacy(context);
+    final suggestions =
+        _activeField == 'from' ? _fromSuggestions : _toSuggestions;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final scheme = Theme.of(context).colorScheme;
+    Widget map = FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: _fromLocation ?? _defaultCenter,
+        initialZoom: _currentZoom,
+        minZoom: 5,
+        maxZoom: 18,
+        interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+        onTap: (_, point) => _handleMapTap(point),
+      ),
+      children: [
+        if (widget.enableTileLayer)
+          TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.mtaxi.app',
+              maxZoom: 19),
+        if (_routePoints.isNotEmpty)
+          PolylineLayer(polylines: [
+            Polyline(
+                points: _routePoints, color: MTaxiDesign.teal, strokeWidth: 5)
+          ]),
+        MarkerLayer(markers: [
+          if (_userLocation != null)
+            Marker(
+                point: _userLocation!,
+                width: 36,
+                height: 36,
+                child: const Icon(Icons.my_location, color: MTaxiDesign.teal)),
+          if (_fromLocation != null)
+            Marker(
+                point: _fromLocation!,
+                width: 44,
+                height: 44,
+                child: const Icon(Icons.location_on,
+                    color: MTaxiDesign.ink, size: 40)),
+          if (_toLocation != null)
+            Marker(
+                point: _toLocation!,
+                width: 44,
+                height: 44,
+                child: const Icon(Icons.location_on,
+                    color: MTaxiDesign.teal, size: 40)),
+        ]),
+        const MTaxiMapAttribution(),
+      ],
+    );
+    if (widget.enableTestMapTap)
+      map = GestureDetector(
+          key: const ValueKey('test_map_tap'),
+          onTapDown: (_) =>
+              _handleMapTap(widget.testMapTapPoint ?? _defaultCenter),
+          child: map);
+    return Column(children: [
+      if (!keyboard)
+        Expanded(
+            child: Stack(children: [
+          Positioned.fill(child: map),
+          const Positioned(top: 30, left: 22, child: MTaxiBrand()),
+          if (_isLoading || _isRouteLoading)
+            const Positioned(
+                top: 90, left: 22, right: 22, child: LinearProgressIndicator()),
+          if (_editorOpen)
+            Positioned(
+                bottom: 12,
+                left: 22,
+                right: 22,
+                child: MTaxiCard(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(_activeField == 'from'
+                        ? _tr('Выберите место посадки на карте',
+                            'Картадан отыру орнын таңдаңыз')
+                        : _tr('Выберите пункт назначения на карте',
+                            'Картадан баратын жерді таңдаңыз')))),
+        ])),
+      Flexible(
+          flex: keyboard ? 1 : 0,
+          child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height *
+                      (keyboard ? .75 : .55)),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                            child: Text(
+                                _editorOpen
+                                    ? _tr('Куда поедем?', 'Қайда барамыз?')
+                                    : _tr('Куда поедем?', 'Қайда барамыз?'),
+                                style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700))),
+                        if (_editorOpen)
+                          IconButton(
+                              tooltip: _tr('Готово', 'Дайын'),
+                              onPressed: () {
+                                _unfocusAddressFields();
+                                setState(() => _editorOpen = false);
+                              },
+                              icon: const Icon(Icons.check))
+                      ]),
+                      const SizedBox(height: 12),
+                      if (!_editorOpen) ...[
+                        InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => setState(() {
+                                  _editorOpen = true;
+                                  _activeField = 'to';
+                                }),
+                            child: Container(
+                                padding: const EdgeInsets.all(18),
+                                decoration: BoxDecoration(
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? scheme.surface
+                                        : MTaxiDesign.surface,
+                                    borderRadius: BorderRadius.circular(14)),
+                                child: Row(children: [
+                                  const Icon(Icons.search),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                      child: Text(_toController.text.isEmpty
+                                          ? _tr('Куда едем?', 'Қайда барамыз?')
+                                          : _toController.text)),
+                                  const Icon(Icons.chevron_right)
+                                ]))),
+                        const SizedBox(height: 10),
+                        TextButton.icon(
+                            onPressed: () => setState(() {
+                                  _editorOpen = true;
+                                  _activeField = 'from';
+                                }),
+                            icon: const Icon(Icons.my_location, size: 18),
+                            label: Text(_fromController.text.isEmpty
+                                ? _tr('Указать место посадки',
+                                    'Отыру орнын көрсету')
+                                : _fromController.text)),
+                      ] else ...[
+                        TextField(
+                            controller: _fromController,
+                            decoration: InputDecoration(
+                                labelText: _tr('Откуда', 'Қайдан'),
+                                prefixIcon:
+                                    const Icon(Icons.radio_button_checked),
+                                suffixIcon: IconButton(
+                                    tooltip:
+                                        _tr('Найти адрес', 'Мекенжайды табу'),
+                                    icon: const Icon(Icons.search),
+                                    onPressed: () => _searchAddress(
+                                        _fromController.text, 'from'))),
+                            onTap: () => setState(() => _activeField = 'from'),
+                            onChanged: _onFromChanged,
+                            onSubmitted: (value) =>
+                                _searchAddress(value, 'from')),
+                        const SizedBox(height: 10),
+                        TextField(
+                            controller: _toController,
+                            decoration: InputDecoration(
+                                labelText: _tr('Куда', 'Қайда'),
+                                prefixIcon:
+                                    const Icon(Icons.location_on_outlined),
+                                suffixIcon: IconButton(
+                                    tooltip:
+                                        _tr('Найти адрес', 'Мекенжайды табу'),
+                                    icon: const Icon(Icons.search),
+                                    onPressed: () => _searchAddress(
+                                        _toController.text, 'to'))),
+                            onTap: () => setState(() => _activeField = 'to'),
+                            onChanged: _onToChanged,
+                            onSubmitted: (value) =>
+                                _searchAddress(value, 'to')),
+                        if (suggestions.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          for (final item in suggestions)
+                            ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.location_on_outlined),
+                                title: Text(item),
+                                onTap: () => _selectAddressSuggestion(
+                                    _activeField, item))
+                        ],
+                        const SizedBox(height: 10),
+                        TextField(
+                            controller: _serviceType == 'delivery'
+                                ? _deliveryItemController
+                                : _commentController,
+                            decoration: InputDecoration(
+                                labelText: _serviceType == 'delivery'
+                                    ? _tr('Что доставить?', 'Не жеткізу керек?')
+                                    : _tr('Комментарий водителю',
+                                        'Жүргізушіге түсініктеме')),
+                            onChanged: (value) {
+                              if (_serviceType == 'delivery') {
+                                widget.onDeliveryItemChanged?.call(value);
+                              } else {
+                                widget.onCommentChanged?.call(value);
+                              }
+                            }),
+                      ],
+                      if (_editorOpen && _fromLocation != null)
+                        Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: FilledButton(
+                                onPressed: () {
+                                  _unfocusAddressFields();
+                                  setState(() {
+                                    _editorOpen = false;
+                                    _activeField = 'to';
+                                  });
+                                },
+                                child: Text(_tr('Забрать отсюда',
+                                    'Осы жерден алып кету')))),
+                      Wrap(spacing: 8, children: [
+                        ChoiceChip(
+                            label: Text(_tr('Такси', 'Такси')),
+                            selected: _serviceType == 'taxi',
+                            selectedColor: MTaxiDesign.gold,
+                            onSelected: (_) => _changeServiceType('taxi')),
+                        ChoiceChip(
+                            label: Text(_tr('Доставка', 'Жеткізу')),
+                            selected: _serviceType == 'delivery',
+                            selectedColor: MTaxiDesign.gold,
+                            onSelected: (_) => _changeServiceType('delivery')),
+                        if (widget.intercityEnabled)
+                          ChoiceChip(
+                              label: Text(_tr('Межгород', 'Қалааралық')),
+                              selected: false,
+                              onSelected: (_) =>
+                                  _changeServiceType('intercity')),
+                      ]),
+                    ]),
+              ))),
+    ]);
+  }
+
+  Widget _buildLegacy(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final suggestionMaxHeight = keyboardInset > 0 ? 260.0 : 220.0;
     final compactMapHeight = _serviceType == 'intercity' ? 180.0 : 220.0;
@@ -1654,58 +1908,59 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  if (widget.intercityEnabled) const SizedBox(width: 8),
                   // Межгород
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _changeServiceType('intercity'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _serviceType == 'intercity'
-                              ? darkSurface
-                              : darkSurface,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: _serviceType == 'intercity'
-                                ? mintColor
-                                : fieldBorder,
-                            width: 1,
+                  if (widget.intercityEnabled)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _changeServiceType('intercity'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
-                        ),
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.alt_route,
-                                  color: _serviceType == 'intercity'
-                                      ? mintColor
-                                      : _getIntercityColor(),
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _tr('Межгород', 'Қалааралық'),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
+                          decoration: BoxDecoration(
+                            color: _serviceType == 'intercity'
+                                ? darkSurface
+                                : darkSurface,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: _serviceType == 'intercity'
+                                  ? mintColor
+                                  : fieldBorder,
+                              width: 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.alt_route,
                                     color: _serviceType == 'intercity'
                                         ? mintColor
                                         : _getIntercityColor(),
+                                    size: 20,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _tr('Межгород', 'Қалааралық'),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: _serviceType == 'intercity'
+                                          ? mintColor
+                                          : _getIntercityColor(),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ]),
               ],
             ),

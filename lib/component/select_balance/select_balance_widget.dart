@@ -1,531 +1,290 @@
-import '/backend/backend_calls/backend_calls.dart';
-import '/component/payment_page/payment_page_widget.dart';
-import '/flutter_flow/flutter_flow_animations.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '/design/mtaxi_theme.dart';
+import '/flutter_flow/internationalization.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'select_balance_model.dart';
-export 'select_balance_model.dart';
-
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiText = Color(0xFF1E1525);
+import 'package:uuid/uuid.dart';
+import '/auth/backend_auth/auth_util.dart';
+import '/backend/backend_calls/backend_calls.dart';
 
 class SelectBalanceWidget extends StatefulWidget {
-  const SelectBalanceWidget({super.key});
-
+  const SelectBalanceWidget({super.key, this.passenger = false});
+  final bool passenger;
   @override
   State<SelectBalanceWidget> createState() => _SelectBalanceWidgetState();
 }
 
-class _SelectBalanceWidgetState extends State<SelectBalanceWidget>
-    with TickerProviderStateMixin {
-  late SelectBalanceModel _model;
-  bool _isSubmitting = false;
-  String? _paymentUrl;
+class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
+  final _amount = TextEditingController();
+  final _phone = TextEditingController();
+  String _requestKey = const Uuid().v4();
+  String? _fingerprint;
   String? _paymentId;
-  String? _errorText;
+  String? _error;
+  String _status = 'pending';
+  bool _busy = false;
+  bool _restoring = true;
+  bool _uncertain = false;
+  late final String _storageKey;
 
-  final animationsMap = <String, AnimationInfo>{};
-
-  @override
-  void setState(VoidCallback callback) {
-    super.setState(callback);
-    _model.onUpdate();
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        _storageKey,
+        jsonEncode({
+          'key': _requestKey,
+          'amount': _amount.text,
+          'phone': _phone.text,
+          'fingerprint': _fingerprint,
+          'paymentId': _paymentId,
+          'status': _status
+        }));
   }
+
+  Future<void> _restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null) {
+        final saved = jsonDecode(raw) as Map;
+        if (!mounted) return;
+        _requestKey = saved['key'] as String;
+        _amount.text = saved['amount'] as String;
+        _phone.text = saved['phone'] as String;
+        _fingerprint = saved['fingerprint'] as String?;
+        _paymentId = saved['paymentId'] as String?;
+        _status = saved['status'] as String? ?? 'pending';
+        _uncertain = _paymentId == null;
+        if (_paymentId != null) {
+          _timer =
+              Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
+        }
+      }
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_storageKey);
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => SelectBalanceModel());
+    _storageKey =
+        'mtaxi_topup_${currentUserUid}_${widget.passenger ? 'passenger' : 'driver'}';
+    _phone.text = currentUserDocument?.phoneNumber ?? '';
+    _restore();
+  }
 
-    _model.textController ??= TextEditingController();
-    _model.textFieldFocusNode ??= FocusNode();
-
-    animationsMap.addAll({
-      'containerOnPageLoadAnimation': AnimationInfo(
-        trigger: AnimationTrigger.onPageLoad,
-        effectsBuilder: () => [
-          VisibilityEffect(duration: 300.ms),
-          MoveEffect(
-            curve: Curves.bounceOut,
-            delay: 300.0.ms,
-            duration: 400.0.ms,
-            begin: Offset(0.0, 100.0),
-            end: Offset(0.0, 0.0),
-          ),
-          FadeEffect(
-            curve: Curves.easeInOut,
-            delay: 300.0.ms,
-            duration: 400.0.ms,
-            begin: 0.0,
-            end: 1.0,
-          ),
-        ],
-      ),
+  Future<void> _submit() async {
+    if (_busy || _restoring) return;
+    final amount = double.tryParse(_amount.text.replaceAll(',', '.').trim());
+    if (amount == null ||
+        !amount.isFinite ||
+        amount <= 0 ||
+        (widget.passenger &&
+            (amount != amount.truncateToDouble() || amount > 1000000))) {
+      setState(() => _error = widget.passenger
+          ? 'Введите целую сумму от 1 до 1 000 000 ₸'
+          : 'Введите корректную сумму');
+      return;
+    }
+    final fingerprint = '$amount:${_phone.text.trim()}';
+    if (_fingerprint != null && _fingerprint != fingerprint) {
+      _requestKey = const Uuid().v4();
+    }
+    _fingerprint = fingerprint;
+    setState(() {
+      _busy = true;
+      _error = null;
     });
-    setupAnimations(
-      animationsMap.values.where((anim) =>
-          anim.trigger == AnimationTrigger.onActionTrigger ||
-          !anim.applyInitialState),
-      this,
-    );
+    try {
+      // Persist before sending so closing/reopening after a lost response reuses the same request.
+      _uncertain = true;
+      await _persist();
+      final response = await makeCloudCall(
+          widget.passenger
+              ? 'createPassengerTopUpPayment'
+              : 'createDriverTopUpPayment',
+          {
+            'amount': amount,
+            'kaspiPhone': _phone.text.trim(),
+            'method': 'kaspi_manual',
+            'idempotencyKey': _requestKey,
+          });
+      if (response['success'] != true) {
+        final code = (response['code'] ?? '').toString();
+        if (code == 'PAYMENT_AMOUNT_INVALID' ||
+            code == 'KASPI_PHONE_INVALID' ||
+            code == 'DRIVER_PROFILE_REQUIRED') {
+          _uncertain = false;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_storageKey);
+        }
+        throw Exception(response['error'] ??
+            'Ответ не подтверждён. Повторите проверку этой заявки.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _paymentId = response['paymentId']?.toString();
+        _status = response['paymentStatus']?.toString() ?? 'pending';
+        _uncertain = false;
+      });
+      await _persist();
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+  Future<void> _refresh() async {
+    if (_busy || _paymentId == null) return;
+    setState(() => _busy = true);
+    try {
+      final response = await makeCloudCall(
+          'getDriverTopUpPaymentStatus', {'paymentId': _paymentId});
+      if (response['success'] != true)
+        throw StateError('Не удалось проверить заявку');
+      if (mounted)
+        setState(() {
+          _status = response['paymentStatus'].toString();
+          _error = null;
+        });
+      if (_status == 'success' || _status == 'failed') {
+        _timer?.cancel();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_storageKey);
+      }
+    } catch (_) {
+      if (mounted)
+        setState(() =>
+            _error = 'Не удалось обновить статус. Нажмите «Проверить оплату».');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
   void dispose() {
-    _model.maybeDispose();
-
+    _timer?.cancel();
+    _amount.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFF12051B);
-    final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final surfaceAlt =
-        isDark ? const Color(0xFF243437) : const Color(0xFFF6F2F8);
-    final textColor = isDark ? Colors.white : _mtaxiText;
-    final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
-    final ctaTextColor =
-        isDark ? const Color(0xFF13191D) : const Color(0xFF12051B);
-    if (_paymentUrl != null && _paymentId != null) {
-      return PaymentPageWidget(
-        url: _paymentUrl!,
-        paymentId: _paymentId!,
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        color: pageBg,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Padding(
-            padding: EdgeInsetsDirectional.fromSTEB(16.0, 2.0, 16.0, 16.0),
-            child: Container(
-              width: double.infinity,
-              constraints: BoxConstraints(
-                maxWidth: 570.0,
-              ),
-              decoration: BoxDecoration(
-                color: surface,
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 12.0,
-                    color: Color(0x1E000000),
-                    offset: Offset(
-                      0.0,
-                      5.0,
-                    ),
-                  )
-                ],
-                borderRadius: BorderRadius.circular(16.0),
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(2.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(24.0, 16.0, 0.0, 0.0),
+    String tr(String ru, String kk) =>
+        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: SafeArea(
+          child: Center(
+              child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const MTaxiBrand(),
+                const SizedBox(height: 28),
+                Text(tr('Пополнить счёт', 'Шотты толықтыру'),
+                    style: const TextStyle(
+                        fontSize: 31, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 16),
+                MTaxiCard(
+                    child: Row(children: [
+                  const CircleAvatar(
+                      backgroundColor: Color(0xFFE84339),
+                      foregroundColor: Colors.white,
+                      child: Text('K',
+                          style: TextStyle(fontWeight: FontWeight.w700))),
+                  const SizedBox(width: 12),
+                  Expanded(
                       child: Text(
-                        FFLocalizations.of(context).getText(
-                          'z7k6pyqm' /* Введите сумму на которую хотит... */,
-                        ),
-                        style: FlutterFlowTheme.of(context)
-                            .headlineMedium
-                            .override(
-                              font: GoogleFonts.outfit(
-                                fontWeight: FlutterFlowTheme.of(context)
-                                    .headlineMedium
-                                    .fontWeight,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .headlineMedium
-                                    .fontStyle,
-                              ),
-                              letterSpacing: 0.0,
-                              fontWeight: FlutterFlowTheme.of(context)
-                                  .headlineMedium
-                                  .fontWeight,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .headlineMedium
-                                  .fontStyle,
-                              color: textColor,
-                            ),
-                      ),
-                    ),
-                    Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 32.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Container(
-                            width: MediaQuery.sizeOf(context).width * 0.5,
-                            height: 40.0,
-                            child: Padding(
-                              padding: EdgeInsets.all(5.0),
-                              child: Container(
-                                width: 200.0,
-                                child: TextFormField(
-                                  controller: _model.textController,
-                                  focusNode: _model.textFieldFocusNode,
-                                  autofocus: false,
-                                  enabled: true,
-                                  obscureText: false,
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    labelStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    hintText:
-                                        FFLocalizations.of(context).getText(
-                                      '22igrtdf' /* Сумма пополнения */,
-                                    ),
-                                    hintStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primaryText,
-                                        width: 1.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primaryText,
-                                        width: 1.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primaryText,
-                                        width: 1.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedErrorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primaryText,
-                                        width: 1.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    filled: true,
-                                    fillColor: surfaceAlt,
-                                  ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.readexPro(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                        color: textColor,
-                                      ),
-                                  cursorColor: _mtaxiMint,
-                                  enableInteractiveSelection: true,
-                                  validator: _model.textControllerValidator
-                                      .asValidator(context),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                24.0, 24.0, 24.0, 0.0),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.max,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Align(
-                                  alignment: AlignmentDirectional(0.0, 0.05),
-                                  child: FFButtonWidget(
-                                    onPressed: () async {
-                                      Navigator.pop(context);
-                                    },
-                                    text: FFLocalizations.of(context).getText(
-                                      'l63lcb7u' /* Закрыть */,
-                                    ),
-                                    options: FFButtonOptions(
-                                      height: 44.0,
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          24.0, 0.0, 24.0, 0.0),
-                                      iconPadding:
-                                          EdgeInsetsDirectional.fromSTEB(
-                                              0.0, 0.0, 0.0, 0.0),
-                                      color: surfaceAlt,
-                                      textStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.readexPro(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
-                                            color: textColor,
-                                          ),
-                                      elevation: 0.0,
-                                      borderSide: BorderSide(
-                                        color: borderColor,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(12.0),
-                                      hoverColor: FlutterFlowTheme.of(context)
-                                          .alternate,
-                                      hoverBorderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                        width: 2.0,
-                                      ),
-                                      hoverTextColor:
-                                          FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                      hoverElevation: 3.0,
-                                    ),
-                                  ),
-                                ),
-                                Align(
-                                  alignment: AlignmentDirectional(0.0, 0.05),
-                                  child: FFButtonWidget(
-                                    onPressed: _isSubmitting
-                                        ? null
-                                        : () async {
-                                            final amount = double.tryParse(
-                                              _model.textController.text
-                                                  .replaceAll(',', '.')
-                                                  .trim(),
-                                            );
-                                            if (amount == null || amount <= 0) {
-                                              setState(() {
-                                                _errorText =
-                                                    'Введите корректную сумму';
-                                              });
-                                              return;
-                                            }
-
-                                            setState(() {
-                                              _isSubmitting = true;
-                                              _errorText = null;
-                                            });
-
-                                            try {
-                                              final response =
-                                                  await makeCloudCall(
-                                                'createDriverTopUpPayment',
-                                                {
-                                                  'amount': amount,
-                                                },
-                                              );
-                                              final success =
-                                                  response['success'] == true;
-                                              final paymentUrl =
-                                                  (response['paymentUrl'] ?? '')
-                                                      .toString()
-                                                      .trim();
-                                              final paymentId =
-                                                  (response['paymentId'] ?? '')
-                                                      .toString()
-                                                      .trim();
-                                              if (!success ||
-                                                  paymentUrl.isEmpty ||
-                                                  paymentId.isEmpty) {
-                                                setState(() {
-                                                  _errorText = (response[
-                                                              'error'] ??
-                                                          'Не удалось открыть оплату')
-                                                      .toString();
-                                                });
-                                                return;
-                                              }
-                                              setState(() {
-                                                _paymentUrl = paymentUrl;
-                                                _paymentId = paymentId;
-                                              });
-                                            } catch (_) {
-                                              setState(() {
-                                                _errorText =
-                                                    'Не удалось создать платеж';
-                                              });
-                                            } finally {
-                                              if (mounted) {
-                                                setState(() {
-                                                  _isSubmitting = false;
-                                                });
-                                              }
-                                            }
-                                          },
-                                    text: FFLocalizations.of(context).getText(
-                                      'vcuaf3du' /* Пополнить */,
-                                    ),
-                                    options: FFButtonOptions(
-                                      height: 44.0,
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          24.0, 0.0, 24.0, 0.0),
-                                      iconPadding:
-                                          EdgeInsetsDirectional.fromSTEB(
-                                              0.0, 0.0, 0.0, 0.0),
-                                      color: _mtaxiMint,
-                                      textStyle: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .override(
-                                            font: GoogleFonts.readexPro(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .fontStyle,
-                                            ),
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .titleSmall
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .titleSmall
-                                                    .fontStyle,
-                                            color: ctaTextColor,
-                                          ),
-                                      elevation: 3.0,
-                                      borderSide: BorderSide(
-                                        color: Colors.transparent,
-                                        width: 1.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(12.0),
-                                      hoverColor:
-                                          FlutterFlowTheme.of(context).accent1,
-                                      hoverBorderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary,
-                                        width: 1.0,
-                                      ),
-                                      hoverTextColor:
-                                          FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                      hoverElevation: 0.0,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (_errorText != null && _errorText!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                  24.0, 12.0, 24.0, 0.0),
-                              child: Text(
-                                _errorText!,
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodySmall
-                                    .override(
-                                      font: GoogleFonts.readexPro(),
-                                      color: FlutterFlowTheme.of(context).error,
-                                      letterSpacing: 0.0,
-                                    ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ).animateOnPageLoad(animationsMap['containerOnPageLoadAnimation']!),
-          ),
-        ],
-      ),
+                          tr('Kaspi · счёт от администратора',
+                              'Kaspi · әкімші жіберетін шот'),
+                          style: const TextStyle(fontWeight: FontWeight.w700))),
+                ])),
+                const SizedBox(height: 16),
+                if (_paymentId == null) ...[
+                  Text(tr(
+                      '1. Укажите сумму и номер Kaspi.\n2. Администратор выставит счёт.\n3. После оплаты и проверки деньги поступят на баланс.',
+                      '1. Сома мен Kaspi нөмірін көрсетіңіз.\n2. Әкімші шот жібереді.\n3. Төлем тексерілгеннен кейін ақша теңгерімге түседі.')),
+                  const SizedBox(height: 16),
+                  TextField(
+                      controller: _phone,
+                      keyboardType: TextInputType.phone,
+                      enabled: !_busy && !_uncertain && !_restoring,
+                      decoration: InputDecoration(
+                          labelText: tr('Номер Kaspi', 'Kaspi нөмірі'),
+                          hintText: '+7XXXXXXXXXX')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: _amount,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      enabled: !_busy && !_uncertain && !_restoring,
+                      decoration: InputDecoration(
+                          labelText: tr(
+                              'Сумма пополнения, ₸', 'Толықтыру сомасы, ₸'))),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                      onPressed: _busy || _restoring ? null : _submit,
+                      child: Text(_busy
+                          ? tr('Отправляем…', 'Жіберілуде…')
+                          : _uncertain
+                              ? tr('Повторить проверку заявки',
+                                  'Өтінімді қайта тексеру')
+                              : tr('Запросить счёт Kaspi',
+                                  'Kaspi шотын сұрау'))),
+                ] else ...[
+                  Text(
+                    '${tr('Сумма заявки', 'Өтінім сомасы')}: ${_amount.text} ₸',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(_status == 'success'
+                      ? tr('Оплата подтверждена. Деньги зачислены на баланс.',
+                          'Төлем расталды. Ақша теңгерімге түсті.')
+                      : _status == 'failed'
+                          ? tr('Заявка отклонена администратором.',
+                              'Әкімші өтінімді қабылдамады.')
+                          : tr(
+                              'Заявка отправлена. Ожидайте счёт в Kaspi на номер ${_phone.text}. После оплаты администратор подтвердит пополнение.',
+                              'Өтінім жіберілді. ${_phone.text} нөміріне Kaspi шотын күтіңіз. Төлемнен кейін әкімші толықтыруды растайды.')),
+                  if (_status == 'pending')
+                    TextButton(
+                        onPressed: _busy ? null : _refresh,
+                        child: Text(tr('Проверить оплату', 'Төлемді тексеру'))),
+                ],
+                if (_uncertain)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(tr(
+                          'Ответ ещё не подтверждён. Повторная проверка использует ту же заявку; сумма и номер сохранены.',
+                          'Жауап әлі расталмады. Қайта тексеру сол өтінімді қолданады; сома мен нөмір сақталған.'))),
+                if (_error != null)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(_error!,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error))),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(tr('Закрыть', 'Жабу'))),
+              ]),
+        ),
+      ))),
     );
   }
 }

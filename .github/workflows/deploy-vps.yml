@@ -1,0 +1,86 @@
+name: Deploy MTaxi VPS
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mtaxi-vps
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VPS_HOST: 89.126.192.185
+      DOMAIN: mtaxi.app.kz
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate secrets
+        env:
+          VPS_PASSWORD: ${{ secrets.VPS_SSH_PASSWORD }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          PRODUCTION_ENV: ${{ secrets.MTAXI_PRODUCTION_ENV }}
+          FIREBASE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          for name in VPS_PASSWORD KNOWN_HOSTS PRODUCTION_ENV FIREBASE_ACCOUNT; do
+            test -n "${!name}" || { echo "Missing secret: $name"; exit 1; }
+          done
+      - name: Install pinned Flutter
+        run: |
+          git clone --depth 1 --branch 3.41.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = 90673a4eef275d1a6692c26ac80d6d746d41a73a
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Build and test
+        run: |
+          npm ci --prefix server
+          npm test --prefix server
+          flutter pub get --enforce-lockfile
+          flutter test --no-pub
+          flutter analyze --no-pub
+          flutter build web --no-pub --no-web-resources-cdn --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define="MTAXI_BACKEND_URL=https://$DOMAIN"
+      - name: Prepare SSH and source
+        env:
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          PRODUCTION_ENV: ${{ secrets.MTAXI_PRODUCTION_ENV }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$PRODUCTION_ENV" > "$RUNNER_TEMP/production.env"
+          git archive --format=tar.gz -o "$RUNNER_TEMP/source.tar.gz" HEAD
+          tar -czf "$RUNNER_TEMP/web.tar.gz" -C build/web .
+      - name: Deploy through SSH
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          remote="root@$VPS_HOST"
+          sshpass -e ssh -o StrictHostKeyChecking=yes "$remote" 'install -d -m 700 /opt/mtaxi-incoming'
+          sshpass -e scp -o StrictHostKeyChecking=yes "$RUNNER_TEMP/production.env" "$RUNNER_TEMP/source.tar.gz" "$RUNNER_TEMP/web.tar.gz" "$remote:/opt/mtaxi-incoming/"
+          sshpass -e ssh -o StrictHostKeyChecking=yes "$remote" 'tar -xOzf /opt/mtaxi-incoming/source.tar.gz deploy/git_deploy.sh | bash'
+      - name: Firebase client configuration
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_PROJECT_ID: mtaxi-52990
+        run: |
+          test -n "$FIREBASE_SERVICE_ACCOUNT_JSON" || { echo 'Missing FIREBASE_SERVICE_ACCOUNT_JSON secret'; exit 1; }
+          node server/scripts/configure_firebase_apps.js
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build APK against live HTTPS server
+        run: bash scripts/build_test_apk.sh "https://$DOMAIN"
+      - name: Publish APK on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'install -d -m 755 /var/www/mtaxi/downloads'
+          sshpass -e scp -o StrictHostKeyChecking=yes output/mtaxi-staging.apk output/mtaxi-staging.apk.sha256 "root@$VPS_HOST:/var/www/mtaxi/downloads/"
+          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'chmod 644 /var/www/mtaxi/downloads/*'
+          curl --fail --head "https://$DOMAIN/downloads/mtaxi-staging.apk"
+          printf 'Web: https://%s/\nAdmin: https://%s/admin\nAPK: https://%s/downloads/mtaxi-staging.apk\n' "$DOMAIN" "$DOMAIN" "$DOMAIN" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary secrets
+        if: always()
+        run: rm -f "$RUNNER_TEMP/production.env"

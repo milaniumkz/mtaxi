@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "842255533405",
+    "project_id": "mtaxi-52990"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:842255533405:android:753efd6c37706cdf4a14b4",
+        "android_client_info": {
+          "package_name": "com.milanium.mtaxi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0-IrTYaKbYLaNNS6tn6UHWgC1p7pNh4U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

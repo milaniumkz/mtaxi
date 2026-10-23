@@ -3,7 +3,6 @@ const { asDate, asNumber, normalizePhone, normalizeString } = require("./utils/v
 const { publicUser } = require("./users");
 const { publicBaseUrl } = require("./media");
 
-const ADMIN_PHONE = "+70000000000";
 
 function requireAuth(auth) {
   if (!auth?.user) {
@@ -20,7 +19,7 @@ function requireAdmin(auth) {
   const authError = requireAuth(auth);
   if (authError) return authError;
   const user = auth.user;
-  if (user.role !== "admin" && normalizePhone(user.phone) !== ADMIN_PHONE) {
+  if (user.role !== "admin") {
     return {
       success: false,
       code: "ADMIN_REQUIRED",
@@ -243,11 +242,24 @@ async function createDriverTopUpPaymentAsync(data = {}, auth, req) {
   return withStoreAsync(async (store) => createDriverTopUpPaymentInStore(store, data, auth, amount, req));
 }
 
-async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
+async function createPassengerTopUpPaymentAsync(data = {}, auth, req) {
+  const authError = requireAuth(auth);
+  if (authError) return authError;
+  const amount = asNumber(data.amount);
+  if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 1000000) return { success: false, code: 'PAYMENT_AMOUNT_INVALID', error: 'Введите сумму от 1 до 1 000 000 ₸' };
+  return withStoreAsync(store => createDriverTopUpPaymentInStore(store, { ...data, method: 'kaspi_manual' }, auth, amount, req, 'passenger'));
+}
+
+async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, purpose = "driver") {
   const user = store.users.find((item) => item.id === auth.user.id);
   if (!user) return { success: false, code: "USER_NOT_FOUND", error: "Пользователь не найден" };
-  if (user.isDriver !== true) {
+  if (purpose === "driver" && user.isDriver !== true) {
     return { success: false, code: "DRIVER_PROFILE_REQUIRED", error: "Пополнение доступно только водителю" };
+  }
+  const manualKaspi = data.method === 'kaspi_manual' || paymentProviderName() === 'kaspi_manual';
+  const kaspiPhone = manualKaspi ? normalizePhone(data.kaspiPhone) : '';
+  if (manualKaspi && !/^\+7\d{10}$/.test(kaspiPhone)) {
+    return { success: false, code: 'KASPI_PHONE_INVALID', error: 'Укажите номер Kaspi в формате +7XXXXXXXXXX' };
   }
   store.payments ||= [];
   const idempotencyKey = normalizeString(data.idempotencyKey);
@@ -255,7 +267,8 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
     const existing = store.payments.find((payment) =>
       payment.userId === user.id && normalizeString(payment.idempotencyKey) === idempotencyKey);
     if (existing) {
-      if ((asNumber(existing.amount) || 0) !== amount) {
+      if ((asNumber(existing.amount) || 0) !== amount ||
+          (manualKaspi && (existing.provider !== 'kaspi_manual' || existing.kaspiPhone !== kaspiPhone))) {
         return {
           success: false,
           code: "PAYMENT_IDEMPOTENCY_CONFLICT",
@@ -274,24 +287,29 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
         paymentUrl: existing.paymentUrl,
         paymentStatus: existing.status,
         amount: existing.amount,
+        manual: existing.provider === 'kaspi_manual',
       };
     }
   }
   store.paymentSequence = (asNumber(store.paymentSequence) || 0) + 1;
   const payment = {
     id: newId("payment"),
-    paymentId: newId("kassa24"),
+    paymentId: newId(manualKaspi ? 'kaspi' : 'kassa24'),
     sequence: store.paymentSequence,
+    purpose,
     userId: user.id,
     userPhone: user.phone,
     amount,
     status: "pending",
-    provider: paymentProviderName(),
+    provider: manualKaspi ? 'kaspi_manual' : paymentProviderName(),
+    ...(manualKaspi ? { kaspiPhone, invoiceStatus: 'requested' } : {}),
     idempotencyKey,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  if (payment.provider === "kassa24") {
+  if (manualKaspi) {
+    payment.paymentUrl = '';
+  } else if (payment.provider === "kassa24") {
     const created = await createKassa24PaymentUrl(payment, user, req);
     if (!created.success) {
       return created;
@@ -303,7 +321,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
   } else {
     payment.paymentUrl = buildPaymentUrl(payment, req);
   }
-  if (!payment.paymentUrl) {
+  if (!payment.paymentUrl && !manualKaspi) {
     return {
       success: false,
       code: "PAYMENT_PROVIDER_NOT_CONFIGURED",
@@ -311,6 +329,19 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
     };
   }
   store.payments.push(payment);
+  if (manualKaspi) {
+    const { createPushNotificationInStore } = require('./push');
+    const queued = createPushNotificationInStore(store, {
+      type: 'KASPI_TOPUP_REQUEST', targetRole: 'admin',
+      targetUserIds: store.users.filter(item => item.role === 'admin' || item.roleState === 'ADMIN').map(item => item.id),
+      title: 'Новая заявка на пополнение Kaspi',
+      body: `${kaspiPhone}: ${amount} ₸. Выставьте счёт и подтвердите после оплаты.`,
+      dedupeKey: `kaspi-request:${payment.paymentId}`,
+      dataPayload: { type: 'KASPI_TOPUP_REQUEST', targetRole: 'admin',
+        initialPageName: 'adminHome', paymentId: payment.paymentId },
+    });
+    if (queued.notification) queued.notification.dataPayload.notificationId = queued.notificationId;
+  }
   addLedger(store, {
     type: "payment_created",
     userId: user.id,
@@ -327,6 +358,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req) {
     paymentUrl: payment.paymentUrl,
     paymentStatus: payment.status,
     amount,
+    manual: manualKaspi,
   };
 }
 
@@ -386,14 +418,38 @@ function getDriverTopUpPaymentStatusInStore(store, data, auth) {
 async function confirmDriverTopUpPaymentAsync(data = {}, auth) {
   const authError = requireAdmin(auth);
   if (authError) return authError;
-  return withStoreAsync(async (store) => confirmDriverTopUpPaymentInStore(store, data));
+  return withStoreAsync(async (store) => confirmDriverTopUpPaymentInStore(store, data, auth));
 }
 
-function confirmDriverTopUpPaymentInStore(store, data) {
+async function adminMarkKaspiInvoiceSentAsync(data = {}, auth) {
+  const authError = requireAdmin(auth);
+  if (authError) return authError;
+  return withStoreAsync(async store => {
+    const payment = findPayment(store, data.paymentId);
+    if (!payment || payment.provider !== 'kaspi_manual' || payment.status !== 'pending') {
+      return { success: false, code: 'PAYMENT_NOT_PENDING', error: 'Заявка недоступна' };
+    }
+    payment.invoiceStatus = 'sent';
+    payment.invoiceSentAt = payment.invoiceSentAt || new Date().toISOString();
+    payment.invoiceSentBy = auth.user.id;
+    payment.updatedAt = new Date().toISOString();
+    return { success: true, code: 'KASPI_INVOICE_SENT', payment: publicPayment(payment) };
+  });
+}
+
+function confirmDriverTopUpPaymentInStore(store, data, auth) {
   const payment = findPayment(store, data.paymentId);
   if (!payment) return { success: false, code: "PAYMENT_NOT_FOUND", error: "Платеж не найден" };
+  if (payment.status === 'failed') return { success: false, code: 'PAYMENT_FAILED', error: 'Заявка отклонена' };
   const applied = applySuccessfulPayment(store, payment, { source: "admin_confirm" });
   if (!applied.success) return applied;
+  if (!applied.alreadyApplied) {
+    payment.confirmedBy = auth?.user?.id || null;
+    store.auditLogs ||= [];
+    store.auditLogs.push({ id: newId('audit'), action: 'confirmDriverTopUpPayment',
+      target: paymentDocPath(payment), adminId: auth?.user?.id,
+      after: { amount: payment.amount, status: payment.status }, createdAt: new Date().toISOString() });
+  }
   return {
     success: true,
     code: applied.alreadyApplied ? "PAYMENT_ALREADY_APPLIED" : "PAYMENT_CONFIRMED",
@@ -676,6 +732,7 @@ async function adminListPaymentsAsync(data = {}, auth) {
           payment.userId,
           payment.user_id,
           payment.userPhone,
+          payment.kaspiPhone,
           payment.status,
           payment.provider,
           payment.amount,
@@ -692,6 +749,7 @@ async function adminListPaymentsAsync(data = {}, auth) {
     return {
       success: true,
       code: "ADMIN_PAYMENTS",
+      pendingKaspiCount: (store.payments || []).filter(payment => payment.provider === 'kaspi_manual' && payment.status === 'pending').length,
       count: payments.length,
       payments,
     };
@@ -780,7 +838,9 @@ async function getMoneyStatsAsync(data = {}, auth) {
 }
 
 module.exports = {
+  adminMarkKaspiInvoiceSentAsync,
   createDriverTopUpPaymentAsync,
+  createPassengerTopUpPaymentAsync,
   getDriverTopUpPaymentStatusAsync,
   confirmDriverTopUpPaymentAsync,
   failDriverTopUpPaymentAsync,

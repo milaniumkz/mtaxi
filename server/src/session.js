@@ -1,6 +1,7 @@
 const { withStoreAsync } = require("./store");
 const { compactOrder, ORDER_STATUS } = require("./orders");
 const { publicUser } = require("./users");
+const { bonusStatus } = require("./driver_bonuses");
 
 function isActiveOrder(order) {
   return order && [0, 1, 2, 3, 4].includes(Number(order.status));
@@ -51,11 +52,14 @@ function buildSessionBootstrap(store, authUser) {
     user.roleState = "PASSENGER";
   }
 
+  const driverBonus = user.isDriver ? bonusStatus(store, user) : null;
   const publicSessionUser = publicUser(user);
 
   return {
     success: true,
     user: publicSessionUser,
+    driverBonus,
+    passengerBonus: { balance: Number(user.passengerBonusBalance) || 0, percent: Number(store.settings?.passengerBonusPercent ?? 2), maxSpendPercent: Number(store.settings?.passengerBonusSpendPercent ?? 100) },
     userDocPath: `users/${user.id}`,
     roleState: publicSessionUser.roleState || "PASSENGER",
     activePassengerOrderRef: passengerOrder ? `order/${passengerOrder.id}` : null,

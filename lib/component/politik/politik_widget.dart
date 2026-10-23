@@ -3,13 +3,13 @@ import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'politik_model.dart';
 export 'politik_model.dart';
 
-const _mtaxiText = Color(0xFF1E1525);
-const _mtaxiMuted = Color(0xFF73677C);
-const _mtaxiMint = Color(0xFF28D8C6);
+const _mtaxiText = Color(0xFF1B242B);
+const _mtaxiMuted = Color(0xFF5C6862);
+const _mtaxiMint = Color(0xFF126E68);
 
 class PolitikWidget extends StatefulWidget {
   const PolitikWidget({super.key});
@@ -50,7 +50,7 @@ class _PolitikWidgetState extends State<PolitikWidget> {
     final textColor = isDark ? Colors.white : _mtaxiText;
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
     final buttonText =
         isDark ? const Color(0xFF13191D) : const Color(0xFF12051B);
     return Container(
@@ -83,7 +83,8 @@ class _PolitikWidgetState extends State<PolitikWidget> {
                     child: Text(
                       'Политика и соглашение',
                       style: FlutterFlowTheme.of(context).titleMedium.override(
-                            font: GoogleFonts.readexPro(
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
                               fontWeight: FontWeight.w800,
                             ),
                             color: textColor,
@@ -150,7 +151,9 @@ class _PolitikWidgetState extends State<PolitikWidget> {
                         text,
                         textAlign: TextAlign.left,
                         style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.readexPro(),
+                              font: TextStyle(
+                                fontFamily: 'Noto Sans',
+                              ),
                               color: textColor,
                               lineHeight: 1.45,
                               letterSpacing: 0.0,

@@ -46,9 +46,9 @@ ChatMessagesRecord chatMessageRecordFromBackendJson(
       'image': (json['imageUrl'] ?? '').toString(),
       'timestamp': timestamp,
       'status': 'sent',
-      'read_by': [
-        if (json['readByUser'] == true && chatRef != null) chatRef,
-      ],
+      'backendSource': true,
+      'readByUser': json['readByUser'] == true,
+      'readByAdmin': json['readByAdmin'] == true,
     },
     ref,
   );

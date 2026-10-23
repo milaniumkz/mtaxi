@@ -11,7 +11,6 @@ const requiredProduction = [
   "MTAXI_STORE",
   "DATABASE_URL",
   "MTAXI_SMS_PROVIDER",
-  "MTAXI_SMS_HTTP_URL",
   "MTAXI_PAYMENT_PROVIDER",
   "MTAXI_PAYMENT_URL_TEMPLATE",
   "MTAXI_PAYMENT_CALLBACK_SECRET",
@@ -21,7 +20,7 @@ const requiredProduction = [
 const productionValues = {
   NODE_ENV: "production",
   MTAXI_STORE: "postgres",
-  MTAXI_SMS_PROVIDER: "http",
+  MTAXI_SMS_PROVIDER: "disabled",
   MTAXI_PAYMENT_PROVIDER: "redirect",
   MTAXI_FCM_ENABLED: "true",
 };

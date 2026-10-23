@@ -21,6 +21,9 @@ const Set<String> _dedupedCallNames = {
 };
 const Set<String> _criticalOrderCallNames = {
   'acceptOrder',
+  'respondOrderOffer',
+  'submitOrderOffer',
+  'createPassengerTopUpPayment',
   'createPassengerOrder',
   'advanceDriverOrderStatus',
   'cancelPassengerOrder',
@@ -113,7 +116,7 @@ Future<Map<String, dynamic>> makeCloudCall(
   Future<Map<String, dynamic>> executeCall() async {
     try {
       unawaited(getAppRuntimeSettings());
-      return _makeExternalBackendCall(
+      return await _makeExternalBackendCall(
         callName,
         input,
         effectiveTimeout,

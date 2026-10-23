@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime_type/mime_type.dart';
 import 'package:video_player/video_player.dart';
@@ -63,19 +62,21 @@ Future<List<SelectedFile>?> selectMediaWithSourceBottomSheet({
   int? imageQuality,
   required bool allowPhoto,
   bool allowVideo = false,
-  String pickerFontFamily = 'Roboto',
+  String pickerFontFamily = 'Noto Sans',
   Color textColor = const Color(0xFF111417),
   Color backgroundColor = const Color(0xFFF5F5F5),
   bool includeDimensions = false,
   bool includeBlurHash = false,
 }) async {
+  String tr(String ru, String kk) =>
+      FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
   final createUploadMediaListTile =
       (String label, MediaSource mediaSource) => ListTile(
             title: Text(
               label,
               textAlign: TextAlign.center,
-              style: GoogleFonts.getFont(
-                pickerFontFamily,
+              style: TextStyle(
+                fontFamily: pickerFontFamily,
                 color: textColor,
                 fontWeight: FontWeight.w600,
                 fontSize: 20,
@@ -100,10 +101,10 @@ Future<List<SelectedFile>?> selectMediaWithSourceBottomSheet({
                 padding: EdgeInsets.fromLTRB(0, 8, 0, 0),
                 child: ListTile(
                   title: Text(
-                    'Choose Source',
+                    tr('Выберите источник', 'Дереккөзді таңдаңыз'),
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.getFont(
-                      pickerFontFamily,
+                    style: TextStyle(
+                      fontFamily: pickerFontFamily,
                       color: textColor.applyAlpha(0.65),
                       fontWeight: FontWeight.w500,
                       fontSize: 20,
@@ -117,27 +118,28 @@ Future<List<SelectedFile>?> selectMediaWithSourceBottomSheet({
             ],
             if (allowPhoto && allowVideo) ...[
               createUploadMediaListTile(
-                'Gallery (Photo)',
+                tr('Галерея (фото)', 'Галерея (фото)'),
                 MediaSource.photoGallery,
               ),
               const Divider(),
               createUploadMediaListTile(
-                'Gallery (Video)',
+                tr('Галерея (видео)', 'Галерея (бейне)'),
                 MediaSource.videoGallery,
               ),
             ] else if (allowPhoto)
               createUploadMediaListTile(
-                'Gallery',
+                tr('Галерея', 'Галерея'),
                 MediaSource.photoGallery,
               )
             else
               createUploadMediaListTile(
-                'Gallery',
+                tr('Галерея', 'Галерея'),
                 MediaSource.videoGallery,
               ),
             if (!kIsWeb) ...[
               const Divider(),
-              createUploadMediaListTile('Camera', MediaSource.camera),
+              createUploadMediaListTile(
+                  tr('Камера', 'Камера'), MediaSource.camera),
               const Divider(),
             ],
             const SizedBox(height: 10),

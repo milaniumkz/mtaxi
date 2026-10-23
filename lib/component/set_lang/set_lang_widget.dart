@@ -2,11 +2,11 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'set_lang_model.dart';
 export 'set_lang_model.dart';
 
-const _mtaxiMint = Color(0xFF28D8C6);
+const _mtaxiMint = Color(0xFF126E68);
 
 class SetLangWidget extends StatefulWidget {
   const SetLangWidget({super.key});
@@ -94,7 +94,8 @@ class _SetLangWidgetState extends State<SetLangWidget> {
                     color: _mtaxiMint,
                     textStyle:
                         FlutterFlowTheme.of(context).titleMedium.override(
-                              font: GoogleFonts.readexPro(
+                              font: TextStyle(
+                                fontFamily: 'Noto Sans',
                                 fontWeight: FontWeight.w500,
                                 fontStyle: FlutterFlowTheme.of(context)
                                     .titleMedium
@@ -135,7 +136,8 @@ class _SetLangWidgetState extends State<SetLangWidget> {
                     color: _mtaxiMint,
                     textStyle:
                         FlutterFlowTheme.of(context).titleMedium.override(
-                              font: GoogleFonts.readexPro(
+                              font: TextStyle(
+                                fontFamily: 'Noto Sans',
                                 fontWeight: FontWeight.w500,
                                 fontStyle: FlutterFlowTheme.of(context)
                                     .titleMedium

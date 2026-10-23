@@ -26,8 +26,7 @@ LatLng? _parseBackendPoint(dynamic value) {
 DocumentReference? _backendUserRef(dynamic userId) {
   final id = userId?.toString().trim() ?? '';
   if (id.isEmpty) return null;
-  return BackendRefs.instance
-      .doc(id.startsWith('users/') ? id : 'users/$id');
+  return BackendRefs.instance.doc(id.startsWith('users/') ? id : 'users/$id');
 }
 
 OrderRecord orderRecordFromBackendJson(Map<String, dynamic> json) {
@@ -52,6 +51,15 @@ OrderRecord orderRecordFromBackendJson(Map<String, dynamic> json) {
     'comment': (json['comment'] ?? '').toString(),
     'deliveryItem': (json['deliveryItem'] ?? '').toString(),
     'price': _parseBackendDouble(json['price']) ?? 0.0,
+    'cashToDriver': _parseBackendDouble(json['cashToDriver']) ??
+        _parseBackendDouble(json['price']) ??
+        0,
+    'passengerBonusUsed': _parseBackendDouble(json['passengerBonusUsed']) ?? 0,
+    'passengerWalletUsed':
+        _parseBackendDouble(json['passengerWalletUsed']) ?? 0,
+    'paymentMode': json['paymentMode'],
+    'driverCar': json['driverCar'] ?? '',
+    'driverPlate': json['driverPlate'] ?? '',
     'distanceKm': _parseBackendDouble(json['distanceKm']),
     'otCoords': fromPoint,
     'kudaCoords': toPoint,

@@ -1,8 +1,10 @@
+const { reservePassengerBonus, refundPassengerBonus, settlePassengerBonus } = require('./passenger_bonuses');
 const { readStoreAsync, withStoreAsync, newId } = require("./store");
 const { asDate, asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { addLedger } = require("./payments");
 const { queueOrderPushEventInStore } = require("./push");
 const { requireAdmin } = require("./admin");
+const { recordCompletedOrder, debitCommission, refundCommission } = require("./driver_bonuses");
 
 const ORDER_STATUS = Object.freeze({
   OPEN: 0,
@@ -69,13 +71,13 @@ function geoPointFromData(data = {}, prefix = "") {
     if (!candidate || typeof candidate !== "object") continue;
     const latitude = asNumber(candidate.latitude ?? candidate.lat);
     const longitude = asNumber(candidate.longitude ?? candidate.lng ?? candidate.lon);
-    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    if (Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude)<=90 && Math.abs(longitude)<=180) {
       return { latitude, longitude };
     }
   }
   const latitude = asNumber(data[`${prefix}Latitude`] ?? data[`${prefix}Lat`]);
   const longitude = asNumber(data[`${prefix}Longitude`] ?? data[`${prefix}Lng`] ?? data[`${prefix}Lon`]);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude)>90 || Math.abs(longitude)>180) return null;
   return { latitude, longitude };
 }
 
@@ -120,7 +122,7 @@ function calculateOrderQuoteFromData({
       success: true,
       type: orderType,
       isNight,
-      price: isNight ? minApplied * nightMultiplier : minApplied,
+      price: Math.max(500, isNight ? minApplied * nightMultiplier : minApplied),
       distanceKm,
       basePrice,
       pricePerKm,
@@ -146,7 +148,7 @@ function calculateOrderQuoteFromData({
         success: true,
         type: orderType,
         isNight,
-        price: isNight ? deliveryPrice * nightMultiplier : deliveryPrice,
+        price: Math.max(500, isNight ? deliveryPrice * nightMultiplier : deliveryPrice),
         cityFound: Boolean(cityPricing.title),
       };
     }
@@ -164,13 +166,14 @@ function calculateOrderQuoteFromData({
     success: true,
     type: orderType,
     isNight,
-    price,
+    price: Math.max(500,price),
     cityFound: Boolean(cityPricing.title),
   };
 }
 
 async function calculateOrderQuoteAsync(data = {}) {
   const store = await readStoreAsync();
+  if (getOrderType({ type: data.type }) === "intercity" && store.settings?.intercityEnabled !== true) return intercityDisabled();
   return calculateOrderQuoteFromStore(store, data);
 }
 
@@ -216,7 +219,9 @@ async function createPassengerOrderAsync(data = {}, auth) {
 }
 
 function createPassengerOrderInStore(store, data, auth, { type, from, to, city }) {
+  if (type === "intercity" && store.settings?.intercityEnabled !== true) return intercityDisabled();
   const user = store.users.find((item) => item.id === auth.user.id);
+  if (!user) return { success:false,code:"USER_NOT_FOUND",error:"Пользователь не найден" };
   const active = store.orders.find(
     (order) => order.id === user?.activePassengerOrderId && isActivePassengerOrder(order),
   );
@@ -236,6 +241,7 @@ function createPassengerOrderInStore(store, data, auth, { type, from, to, city }
   const calculatedDistanceKm = asNumber(data.distanceKm) ?? distanceKmBetween(fromPoint, toPoint);
   const routeDistanceKm = type === "intercity" ? calculatedDistanceKm : (calculatedDistanceKm ?? 0);
   const explicitPrice = asNumber(data.price);
+  if (data.price != null && (!Number.isSafeInteger(explicitPrice) || explicitPrice < 500 || explicitPrice > 10000000)) return { success: false, code: "PRICE_MINIMUM", error: "Минимальная цена — 500 ₸", minimumPrice: 500 };
   const quote = explicitPrice == null
     ? calculateOrderQuoteFromData({
       type,
@@ -270,7 +276,9 @@ function createPassengerOrderInStore(store, data, auth, { type, from, to, city }
     type,
     comment: type === "delivery" ? "" : normalizeString(data.comment),
     deliveryItem: type === "delivery" ? normalizeString(data.deliveryItem) : "",
-    price: quote.price,
+    price: Math.max(500, quote.price),
+    passengerPrice: Math.max(500, quote.price),
+    offers: [],
     distanceKm: routeDistanceKm,
     fromPoint,
     toPoint,
@@ -280,6 +288,10 @@ function createPassengerOrderInStore(store, data, auth, { type, from, to, city }
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+  order.paymentMode = data.paymentMode === 'wallet' ? 'wallet' : 'cash';
+  const paymentError = reservePassengerBonus(store, order, user, data.usePassengerBonuses === true);
+  if (paymentError) return paymentError;
+  order.cashToDriver ??= order.price;
   store.orders.push(order);
   user.activePassengerOrderId = order.id;
   user.hasActivePassengerOrder = true;
@@ -353,6 +365,7 @@ async function adminCreateOrderAsync(data = {}, auth) {
 }
 
 function adminCreateOrderInStore(store, data, auth, { type, from, to, city }) {
+  if (type === "intercity" && store.settings?.intercityEnabled !== true) return intercityDisabled();
   store.users ||= [];
   store.orders ||= [];
   const user = findOrCreateAdminPassenger(store, data);
@@ -360,6 +373,7 @@ function adminCreateOrderInStore(store, data, auth, { type, from, to, city }) {
     return { success: false, code: "ORDER_CUSTOMER_REQUIRED", error: "Укажите пассажира или номер телефона" };
   }
   const explicitPrice = asNumber(data.price);
+  if (data.price != null && (!Number.isSafeInteger(explicitPrice) || explicitPrice < 500 || explicitPrice > 10000000)) return { success: false, code: "PRICE_MINIMUM", error: "Минимальная цена — 500 ₸", minimumPrice: 500 };
   const quote = explicitPrice == null ? calculateOrderQuoteFromData({
     type,
     city,
@@ -383,7 +397,9 @@ function adminCreateOrderInStore(store, data, auth, { type, from, to, city }) {
     type,
     comment: type === "delivery" ? "" : normalizeString(data.comment),
     deliveryItem: type === "delivery" ? normalizeString(data.deliveryItem) : "",
-    price: quote.price,
+    price: Math.max(500, quote.price),
+    passengerPrice: Math.max(500, quote.price),
+    offers: [],
     distanceKm: asNumber(data.distanceKm),
     fromPoint: geoPointFromData(data, "from") || geoPointFromData(data, "ot") || geoPointFromData(data),
     toPoint: geoPointFromData(data, "to") || geoPointFromData(data, "kuda"),
@@ -394,6 +410,10 @@ function adminCreateOrderInStore(store, data, auth, { type, from, to, city }) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+  order.paymentMode = data.paymentMode === 'wallet' ? 'wallet' : 'cash';
+  const paymentError = reservePassengerBonus(store, order, user, data.usePassengerBonuses === true);
+  if (paymentError) return paymentError;
+  order.cashToDriver ??= order.price;
   store.orders.push(order);
   if (isActivePassengerOrder(order)) {
     user.activePassengerOrderId = order.id;
@@ -431,6 +451,11 @@ function compactOrder(order) {
     kuda: order.kuda || "",
     city: order.city || "",
     price: asNumber(order.price) || 0,
+    passengerPrice: order.passengerPrice ?? order.price,
+    passengerBonusUsed: order.passengerBonusUsed || 0,
+    passengerWalletUsed: order.passengerWalletUsed || 0,
+    paymentMode: order.paymentMode || "cash",
+    cashToDriver: order.cashToDriver ?? order.price,
     distanceKm: asNumber(order.distanceKm),
     fromPoint: order.fromPoint || null,
     toPoint: order.toPoint || null,
@@ -440,6 +465,8 @@ function compactOrder(order) {
     customerPhone: order.customerPhone || "",
     driverName: order.driverName || "",
     driverPhone: order.driverPhone || "",
+    driverCar: order.driverCar || "",
+    driverPlate: order.driverPlate || "",
     comment: order.comment || "",
     deliveryItem: order.deliveryItem || "",
     cancelledAt: order.cancelledAt || null,
@@ -582,6 +609,7 @@ async function adminListOrdersAsync(data = {}, auth) {
 }
 
 function closeActiveOrderRefs(store, order) {
+  if ([6, 7].includes(Number(order.status))) refundPassengerBonus(store, order);
   const passenger = store.users.find((user) => user.id === order.userId);
   const driver = store.users.find((user) => user.id === order.driverId);
   if (passenger?.activePassengerOrderId === order.id) {
@@ -708,6 +736,7 @@ function acceptOrderInStore(store, auth, orderId) {
   if (!driver) {
     return { success: false, accepted: false, code: "DRIVER_NOT_FOUND", error: "Водитель не найден" };
   }
+  if (driver.blocked === true) return { success:false,accepted:false,code:"DRIVER_BLOCKED",error:"Водитель заблокирован" };
   if (driver.isDriver !== true || normalizeString(driver.statusDriver).toLowerCase() !== "approved") {
     return { success: false, accepted: false, code: "DRIVER_NOT_APPROVED", error: "Водитель не подтвержден" };
   }
@@ -733,10 +762,11 @@ function acceptOrderInStore(store, auth, orderId) {
     return { success: false, accepted: false, code: "ORDER_ALREADY_ACCEPTED", error: "Заказ взял другой водитель" };
   }
 
+  if (order.userId === driver.id) return { success: false, code: "OWN_ORDER_FORBIDDEN", error: "Нельзя принять собственный заказ" };
   const isVipDriver = driver.vip === true;
   const requiredBalance = isVipDriver ? 0 : requiredDriverBalance(order, store.settings || {});
   const balance = asNumber(driver.balance) || 0;
-  if (balance < requiredBalance) {
+  if (!debitCommission(driver, order, requiredBalance)) {
     return {
       success: false,
       accepted: false,
@@ -747,15 +777,18 @@ function acceptOrderInStore(store, auth, orderId) {
     };
   }
 
-  driver.balance = balance - requiredBalance;
   driver.activeDriverOrderId = order.id;
   driver.hasActiveDriverOrder = true;
   driver.roleState = "DRIVER_ON_TRIP";
 
+  order.commissionRefunded = false;
+  order.adminCommissionRefunded = false;
   order.status = ORDER_STATUS.DRIVER_ASSIGNED;
   order.driverId = driver.id;
   order.driverName = driver.displayName || "";
   order.driverPhone = driver.phone || "";
+  order.driverCar = [driver.carBrand || driver.marka || driver.Marka, driver.carModel || driver.model, driver.color].filter(Boolean).join(" ");
+  order.driverPlate = driver.gosNomer || "";
   order.acceptedAt = new Date().toISOString();
   order.acceptedCommission = requiredBalance;
   order.updatedAt = new Date().toISOString();
@@ -765,6 +798,8 @@ function acceptOrderInStore(store, auth, orderId) {
       userId: driver.id,
       orderId: order.id,
       amount: requiredBalance,
+      bonusAmount: order.acceptedBonusCommission,
+      cashAmount: order.acceptedCashCommission,
       balanceBefore: balance,
       balanceAfter: driver.balance,
     });
@@ -816,6 +851,8 @@ function cancelPassengerOrderInStore(store, auth, orderId) {
   if (!order) {
     return { success: true, code: "ORDER_CANCELLED" };
   }
+  if (order.userId !== auth.user.id) return { success: false, code: "ORDER_FORBIDDEN", error: "Нет доступа к заказу" };
+  if (Number(order.status) >= 4 && Number(order.status) <= 5) return { success: false, code: "TRIP_ALREADY_STARTED", error: "После начала поездки отмена недоступна" };
   if (Number(order.status) === ORDER_STATUS.CANCELLED) {
     return { success: true, code: "ORDER_CANCELLED", orderDocPath: orderDocPath(order) };
   }
@@ -831,7 +868,7 @@ function cancelPassengerOrderInStore(store, auth, orderId) {
     const refund = asNumber(order.acceptedCommission) || 0;
     if (refund > 0) {
       const before = asNumber(driver.balance) || 0;
-      driver.balance = before + refund;
+      refundCommission(driver, order);
       addLedger(store, {
         type: "order_commission_refund",
         userId: driver.id,
@@ -843,6 +880,7 @@ function cancelPassengerOrderInStore(store, auth, orderId) {
     }
   }
   closeActiveOrderRefs(store, order);
+  refundPassengerBonus(store, order);
   order.status = ORDER_STATUS.CANCELLED;
   order.cancelledBy = auth.user.id === order.userId ? "passenger" : "system";
   order.cancelledAt = new Date().toISOString();
@@ -889,10 +927,20 @@ function advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus) {
   if (!isActivePassengerOrder(order)) {
     return { success: false, code: "ORDER_NOT_ACTIVE", error: "Заказ уже закрыт" };
   }
+  if (nextStatus === Number(order.status)) return { success: true, code: "ORDER_STATUS_UNCHANGED", status: order.status };
+  if (nextStatus !== Number(order.status) + 1) return { success: false, code: "ORDER_STATUS_SEQUENCE_REQUIRED", error: "Сначала отметьте прибытие, затем начало поездки" };
   if (nextStatus < Number(order.status)) {
     return { success: false, code: "ORDER_STATUS_ROLLBACK_DENIED", error: "Нельзя вернуть заказ на старый статус" };
   }
 
+  if (nextStatus === 3 && order.fromPoint) {
+    const { meters } = require('./trip_automation');
+    const fresh = Date.now() - Date.parse(driver.coordsUpdatedAt || '') <= 30000;
+    const accurate = Number(driver.coordsAccuracy) > 0 && Number(driver.coordsAccuracy) <= 40;
+    if (!fresh || !accurate || !driver.coords || meters(order.fromPoint, driver.coords) > 120) return { success:false, code:"PICKUP_GPS_REQUIRED",error:"Для прибытия нужна свежая точная геопозиция рядом с местом посадки" };
+    order.pickupPresenceVerified = true;
+  }
+  if (nextStatus === 4 && order.fromPoint && !order.pickupPresenceVerified) return { success:false,code:"PICKUP_NOT_VERIFIED",error:"Сначала подтвердите прибытие к месту посадки" };
   order.status = nextStatus;
   order.updatedAt = new Date().toISOString();
   if (nextStatus === ORDER_STATUS.DRIVER_ARRIVED) {
@@ -923,6 +971,8 @@ function advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus) {
   }
   if (nextStatus === ORDER_STATUS.COMPLETED) {
     order.completedAt = new Date().toISOString();
+    recordCompletedOrder(store, driver, order);
+    settlePassengerBonus(store, order, driver);
     closeActiveOrderRefs(store, order);
     queueOrderPushEventInStore(store, {
       order,
@@ -971,6 +1021,12 @@ module.exports = {
   expirePendingOrderIfNeededAsync,
   expireStalePendingOrdersAsync,
   acceptOrderAsync,
+  acceptOrderInStore,
   cancelPassengerOrderAsync,
   advanceDriverOrderStatusAsync,
+  advanceDriverOrderStatusInStore,
 };
+
+function intercityDisabled() {
+  return { success: false, code: "INTERCITY_DISABLED", error: "Межгород временно отключён" };
+}

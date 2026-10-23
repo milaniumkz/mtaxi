@@ -1,29 +1,32 @@
+import '/design/driver_approval.dart';
+import '/design/mtaxi_theme.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/app_city_tariffs/app_city_tariffs.dart';
 import '/backend/backend.dart';
 import '/backend/backend_user_adapter.dart';
 import '/backend/backend_calls/backend_calls.dart';
 import '/backend/uploads/storage.dart';
-import '/flutter_flow/flutter_flow_autocomplete_options_list.dart';
+
 import '/flutter_flow/permissions_util.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
+
 import '/flutter_flow/upload_data.dart';
 import '/index.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:permission_handler/permission_handler.dart';
 import 'package:webviewx_plus/webviewx_plus.dart';
 import 'set_profile_driver_model.dart';
 export 'set_profile_driver_model.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 
-const _mtaxiMint = Color(0xFF28D8C6);
-const _mtaxiText = Color(0xFF1E1525);
+const _mtaxiMint = Color(0xFF126E68);
+const _mtaxiText = Color(0xFF1B242B);
 
 class _KazakhstanPlateInputFormatter extends TextInputFormatter {
   static final _digitPattern = RegExp(r'\d');
@@ -105,13 +108,21 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final _firstNameFieldKey = GlobalKey();
-  final _lastNameFieldKey = GlobalKey();
+  bool get _needsPassword =>
+      currentUserDocument?.snapshotData['hasPassword'] != true;
   final _passwordFieldKey = GlobalKey();
   final _passwordRepeatFieldKey = GlobalKey();
   final _plateFieldKey = GlobalKey();
   final _carColorFieldKey = GlobalKey();
   final _vehiclePhotoBlockKey = GlobalKey();
   final _techPhotoBlockKey = GlobalKey();
+  final Map<String, String> _uploadErrors = {};
+  int _designStep = 0;
+  late final String _draftUid;
+  bool _draftRestored = false;
+  Future<void> _draftWrites = Future<void>.value();
+  String get _draftKey => 'mtaxi_driver_registration_draft_$_draftUid';
+  late Future<List<String>> _cities;
   bool _didAttemptSubmit = false;
   bool _isSubmittingRegistration = false;
   bool _isCheckingLocationPermission = false;
@@ -161,6 +172,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   }
 
   String? _passwordRepeatFieldError(BuildContext context) {
+    if (!_needsPassword) return null;
     if (!_didAttemptSubmit) {
       return null;
     }
@@ -215,7 +227,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
       return _firstNameFieldKey;
     }
     if (_plateFieldError(context) != null) return _plateFieldKey;
-    if ((_model.textController3?.text ?? '').trim().isEmpty) {
+    if (_needsPassword && (_model.textController3?.text ?? '').trim().isEmpty) {
       return _passwordFieldKey;
     }
     if (_passwordRepeatFieldError(context) != null) {
@@ -253,10 +265,11 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
             kk: 'Тізімнен қалаңызды немесе ауылыңызды таңдаңыз',
           )
         : null);
-    addIf(_requiredFieldError(
-      _model.textController3?.text ?? '',
-      _tr(context, ru: 'Придумайте пароль', kk: 'Құпиясөз ойлап табыңыз'),
-    ));
+    if (_needsPassword)
+      addIf(_requiredFieldError(
+        _model.textController3?.text ?? '',
+        _tr(context, ru: 'Придумайте пароль', kk: 'Құпиясөз ойлап табыңыз'),
+      ));
     addIf(_passwordRepeatFieldError(context));
     return errors.toSet().toList();
   }
@@ -373,6 +386,13 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                 ),
         );
       }
+      try {
+        await _draftWrites;
+        final draftPrefs = await SharedPreferences.getInstance();
+        await draftPrefs.remove(_draftKey);
+      } catch (_) {
+        // Registration is already confirmed by the server; draft cleanup is local.
+      }
       FFAppState().pendingRegistrationRole = '';
       FFAppState().update(() {});
       currentUserDocument =
@@ -380,17 +400,15 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
       if (!mounted) return;
       await _refreshExistingRegistrationDraft();
       if (!mounted) return;
-      await _showMessageDialog(
-        context,
-        _tr(
-          context,
-          ru: 'Анкета водителя отправлена на проверку. После подтверждения администратором откроется режим водителя.',
-          kk: 'Жүргізуші сауалнамасы тексеруге жіберілді. Әкімші растағаннан кейін жүргізуші режимі ашылады.',
-        ),
-      );
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (approvalContext) => DriverApproval(
+                onProfile: () => Navigator.pop(approvalContext),
+                onSupport: () =>
+                    approvalContext.pushNamed(SupportChatWidget.routeName),
+              )));
       if (!mounted) return;
       context.goNamedAuth(
-        HomePageWidget.routeName,
+        ProfileWidget.routeName,
         context.mounted,
       );
     } catch (e) {
@@ -588,21 +606,77 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   }
 
   Future<void> _refreshExistingRegistrationDraft() async {
-    safeSetState(() {
-      _hydrateFromUserRecord(currentUserDocument);
-    });
+    if (_draftRestored || _draftUid.isEmpty) return;
+    _draftRestored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || !mounted || currentUserUid != _draftUid) return;
+      final draft = jsonDecode(raw);
+      if (draft is! Map) return;
+      safeSetState(() {
+        final fields = <String, TextEditingController?>{
+          'name': _model.textController1,
+          'surname': _model.textController2,
+          'plate': _model.textController5,
+          'color': _model.textController6,
+          'city': _model.textController7,
+        };
+        for (final entry in fields.entries) {
+          if (draft[entry.key] is String) entry.value?.text = draft[entry.key];
+        }
+        _model.textFieldSelectedOption7 = _model.textController7?.text;
+        _model.datePicked =
+            DateTime.tryParse(draft['birthDate']?.toString() ?? '');
+        if (draft['avtoImage'] is String)
+          _model.uploadedFileUrl_uploadData2xm = draft['avtoImage'];
+        if (draft['techImage'] is String)
+          _model.uploadedFileUrl_techPhoto = draft['techImage'];
+        _designStep = draft['step'] == 1 ? 1 : 0;
+      });
+    } catch (_) {
+      // A malformed local draft must not prevent registration.
+    }
   }
 
-  Future<bool> _saveDriverRegistrationDraft({
-    String? avtoImage,
-    String? techImage,
-  }) async {
-    return true;
+  Future<bool> _saveDriverRegistrationDraft(
+      {String? avtoImage, String? techImage}) async {
+    if (_draftUid.isEmpty || currentUserUid != _draftUid) return false;
+    // Never persist either password controller in a registration draft.
+    final data = jsonEncode({
+      'name': _model.textController1?.text ?? '',
+      'surname': _model.textController2?.text ?? '',
+      'plate': _model.textController5?.text ?? '',
+      'color': _model.textController6?.text ?? '',
+      'city': _selectedCity(),
+      'birthDate': _model.datePicked?.toIso8601String(),
+      'avtoImage': avtoImage ?? _model.uploadedFileUrl_uploadData2xm,
+      'techImage': techImage ?? _model.uploadedFileUrl_techPhoto,
+      'step': _designStep,
+    });
+    final write = _draftWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      if (!await prefs.setString(_draftKey, data))
+        throw StateError('Draft not saved');
+    });
+    _draftWrites = write.catchError((_) {});
+    try {
+      await write;
+      return true;
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_tr(context,
+                ru: 'Не удалось сохранить черновик на устройстве. Не закрывайте анкету до отправки.',
+                kk: 'Құрылғыда жоба сақталмады. Жібергенше сауалнаманы жаппаңыз.'))));
+      return false;
+    }
   }
 
   Future<void> _clearDriverRegistrationDraftFields(
-    List<String> fieldKeys,
-  ) async {}
+      List<String> fieldKeys) async {
+    await _saveDriverRegistrationDraft();
+  }
 
   Future<void> _deleteVehiclePhotoFromDraft() async {
     safeSetState(() {
@@ -738,6 +812,9 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
     required ValueSetter<String> setUrl,
     required String userField,
   }) async {
+    if (_isSubmittingRegistration ||
+        _model.isDataUploading_uploadData2xm ||
+        _model.isDataUploading_techPhoto) return;
     if (currentUserUid.trim().isEmpty) {
       if (!mounted) {
         return;
@@ -776,7 +853,10 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
       ),
       showLoading: true,
     );
-    safeSetState(() => setUploading(true));
+    safeSetState(() {
+      setUploading(true);
+      _uploadErrors.remove(userField);
+    });
     var selectedUploadedFiles = <FFUploadedFile>[];
     var downloadUrls = <String>[];
     String? uploadError;
@@ -810,7 +890,12 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
     if (uploadError != null ||
         selectedUploadedFiles.length != selectedMedia.length ||
         downloadUrls.length != selectedMedia.length) {
-      safeSetState(() {});
+      safeSetState(() => _uploadErrors[userField] = uploadError?.isNotEmpty ==
+              true
+          ? uploadError!
+          : _tr(context,
+              ru: 'Фото не загрузилось. Проверьте интернет и попробуйте ещё раз.',
+              kk: 'Фото жүктелмеді. Интернетті тексеріп, қайталап көріңіз.'));
       if (!mounted) return;
       await _showMessageDialog(
         context,
@@ -870,7 +955,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
     final surface2 = isDark ? const Color(0xFF243437) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : _mtaxiText;
     final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
+        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
     final hasImage = imageUrl.isNotEmpty;
     final hasError = errorText != null && errorText.trim().isNotEmpty;
     return Card(
@@ -892,7 +977,8 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
             Text(
               title,
               style: FlutterFlowTheme.of(context).bodyMedium.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight:
                           FlutterFlowTheme.of(context).bodyMedium.fontWeight,
                       fontStyle:
@@ -954,7 +1040,8 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
             ],
             if (hasError) ...[
               const SizedBox(height: 10),
-              _buildInlineUploadError(context, errorText),
+              _buildInlineUploadError(context, errorText,
+                  onRetry: () => onTap()),
             ],
           ],
         ),
@@ -989,48 +1076,9 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
     );
   }
 
-  Widget _buildInlineUploadError(BuildContext context, String message) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 4.0),
-      padding: const EdgeInsets.all(10.0),
-      decoration: BoxDecoration(
-        color: FlutterFlowTheme.of(context).error.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10.0),
-        border: Border.all(
-          color: FlutterFlowTheme.of(context).error,
-          width: 1.0,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.error_outline,
-            color: FlutterFlowTheme.of(context).error,
-            size: 18.0,
-          ),
-          const SizedBox(width: 8.0),
-          Expanded(
-            child: Text(
-              message,
-              style: FlutterFlowTheme.of(context).bodySmall.override(
-                    font: GoogleFonts.readexPro(
-                      fontWeight: FontWeight.w600,
-                      fontStyle:
-                          FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                    ),
-                    color: FlutterFlowTheme.of(context).error,
-                    letterSpacing: 0.0,
-                    fontWeight: FontWeight.w600,
-                    fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildInlineUploadError(BuildContext context, String message,
+          {required VoidCallback onRetry}) =>
+      MTaxiUploadError(message: message, onRetry: onRetry);
 
   Widget _buildUploadSuccessStatus(BuildContext context) {
     return Container(
@@ -1059,7 +1107,8 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
               kk: 'Жүктелді',
             ),
             style: FlutterFlowTheme.of(context).bodySmall.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w600,
                     fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
                   ),
@@ -1115,7 +1164,9 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _draftUid = currentUserUid;
     _model = createModel(context, () => SetProfileDriverModel());
+    _cities = _loadCityTitles();
 
     _model.textController1 ??= TextEditingController();
     _model.textFieldFocusNode1 ??= FocusNode();
@@ -1169,1663 +1220,263 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF1B2528) : const Color(0xFFEFF2F6);
-    final surface = isDark ? const Color(0xFF13191D) : const Color(0xFFFFFFFF);
-    final surface2 = isDark ? const Color(0xFF243437) : const Color(0xFFFFFFFF);
-    final textColor = isDark ? Colors.white : _mtaxiText;
-    final appBarBg = isDark ? _mtaxiMint : surface;
-    final appBarText = isDark ? Colors.white : textColor;
-    final ctaTextColor = isDark ? const Color(0xFF071718) : Colors.white;
-    final borderColor =
-        isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8E2EC);
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        resizeToAvoidBottomInset: true,
-        backgroundColor: pageBg,
-        appBar: AppBar(
-          backgroundColor: appBarBg,
-          iconTheme: IconThemeData(color: appBarText),
-          automaticallyImplyLeading: true,
-          centerTitle: true,
-          elevation: 0,
-          title: Text(
-            _tr(
-              context,
-              ru: 'Регистрация водителя',
-              kk: 'Жүргізушіні тіркеу',
-            ),
-            style: FlutterFlowTheme.of(context).titleLarge.override(
-                  font: GoogleFonts.outfit(fontWeight: FontWeight.w800),
-                  color: appBarText,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ),
-        body: SafeArea(
-          top: true,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(context).bottom + 80.0,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                const SizedBox(height: 28),
-                if (_canReturnToPassengerMode() &&
-                    MediaQuery.sizeOf(context).width < 0)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: TextButton.icon(
-                        onPressed: _isSubmittingRegistration
-                            ? null
-                            : _returnToPassengerMode,
-                        icon: Icon(
-                          Icons.arrow_back,
-                          color: _mtaxiMint,
-                          size: 20.0,
-                        ),
-                        label: Text(
-                          _tr(
-                            context,
-                            ru: 'Назад в режим пассажира',
-                            kk: 'Жолаушы режиміне қайту',
-                          ),
-                          style:
-                              FlutterFlowTheme.of(context).bodyMedium.override(
-                                    font: GoogleFonts.readexPro(
-                                      fontWeight: FontWeight.w700,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontStyle,
-                                    ),
-                                    color: _mtaxiMint,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.w700,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .fontStyle,
-                                  ),
-                        ),
-                      ),
-                    ),
-                  ),
-                Card(
-                  key: _vehiclePhotoBlockKey,
-                  clipBehavior: Clip.antiAliasWithSaveLayer,
-                  color: surface,
-                  elevation: 0.0,
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(
-                      color: _vehiclePhotoError(context) != null
-                          ? FlutterFlowTheme.of(context).error
-                          : borderColor,
-                      width: _vehiclePhotoError(context) != null ? 2.0 : 1.0,
-                    ),
-                    borderRadius: BorderRadius.circular(0.0),
-                  ),
+    String tr(String ru, String kk) => _tr(context, ru: ru, kk: kk);
+    final uploading = _model.isDataUploading_uploadData2xm ||
+        _model.isDataUploading_techPhoto;
+    Future<void> profilePhoto() => _pickAndUploadImage(
+          storageFolderPath:
+              'users/$currentUserUid/driver_registration/vehicle',
+          setUploading: (value) => _model.isDataUploading_uploadData2xm = value,
+          setLocalFile: (value) =>
+              _model.uploadedLocalFile_uploadData2xm = value,
+          setUrl: (value) => _model.uploadedFileUrl_uploadData2xm = value,
+          userField: 'avtoImage',
+        );
+    Future<void> techPhoto() => _pickAndUploadImage(
+          storageFolderPath:
+              'users/$currentUserUid/driver_registration/tech_passport',
+          setUploading: (value) => _model.isDataUploading_techPhoto = value,
+          setLocalFile: (value) => _model.uploadedLocalFile_techPhoto = value,
+          setUrl: (value) => _model.uploadedFileUrl_techPhoto = value,
+          userField: 'techImage',
+        );
+    return PopScope(
+        canPop: _designStep == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && !_isSubmittingRegistration)
+            setState(() => _designStep = 0);
+        },
+        child: Scaffold(
+          appBar: AppBar(
+              title: Text(tr('Стать водителем', 'Жүргізуші болу')),
+              leading: _designStep == 1
+                  ? IconButton(
+                      tooltip: tr('Назад', 'Артқа'),
+                      onPressed: _isSubmittingRegistration
+                          ? null
+                          : () => setState(() => _designStep = 0),
+                      icon: const Icon(Icons.arrow_back))
+                  : null),
+          body: SafeArea(
+              child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(22),
                   child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                        child: Text(
-                          _tr(
-                            context,
-                            ru: 'Фото авто',
-                            kk: 'Көлік фотосы',
-                          ),
-                          style:
-                              FlutterFlowTheme.of(context).bodyMedium.override(
-                                    font: GoogleFonts.readexPro(
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontStyle,
-                                    ),
-                                    letterSpacing: 0.0,
-                                    fontWeight: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .fontWeight,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .fontStyle,
-                                    color: textColor,
-                                  ),
-                        ),
-                      ),
-                      Align(
-                        alignment: AlignmentDirectional(0.0, 0.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            InkWell(
-                              splashColor: Colors.transparent,
-                              focusColor: Colors.transparent,
-                              hoverColor: Colors.transparent,
-                              highlightColor: Colors.transparent,
-                              onTap: () async {
-                                await _pickAndUploadImage(
-                                  storageFolderPath:
-                                      'users/$currentUserUid/driver_registration/vehicle',
-                                  setUploading: (value) => _model
-                                      .isDataUploading_uploadData2xm = value,
-                                  setLocalFile: (value) => _model
-                                      .uploadedLocalFile_uploadData2xm = value,
-                                  setUrl: (value) => _model
-                                      .uploadedFileUrl_uploadData2xm = value,
-                                  userField: 'avtoImage',
-                                );
-                              },
-                              child: Stack(
-                                children: [
-                                  if (_model.uploadedFileUrl_uploadData2xm ==
-                                      '')
-                                    Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          0.0, 5.0, 0.0, 0.0),
-                                      child: Container(
-                                        width: 42.0,
-                                        height: 42.0,
-                                        decoration: BoxDecoration(
-                                          color: surface2,
-                                          borderRadius:
-                                              BorderRadius.circular(8.0),
-                                          border: Border.all(
-                                            color: _vehiclePhotoError(
-                                                        context) !=
-                                                    null
-                                                ? FlutterFlowTheme.of(context)
-                                                    .error
-                                                : Colors.transparent,
-                                            width:
-                                                _vehiclePhotoError(context) !=
-                                                        null
-                                                    ? 2.0
-                                                    : 0.0,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          Icons.add,
-                                          color: _mtaxiMint,
-                                          size: 26.0,
-                                        ),
-                                      ),
-                                    ),
-                                  if (_model.uploadedFileUrl_uploadData2xm !=
-                                      '')
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      child: SizedBox(
-                                        width: 42.0,
-                                        height: 42.0,
-                                        child: _buildPreviewImage(
-                                          context,
-                                          imageUrl: _model
-                                              .uploadedFileUrl_uploadData2xm,
-                                          localFile: _model
-                                              .uploadedLocalFile_uploadData2xm,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (_model.uploadedFileUrl_uploadData2xm != '') ...[
-                              const SizedBox(height: 10),
-                              _buildUploadSuccessStatus(context),
-                              _buildUploadActions(
-                                context: context,
-                                onReplace: () => _pickAndUploadImage(
-                                  storageFolderPath:
-                                      'users/$currentUserUid/driver_registration/vehicle',
-                                  setUploading: (value) => _model
-                                      .isDataUploading_uploadData2xm = value,
-                                  setLocalFile: (value) => _model
-                                      .uploadedLocalFile_uploadData2xm = value,
-                                  setUrl: (value) => _model
-                                      .uploadedFileUrl_uploadData2xm = value,
-                                  userField: 'avtoImage',
-                                ),
-                                onDelete: () =>
-                                    unawaited(_deleteVehiclePhotoFromDraft()),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (_vehiclePhotoError(context) != null)
-                        Padding(
-                          padding:
-                              const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 8.0),
-                          child: _buildInlineUploadError(
-                            context,
-                            _vehiclePhotoError(context)!,
-                          ),
-                        ),
-                      Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 4.0),
-                        child: _buildUploadCard(
-                          key: _techPhotoBlockKey,
-                          context: context,
-                          title: _tr(
-                            context,
-                            ru: 'Техпаспорт',
-                            kk: 'Техпаспорт суреті',
-                          ),
-                          imageUrl: _model.uploadedFileUrl_techPhoto,
-                          localFile: _model.uploadedLocalFile_techPhoto,
-                          errorText: _techPhotoError(context),
-                          onTap: () => _pickAndUploadImage(
-                            storageFolderPath:
-                                'users/$currentUserUid/driver_registration/tech_passport',
-                            setUploading: (value) =>
-                                _model.isDataUploading_techPhoto = value,
-                            setLocalFile: (value) =>
-                                _model.uploadedLocalFile_techPhoto = value,
-                            setUrl: (value) =>
-                                _model.uploadedFileUrl_techPhoto = value,
-                            userField: 'techImage',
-                          ),
-                          onDelete: () =>
-                              unawaited(_deleteTechPhotoFromDraft()),
-                        ),
-                      ),
-                      if (MediaQuery.sizeOf(context).width < 0)
-                        Row(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    15.0, 5.0, 15.0, 0.0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.8,
-                                  child: TextFormField(
-                                    key: _firstNameFieldKey,
-                                    controller: _model.textController1,
-                                    focusNode: _model.textFieldFocusNode1,
-                                    onChanged: (_) {
-                                      if (_didAttemptSubmit)
-                                        safeSetState(() {});
-                                    },
-                                    onTap: () => _scrollFieldIntoView(
-                                        _firstNameFieldKey),
-                                    autofocus: false,
-                                    obscureText: false,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                            tr('Шаг ${_designStep + 1} из 2',
+                                '2 қадамның ${_designStep + 1}-қадамы'),
+                            style: const TextStyle(fontSize: 12)),
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(
+                            value: (_designStep + 1) / 2,
+                            color: MTaxiDesign.gold,
+                            backgroundColor: MTaxiDesign.surface),
+                        const SizedBox(height: 24),
+                        Text(
+                            _designStep == 0
+                                ? tr(
+                                    'Вы и ваш автомобиль', 'Сіз және көлігіңіз')
+                                : tr('Проверим документы',
+                                    'Құжаттарды тексерейік'),
+                            style: const TextStyle(
+                                fontSize: 31, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        Text(tr(
+                            'Анкета попадёт администратору. Заказы откроются после подтверждения.',
+                            'Сауалнама әкімшіге жіберіледі. Тапсырыстар растаудан кейін ашылады.')),
+                        const SizedBox(height: 24),
+                        if (_designStep == 0) ...[
+                          TextField(
+                              key: _firstNameFieldKey,
+                              controller: _model.textController1,
+                              enabled: !_isSubmittingRegistration,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: InputDecoration(
+                                  labelText: tr('Имя и фамилия', 'Аты-жөні'),
+                                  errorText: _requiredFieldError(
+                                      _model.textController1.text,
+                                      tr('Введите имя',
+                                          'Атыңызды енгізіңіз')))),
+                          const SizedBox(height: 14),
+                          TextField(
+                              key: _plateFieldKey,
+                              controller: _model.textController5,
+                              enabled: !_isSubmittingRegistration,
+                              inputFormatters: [
+                                _KazakhstanPlateInputFormatter()
+                              ],
+                              decoration: InputDecoration(
+                                  labelText:
+                                      tr('Госномер', 'Мемлекеттік нөмір'),
+                                  hintText: '123 ABC 01',
+                                  errorText: _plateFieldError(context))),
+                          const SizedBox(height: 14),
+                          TextField(
+                              key: _carColorFieldKey,
+                              controller: _model.textController6,
+                              enabled: !_isSubmittingRegistration,
+                              decoration: InputDecoration(
+                                  labelText:
+                                      tr('Цвет автомобиля', 'Көлік түсі'))),
+                          const SizedBox(height: 14),
+                          FutureBuilder<List<String>>(
+                              future: _cities,
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState !=
+                                    ConnectionState.done)
+                                  return const LinearProgressIndicator();
+                                final items = snapshot.data ?? [];
+                                if (snapshot.hasError || items.isEmpty)
+                                  return TextButton.icon(
+                                      onPressed: () => setState(
+                                          () => _cities = _loadCityTitles()),
+                                      icon: const Icon(Icons.refresh),
+                                      label: Text(tr(
+                                          'Не удалось загрузить посёлки. Повторить',
+                                          'Ауылдар жүктелмеді. Қайталау')));
+                                final selected = _selectedCity();
+                                return DropdownButtonFormField<String>(
+                                    initialValue: items.contains(selected)
+                                        ? selected
+                                        : null,
+                                    isExpanded: true,
                                     decoration: InputDecoration(
-                                      labelText: _tr(
-                                        context,
-                                        ru: 'Имя и Фамилия',
-                                        kk: 'Аты және тегі',
-                                      ),
-                                      floatingLabelBehavior:
-                                          FloatingLabelBehavior.always,
-                                      errorText: _requiredFieldError(
-                                        _model.textController1?.text ?? '',
-                                        _tr(
-                                          context,
-                                          ru: 'Введите имя и фамилию',
-                                          kk: 'Атыңыз бен тегіңізді енгізіңіз',
-                                        ),
-                                      ),
-                                      labelStyle: FlutterFlowTheme.of(context)
-                                          .labelMedium
-                                          .override(
-                                            font: GoogleFonts.readexPro(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontStyle,
-                                            ),
-                                            color: FlutterFlowTheme.of(context)
-                                                .primaryText,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                      hintStyle: FlutterFlowTheme.of(context)
-                                          .labelMedium
-                                          .override(
-                                            font: GoogleFonts.readexPro(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontStyle,
-                                            ),
-                                            color: FlutterFlowTheme.of(context)
-                                                .primaryText,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .alternate,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .primary,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      errorBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .error,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      focusedErrorBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .error,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      contentPadding:
-                                          EdgeInsetsDirectional.fromSTEB(
-                                              14.0, 18.0, 14.0, 14.0),
-                                    ),
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
-                                          ),
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                    validator: _model.textController1Validator
-                                        .asValidator(context),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      if (MediaQuery.sizeOf(context).width < 0)
-                        Row(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    15.0, 5.0, 15.0, 0.0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.8,
-                                  child: TextFormField(
-                                    key: _lastNameFieldKey,
-                                    controller: _model.textController2,
-                                    focusNode: _model.textFieldFocusNode2,
-                                    onChanged: (_) {
-                                      if (_didAttemptSubmit)
-                                        safeSetState(() {});
-                                    },
-                                    onTap: () =>
-                                        _scrollFieldIntoView(_lastNameFieldKey),
-                                    autofocus: false,
-                                    obscureText: false,
-                                    decoration: InputDecoration(
-                                      labelText:
-                                          FFLocalizations.of(context).getText(
-                                        'e61j3fsj' /* Фамилия */,
-                                      ),
-                                      floatingLabelBehavior:
-                                          FloatingLabelBehavior.always,
-                                      errorText: _requiredFieldError(
-                                        _model.textController2?.text ?? '',
-                                        _tr(
-                                          context,
-                                          ru: 'Введите фамилию',
-                                          kk: 'Тегіңізді енгізіңіз',
-                                        ),
-                                      ),
-                                      labelStyle: FlutterFlowTheme.of(context)
-                                          .labelMedium
-                                          .override(
-                                            font: GoogleFonts.readexPro(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontStyle,
-                                            ),
-                                            color: FlutterFlowTheme.of(context)
-                                                .primaryText,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                      hintStyle: FlutterFlowTheme.of(context)
-                                          .labelMedium
-                                          .override(
-                                            font: GoogleFonts.readexPro(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontStyle,
-                                            ),
-                                            color: FlutterFlowTheme.of(context)
-                                                .primaryText,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .alternate,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .primary,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      errorBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .error,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      focusedErrorBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .error,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      contentPadding:
-                                          EdgeInsetsDirectional.fromSTEB(
-                                              14.0, 18.0, 14.0, 14.0),
-                                    ),
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
-                                          ),
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                    validator: _model.textController2Validator
-                                        .asValidator(context),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  15.0, 5.0, 15.0, 0.0),
-                              child: Container(
-                                width: MediaQuery.sizeOf(context).width * 0.8,
-                                child: TextFormField(
-                                  key: _passwordFieldKey,
-                                  controller: _model.textController3,
-                                  focusNode: _model.textFieldFocusNode3,
-                                  onChanged: (_) {
-                                    if (_didAttemptSubmit) safeSetState(() {});
-                                  },
-                                  onTap: () =>
-                                      _scrollFieldIntoView(_passwordFieldKey),
-                                  autofocus: false,
-                                  obscureText: !_model.passwordVisibility1,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        FFLocalizations.of(context).getText(
-                                      'z8p3pkmb' /* Придумайте пароль */,
-                                    ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
-                                    errorText: _requiredFieldError(
-                                      _model.textController3?.text ?? '',
-                                      _tr(
-                                        context,
-                                        ru: 'Придумайте пароль',
-                                        kk: 'Құпиясөз ойлап табыңыз',
-                                      ),
-                                    ),
-                                    labelStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    hintStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedErrorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    contentPadding:
-                                        EdgeInsetsDirectional.fromSTEB(
-                                            14.0, 18.0, 14.0, 14.0),
-                                    suffixIcon: InkWell(
-                                      onTap: () async {
-                                        safeSetState(() =>
-                                            _model.passwordVisibility1 =
-                                                !_model.passwordVisibility1);
-                                      },
-                                      focusNode: FocusNode(skipTraversal: true),
-                                      child: Icon(
-                                        _model.passwordVisibility1
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                        size: 22,
-                                      ),
-                                    ),
-                                  ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.readexPro(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                  keyboardType: TextInputType.visiblePassword,
-                                  validator: _model.textController3Validator
-                                      .asValidator(context),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  15.0, 5.0, 15.0, 0.0),
-                              child: Container(
-                                width: MediaQuery.sizeOf(context).width * 0.8,
-                                child: TextFormField(
-                                  key: _passwordRepeatFieldKey,
-                                  controller: _model.textController4,
-                                  focusNode: _model.textFieldFocusNode4,
-                                  onChanged: (_) {
-                                    if (_didAttemptSubmit) safeSetState(() {});
-                                  },
-                                  onTap: () => _scrollFieldIntoView(
-                                      _passwordRepeatFieldKey),
-                                  autofocus: false,
-                                  obscureText: !_model.passwordVisibility2,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        FFLocalizations.of(context).getText(
-                                      '3u2799x2' /* Повторите пароль */,
-                                    ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
+                                        labelText: tr('Город или посёлок',
+                                            'Қала немесе ауыл')),
+                                    items: [
+                                      for (final city in items)
+                                        DropdownMenuItem(
+                                            value: city, child: Text(city))
+                                    ],
+                                    onChanged: _isSubmittingRegistration
+                                        ? null
+                                        : (value) {
+                                            setState(() {
+                                              _model.textController7.text =
+                                                  value ?? '';
+                                              _model.textFieldSelectedOption7 =
+                                                  value;
+                                            });
+                                          });
+                              }),
+                          const SizedBox(height: 14),
+                          OutlinedButton.icon(
+                              onPressed: _pickBirthDate,
+                              icon: const Icon(Icons.calendar_month_outlined),
+                              label: Text(_model.datePicked == null
+                                  ? tr('Дата рождения', 'Туған күні')
+                                  : dateTimeFormat(
+                                      'd/M/y', _model.datePicked))),
+                          if (_needsPassword) ...[
+                            const SizedBox(height: 14),
+                            TextField(
+                                key: _passwordFieldKey,
+                                controller: _model.textController3,
+                                obscureText: true,
+                                maxLength: 128,
+                                decoration: InputDecoration(
+                                    labelText: tr('Пароль', 'Құпиясөз'),
+                                    helperText: tr('От 8 до 128 символов',
+                                        '8–128 таңба'))),
+                            const SizedBox(height: 14),
+                            TextField(
+                                key: _passwordRepeatFieldKey,
+                                controller: _model.textController4,
+                                obscureText: true,
+                                decoration: InputDecoration(
+                                    labelText: tr('Повторите пароль',
+                                        'Құпиясөзді қайталаңыз'),
                                     errorText:
-                                        _passwordRepeatFieldError(context),
-                                    labelStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    hintStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedErrorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    contentPadding:
-                                        EdgeInsetsDirectional.fromSTEB(
-                                            14.0, 18.0, 14.0, 14.0),
-                                    suffixIcon: InkWell(
-                                      onTap: () async {
-                                        safeSetState(() =>
-                                            _model.passwordVisibility2 =
-                                                !_model.passwordVisibility2);
-                                      },
-                                      focusNode: FocusNode(skipTraversal: true),
-                                      child: Icon(
-                                        _model.passwordVisibility2
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                        size: 22,
-                                      ),
-                                    ),
-                                  ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.readexPro(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                  keyboardType: TextInputType.visiblePassword,
-                                  validator: _model.textController4Validator
-                                      .asValidator(context),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  15.0, 5.0, 15.0, 0.0),
-                              child: Container(
-                                width: MediaQuery.sizeOf(context).width * 0.8,
-                                child: TextFormField(
-                                  key: _plateFieldKey,
-                                  controller: _model.textController5,
-                                  focusNode: _model.textFieldFocusNode5,
-                                  onChanged: (_) {
-                                    if (_didAttemptSubmit) safeSetState(() {});
-                                  },
-                                  onTap: () =>
-                                      _scrollFieldIntoView(_plateFieldKey),
-                                  autofocus: false,
-                                  obscureText: false,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        FFLocalizations.of(context).getText(
-                                      'otwuet73' /* Гос. Номер */,
-                                    ),
-                                    hintText: '123 ABC 01',
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
-                                    errorText: _plateFieldError(context),
-                                    labelStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    hintStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedErrorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    contentPadding:
-                                        EdgeInsetsDirectional.fromSTEB(
-                                            14.0, 18.0, 14.0, 14.0),
-                                  ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.readexPro(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                  textCapitalization:
-                                      TextCapitalization.characters,
-                                  inputFormatters: [
-                                    _KazakhstanPlateInputFormatter(),
-                                  ],
-                                  validator: _model.textController5Validator
-                                      .asValidator(context),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  15.0, 5.0, 15.0, 0.0),
-                              child: Container(
-                                width: MediaQuery.sizeOf(context).width * 0.8,
-                                child: TextFormField(
-                                  key: _carColorFieldKey,
-                                  controller: _model.textController6,
-                                  focusNode: _model.textFieldFocusNode6,
-                                  onChanged: (_) {
-                                    if (_didAttemptSubmit) safeSetState(() {});
-                                  },
-                                  onTap: () =>
-                                      _scrollFieldIntoView(_carColorFieldKey),
-                                  autofocus: false,
-                                  obscureText: false,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        FFLocalizations.of(context).getText(
-                                      '77se37qq' /* Цвет авто */,
-                                    ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
-                                    errorText: _requiredFieldError(
-                                      _model.textController6?.text ?? '',
-                                      _tr(
-                                        context,
-                                        ru: 'Введите цвет авто',
-                                        kk: 'Көлік түсін енгізіңіз',
-                                      ),
-                                    ),
-                                    labelStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    hintStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .override(
-                                          font: GoogleFonts.readexPro(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .labelMedium
-                                                  .fontStyle,
-                                        ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    focusedErrorBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color:
-                                            FlutterFlowTheme.of(context).error,
-                                        width: 2.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    contentPadding:
-                                        EdgeInsetsDirectional.fromSTEB(
-                                            14.0, 18.0, 14.0, 14.0),
-                                  ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.readexPro(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                  validator: _model.textController6Validator
-                                      .asValidator(context),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: FutureBuilder<List<String>>(
-                                future: _loadCityTitles(),
-                                builder: (context, snapshot) {
-                                  // Customize what your widget looks like when it's loading.
-                                  if (!snapshot.hasData) {
-                                    return Center(
-                                      child: SizedBox(
-                                        width: 50.0,
-                                        height: 50.0,
-                                        child: CircularProgressIndicator(
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                            FlutterFlowTheme.of(context)
-                                                .primary,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  final cityTitles =
-                                      snapshot.data ?? const <String>[];
-
-                                  return Autocomplete<String>(
-                                    initialValue: TextEditingValue(
-                                      text: _model.textController7?.text ?? '',
-                                    ),
-                                    optionsBuilder: (textEditingValue) {
-                                      if (textEditingValue.text == '') {
-                                        return const Iterable<String>.empty();
-                                      }
-                                      return cityTitles.where((option) {
-                                        final lowercaseOption =
-                                            option.toLowerCase();
-                                        return lowercaseOption.contains(
-                                            textEditingValue.text
-                                                .toLowerCase());
-                                      });
-                                    },
-                                    optionsViewBuilder:
-                                        (context, onSelected, options) {
-                                      return AutocompleteOptionsList(
-                                        textFieldKey: _model.textFieldKey7,
-                                        textController: _model.textController7!,
-                                        options: options.toList(),
-                                        onSelected: onSelected,
-                                        textStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.readexPro(
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontStyle,
-                                              ),
-                                              letterSpacing: 0.0,
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                        textHighlightStyle: TextStyle(),
-                                        elevation: 4.0,
-                                        optionBackgroundColor: surface,
-                                        optionHighlightColor:
-                                            FlutterFlowTheme.of(context)
-                                                .secondaryBackground,
-                                        maxHeight: (MediaQuery.sizeOf(context)
-                                                    .height -
-                                                MediaQuery.viewInsetsOf(context)
-                                                    .bottom -
-                                                220.0)
-                                            .clamp(160.0, 360.0)
-                                            .toDouble(),
-                                      );
-                                    },
-                                    onSelected: (String selection) {
-                                      safeSetState(() =>
-                                          _model.textFieldSelectedOption7 =
-                                              selection);
-                                      FocusScope.of(context).unfocus();
-                                    },
-                                    fieldViewBuilder: (
-                                      context,
-                                      textEditingController,
-                                      focusNode,
-                                      onEditingComplete,
-                                    ) {
-                                      _model.textFieldFocusNode7 = focusNode;
-
-                                      _model.textController7 =
-                                          textEditingController;
-                                      return TextFormField(
-                                        key: _model.textFieldKey7,
-                                        controller: textEditingController,
-                                        focusNode: focusNode,
-                                        onTap: () => _scrollFieldIntoView(
-                                            _model.textFieldKey7),
-                                        onEditingComplete: onEditingComplete,
-                                        autofocus: false,
-                                        obscureText: false,
-                                        decoration: InputDecoration(
-                                          labelText: _tr(
-                                            context,
-                                            ru: 'Населенный пункт',
-                                            kk: 'Елді мекен',
-                                          ),
-                                          floatingLabelBehavior:
-                                              FloatingLabelBehavior.always,
-                                          errorText: _didAttemptSubmit &&
-                                                  _selectedCity().isEmpty
-                                              ? _tr(
-                                                  context,
-                                                  ru: 'Выберите город из списка',
-                                                  kk: 'Тізімнен қалаңызды таңдаңыз',
-                                                )
-                                              : null,
-                                          labelStyle: FlutterFlowTheme.of(
-                                                  context)
-                                              .labelMedium
-                                              .override(
-                                                font: GoogleFonts.readexPro(
-                                                  fontWeight:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .labelMedium
-                                                          .fontWeight,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .labelMedium
-                                                          .fontStyle,
-                                                ),
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primaryText,
-                                                letterSpacing: 0.0,
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .labelMedium
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .labelMedium
-                                                        .fontStyle,
-                                              ),
-                                          hintStyle: FlutterFlowTheme.of(
-                                                  context)
-                                              .labelMedium
-                                              .override(
-                                                font: GoogleFonts.readexPro(
-                                                  fontWeight:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .labelMedium
-                                                          .fontWeight,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .labelMedium
-                                                          .fontStyle,
-                                                ),
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primaryText,
-                                                letterSpacing: 0.0,
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .labelMedium
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .labelMedium
-                                                        .fontStyle,
-                                              ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .alternate,
-                                              width: 2.0,
-                                            ),
-                                            borderRadius:
-                                                BorderRadius.circular(8.0),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primary,
-                                              width: 2.0,
-                                            ),
-                                            borderRadius:
-                                                BorderRadius.circular(8.0),
-                                          ),
-                                          errorBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .error,
-                                              width: 2.0,
-                                            ),
-                                            borderRadius:
-                                                BorderRadius.circular(8.0),
-                                          ),
-                                          focusedErrorBorder:
-                                              OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .error,
-                                              width: 2.0,
-                                            ),
-                                            borderRadius:
-                                                BorderRadius.circular(8.0),
-                                          ),
-                                          contentPadding:
-                                              EdgeInsetsDirectional.fromSTEB(
-                                                  14.0, 18.0, 14.0, 14.0),
-                                        ),
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.readexPro(
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontStyle,
-                                              ),
-                                              letterSpacing: 0.0,
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                        validator: _model
-                                            .textController7Validator
-                                            .asValidator(context),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (MediaQuery.sizeOf(context).width < 0)
-                        Row(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    15.0, 10.0, 15.0, 0.0),
-                                child: InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: _pickBirthDate,
-                                  child: InputDecorator(
-                                    decoration: InputDecoration(
-                                      labelText:
-                                          FFLocalizations.of(context).getText(
-                                        'jae81zbb' /* Дата рождения */,
-                                      ),
-                                      floatingLabelBehavior:
-                                          FloatingLabelBehavior.always,
-                                      errorText: _didAttemptSubmit &&
-                                              _model.datePicked == null
-                                          ? _tr(
-                                              context,
-                                              ru: 'Введите дату рождения',
-                                              kk: 'Туған күніңізді енгізіңіз',
-                                            )
-                                          : null,
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .alternate,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: FlutterFlowTheme.of(context)
-                                              .alternate,
-                                          width: 2.0,
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                      ),
-                                      contentPadding:
-                                          EdgeInsetsDirectional.fromSTEB(
-                                              14.0, 14.0, 14.0, 14.0),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            _model.datePicked == null
-                                                ? 'Выберите дату'
-                                                : dateTimeFormat(
-                                                    "d/M/y",
-                                                    _model.datePicked,
-                                                    locale: FFLocalizations.of(
-                                                            context)
-                                                        .languageCode,
-                                                  ),
-                                            style: FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .override(
-                                                  font: GoogleFonts.readexPro(
-                                                    fontWeight:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodyMedium
-                                                            .fontWeight,
-                                                    fontStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodyMedium
-                                                            .fontStyle,
-                                                  ),
-                                                  color:
-                                                      _model.datePicked == null
-                                                          ? FlutterFlowTheme.of(
-                                                                  context)
-                                                              .secondaryText
-                                                          : FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primaryText,
-                                                  letterSpacing: 0.0,
-                                                  fontWeight:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .fontWeight,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .fontStyle,
-                                                ),
-                                          ),
-                                        ),
-                                        Icon(
-                                          Icons.calendar_month_outlined,
-                                          color: FlutterFlowTheme.of(context)
-                                              .primary,
-                                          size: 24.0,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                                        _passwordRepeatFieldError(context))),
                           ],
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(80, 205, 80, 30),
-                        child: FFButtonWidget(
-                          onPressed: _isSubmittingRegistration
-                              ? null
-                              : _submitDriverRegistration,
-                          text: _isSubmittingRegistration
-                              ? _tr(
-                                  context,
-                                  ru: 'Отправляем анкету...',
-                                  kk: 'Сауалнаманы жіберіп жатырмыз...',
-                                )
-                              : _tr(
-                                  context,
-                                  ru: 'Далее',
-                                  kk: 'Әрі қарай',
-                                ),
-                          options: FFButtonOptions(
-                            height: 54.0,
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                24.0, 0.0, 24.0, 0.0),
-                            iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                0.0, 0.0, 0.0, 0.0),
-                            color: _mtaxiMint,
-                            textStyle: FlutterFlowTheme.of(context)
-                                .titleSmall
-                                .override(
-                                  font: GoogleFonts.readexPro(
-                                    fontWeight: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .fontWeight,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .fontStyle,
-                                  ),
-                                  color: ctaTextColor,
-                                  letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w800,
-                                  fontStyle: FlutterFlowTheme.of(context)
-                                      .titleSmall
-                                      .fontStyle,
-                                ),
-                            elevation: 0.0,
-                            borderSide: BorderSide(
-                              color: Colors.transparent,
-                              width: 1.0,
-                            ),
-                            borderRadius: BorderRadius.circular(8.0),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+                          const SizedBox(height: 24),
+                          FilledButton(
+                              onPressed: () {
+                                setState(() => _didAttemptSubmit = true);
+                                if (_model.textController1.text
+                                        .trim()
+                                        .isEmpty ||
+                                    _plateFieldError(context) != null ||
+                                    _selectedCity().isEmpty ||
+                                    (_needsPassword &&
+                                        (_model.textController3.text
+                                                    .trim()
+                                                    .length <
+                                                8 ||
+                                            _passwordRepeatFieldError(
+                                                    context) !=
+                                                null))) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(tr(
+                                          'Проверьте имя, номер, посёлок и пароль',
+                                          'Аты-жөнін, нөмірін, ауылын және құпиясөзді тексеріңіз'))));
+                                  return;
+                                }
+                                FocusScope.of(context).unfocus();
+                                setState(() {
+                                  _designStep = 1;
+                                  _didAttemptSubmit = false;
+                                });
+                                unawaited(_saveDriverRegistrationDraft());
+                              },
+                              child: Text(tr('Продолжить', 'Жалғастыру'))),
+                        ] else ...[
+                          _buildUploadCard(
+                              key: _vehiclePhotoBlockKey,
+                              context: context,
+                              title: tr('Фото профиля водителя',
+                                  'Жүргізуші профилінің фотосы'),
+                              imageUrl: _model.uploadedFileUrl_uploadData2xm,
+                              localFile: _model.uploadedLocalFile_uploadData2xm,
+                              errorText: _uploadErrors['avtoImage'] ??
+                                  _vehiclePhotoError(context),
+                              onTap: profilePhoto,
+                              onDelete: () =>
+                                  unawaited(_deleteVehiclePhotoFromDraft())),
+                          const SizedBox(height: 16),
+                          _buildUploadCard(
+                              key: _techPhotoBlockKey,
+                              context: context,
+                              title: tr('Техпаспорт', 'Техпаспорт'),
+                              imageUrl: _model.uploadedFileUrl_techPhoto,
+                              localFile: _model.uploadedLocalFile_techPhoto,
+                              errorText: _uploadErrors['techImage'] ??
+                                  _techPhotoError(context),
+                              onTap: techPhoto,
+                              onDelete: () =>
+                                  unawaited(_deleteTechPhotoFromDraft())),
+                          const SizedBox(height: 20),
+                          MTaxiCard(
+                              child: Text(tr(
+                                  'Снимки должны быть чёткими, а данные — читаемыми. 1 000 бонусных ₸ начислятся один раз после первого подтверждения анкеты.',
+                                  'Суреттер анық, деректер оқылатын болуы керек. 1 000 бонус ₸ сауалнама алғаш расталғаннан кейін бір рет есептеледі.'))),
+                          if (uploading)
+                            const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: LinearProgressIndicator()),
+                          const SizedBox(height: 24),
+                          FilledButton(
+                              onPressed: _isSubmittingRegistration ||
+                                      uploading ||
+                                      _model.uploadedFileUrl_uploadData2xm
+                                          .isEmpty ||
+                                      _model.uploadedFileUrl_techPhoto.isEmpty
+                                  ? null
+                                  : _submitDriverRegistration,
+                              child: Text(_isSubmittingRegistration
+                                  ? tr('Отправляем…', 'Жіберілуде…')
+                                  : tr('Отправить на проверку',
+                                      'Тексеруге жіберу'))),
+                        ],
+                        if (_canReturnToPassengerMode())
+                          TextButton(
+                              onPressed: _isSubmittingRegistration
+                                  ? null
+                                  : _returnToPassengerMode,
+                              child: Text(tr(
+                                  'Вернуться в профиль', 'Профильге оралу'))),
+                      ]))),
+        ));
   }
 }
