@@ -1,3 +1,4 @@
+import 'package:mtaxi/backend/backend_session.dart';
 import 'package:mtaxi/auth/backend_auth/backend_user_provider.dart';
 import 'package:mtaxi/passenger/me_order/me_order_widget.dart';
 import 'dart:convert';
@@ -23,6 +24,8 @@ import 'package:mtaxi/design/trip_panel.dart';
 import 'package:mtaxi/flutter_flow/internationalization.dart';
 import 'package:mtaxi/trips/passenger_wallet.dart';
 import 'package:mtaxi/trips/wallet_page.dart';
+import 'package:mtaxi/trips/trip_receipt.dart';
+import 'package:mtaxi/driver/set_profile_driver/set_profile_driver_widget.dart';
 
 Widget wrap(Widget child, {double scale = 1, String locale = 'ru'}) =>
     ChangeNotifierProvider<FFAppState>.value(
@@ -290,6 +293,168 @@ void main() {
             200,
             headers: {'content-type': 'application/json; charset=utf-8'})));
     activateBackendUser(null);
+  });
+
+  testWidgets(
+      'driver registration restores a scoped draft without persisting passwords',
+      (tester) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('flutter.baseflow.com/permissions/methods'),
+        (_) async => 1);
+    final user = {
+      'id': 'draft-test',
+      'phone': '+77019990011',
+      'hasPassword': true,
+      'roleState': 'PASSENGER',
+      'profileCompleted': false,
+      'isDriver': false
+    };
+    SharedPreferences.setMockInitialValues({
+      mtaxiBackendAccessTokenPrefsKey: 'test-only-token',
+      'mtaxi_driver_registration_draft_draft-test': jsonEncode({
+        'name': 'Черновик Водителя',
+        'plate': '123 ABC 14',
+        'color': 'Белый',
+        'city': 'Железинка',
+        'birthDate': '2000-01-01',
+        'step': 1,
+        'avtoImage': '',
+        'techImage': '',
+        'password': 'must-not-be-resaved',
+      }),
+    });
+    activateBackendUser(user);
+    await http.runWithClient(() async {
+      await tester.pumpWidget(wrap(const SetProfileDriverWidget()));
+      await tester.pumpAndSettle();
+      expect(find.text('Шаг 2 из 2'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+      expect(find.text('Черновик Водителя'), findsOneWidget);
+      await tester.ensureVisible(find.text('Продолжить'));
+      await tester.tap(find.text('Продолжить'));
+      await tester.pumpAndSettle();
+      final prefs = await SharedPreferences.getInstance();
+      final saved = jsonDecode(
+          prefs.getString('mtaxi_driver_registration_draft_draft-test')!);
+      expect(saved['name'], 'Черновик Водителя');
+      expect(saved.containsKey('password'), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      activateBackendUser({...user, 'id': 'another-draft-user'});
+      await tester.pumpWidget(wrap(const SetProfileDriverWidget()));
+      await tester.pumpAndSettle();
+      expect(find.text('Шаг 1 из 2'), findsOneWidget);
+      expect(find.text('Черновик Водителя'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+        () => MockClient((_) async => http.Response(
+            jsonEncode({
+              'success': true,
+              'user': user,
+              'tariffs': [
+                {'title': 'Железинка'}
+              ],
+              'cities': ['Железинка'],
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'})));
+    activateBackendUser(null);
+  });
+
+  testWidgets('wallet refreshes when revisited and supports explicit refresh',
+      (tester) async {
+    var balance = 500;
+    var active = true;
+    late StateSetter update;
+    final calls = <String>[];
+    await http.runWithClient(() async {
+      await tester.pumpWidget(wrap(StatefulBuilder(builder: (_, setState) {
+        update = setState;
+        return MTaxiTabActivity(active: active, child: const WalletPage());
+      })));
+      await tester.pumpAndSettle();
+      expect(find.text('500 ₸'), findsOneWidget);
+      update(() => active = false);
+      await tester.pump();
+      balance = 1500;
+      update(() => active = true);
+      await tester.pumpAndSettle();
+      expect(find.text('1 500 ₸'), findsOneWidget);
+      balance = 2500;
+      await tester.tap(find.byTooltip('Обновить баланс'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 500 ₸'), findsOneWidget);
+      expect(calls.every((name) => name == 'getSessionBootstrap'), isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+        () => MockClient((request) async {
+              calls.add(request.url.pathSegments.last);
+              return http.Response(
+                  jsonEncode({
+                    'success': true,
+                    'user': {'balance': balance},
+                    'passengerBonus': {
+                      'balance': 14,
+                      'percent': 2,
+                      'maxSpendPercent': 100
+                    }
+                  }),
+                  200,
+                  headers: {'content-type': 'application/json; charset=utf-8'});
+            }));
+  });
+
+  testWidgets('history retry recovers from a failed response', (tester) async {
+    var ready = false;
+    await http.runWithClient(() async {
+      await tester.pumpWidget(wrap(const MeOrderWidget(driver: false)));
+      await tester.pumpAndSettle();
+      expect(find.text('Повторить'), findsOneWidget);
+      ready = true;
+      await tester.tap(find.text('Повторить'));
+      await tester.pumpAndSettle();
+      expect(find.text('Здесь пока нет поездок'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+        () => MockClient((_) async => http.Response(
+            jsonEncode({'success': ready, 'orders': []}), 200,
+            headers: {'content-type': 'application/json; charset=utf-8'})));
+  });
+
+  testWidgets('receipt retry only reloads the confirmed receipt',
+      (tester) async {
+    var ready = false;
+    final calls = <String>[];
+    await http.runWithClient(() async {
+      await tester.pumpWidget(wrap(Builder(
+          builder: (context) => Scaffold(
+              body: TextButton(
+                  onPressed: () => showTripReceipt(context, 'order/retry'),
+                  child: const Text('Итог'))))));
+      await tester.tap(find.text('Итог'));
+      await tester.pumpAndSettle();
+      expect(find.text('Итог пока недоступен'), findsOneWidget);
+      ready = true;
+      await tester.tap(find.text('Повторить'));
+      await tester.pumpAndSettle();
+      expect(find.text('Спасибо за поездку!'), findsOneWidget);
+      expect(calls.every((name) => name == 'getOrderDetails'), isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+        () => MockClient((request) async {
+              calls.add(request.url.pathSegments.last);
+              return http.Response(
+                  jsonEncode({
+                    'success': ready,
+                    'order': {...order, 'status': 5}
+                  }),
+                  200,
+                  headers: {'content-type': 'application/json; charset=utf-8'});
+            }));
   });
 
   testWidgets('wallet failure never masquerades as zero balance',

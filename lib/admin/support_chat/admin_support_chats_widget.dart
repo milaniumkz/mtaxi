@@ -7,12 +7,11 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '/admin/admin_utils.dart';
 import 'admin_support_chats_model.dart';
 export 'admin_support_chats_model.dart';
 
-const _mtaxiPageBg = Color(0xFF12051B);
+const _mtaxiPageBg = Color(0xFFF4F7F8);
 const _mtaxiSurface = Color(0xFFFFFFFF);
 
 class AdminSupportChatsWidget extends StatefulWidget {
@@ -501,7 +500,8 @@ class _AdminSupportChatsWidgetState extends State<AdminSupportChatsWidget> {
       key: scaffoldKey,
       backgroundColor: _mtaxiPageBg,
       appBar: AppBar(
-        backgroundColor: _mtaxiPageBg,
+        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF12051B),
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -532,7 +532,9 @@ class _AdminSupportChatsWidgetState extends State<AdminSupportChatsWidget> {
         title: Text(
           'Чат поддержки',
           style: FlutterFlowTheme.of(context).headlineMedium.override(
-                font: GoogleFonts.readexPro(
+                color: Colors.white,
+                font: TextStyle(
+                  fontFamily: 'Noto Sans',
                   fontWeight: FontWeight.w600,
                   fontStyle:
                       FlutterFlowTheme.of(context).headlineMedium.fontStyle,

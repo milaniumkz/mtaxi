@@ -5,6 +5,7 @@ import 'dart:async';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/backend_session.dart';
+import '/backend/backend_user_adapter.dart';
 import '/backend/backend_support_chat.dart';
 import '/backend/backend_calls/backend_calls.dart';
 import '/backend/uploads/storage.dart';
@@ -38,14 +39,30 @@ class _ProfileWidgetState extends State<ProfileWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isSwitchingRoleState = false;
+  bool _isSigningOut = false;
   final Set<String> _optimisticallyReadSupportChatPaths = {};
   final Set<String> _optimisticallyReadSupportChatKeys = {};
 
   String get _currentUserPath => currentUserDocument?.reference.path ?? '';
 
+  Future<void> _signOut() async {
+    if (_isSigningOut) return;
+    setState(() => _isSigningOut = true);
+    final router = GoRouter.of(context);
+    router.prepareAuthEvent(true);
+    try {
+      await authManager.signOut();
+      router.clearRedirectLocation();
+      if (mounted) context.go(LoginWidget.routePath);
+    } finally {
+      if (mounted) setState(() => _isSigningOut = false);
+    }
+  }
+
   Future<void> _refreshCurrentUserRecord() async {
     final response = await makeCloudCall('getSessionBootstrap', {});
-    await saveBackendUserFromResponse(response);
+    currentUserDocument =
+        await applyBackendUserResponse(response) ?? currentUserDocument;
   }
 
   bool get _hasDriverAccount => userHasDriverAccount(currentUserDocument);
@@ -78,90 +95,49 @@ class _ProfileWidgetState extends State<ProfileWidget> {
     return authoritativeRoleState == targetRoleState;
   }
 
-  Future<bool> _waitForRoleStateApplied(
-    String targetRoleState, {
-    Duration timeout = const Duration(seconds: 6),
-  }) async {
-    if (_matchesAuthoritativeTargetRoleState(targetRoleState)) {
-      return true;
-    }
-
-    final stopwatch = Stopwatch()..start();
-    while (stopwatch.elapsed < timeout) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      if (!mounted) {
-        return false;
-      }
-      if (_matchesAuthoritativeTargetRoleState(targetRoleState)) {
-        return true;
-      }
-    }
-    return _matchesAuthoritativeTargetRoleState(targetRoleState);
-  }
-
-  Future<void> _switchRoleState({
-    required String targetRoleState,
-    required String routePath,
-  }) async {
-    if (_isSwitchingRoleState) {
-      return;
-    }
-
-    safeSetState(() {
-      _isSwitchingRoleState = true;
-    });
-
-    if (targetRoleState == 'PASSENGER') {
-      FFAppState().forcePassengerMode();
-    } else {
-      FFAppState().clearForcedPassengerMode();
-    }
-    UserModeResolver.setTransientRoleState(targetRoleState);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      context.go(routePath);
-    });
+  Future<void> _switchRoleState(
+      {required String targetRoleState, required String routePath}) async {
+    if (_isSwitchingRoleState) return;
+    setState(() => _isSwitchingRoleState = true);
     try {
-      unawaited(
-        makeCloudCall(
-          'updateUserPreferences',
-          {
-            'userDocPath': currentUserDocument?.reference.path,
-            'targetRoleState': targetRoleState,
-          },
-        ).then((response) async {
-          final success = response['success'] == true;
-          final code = (response['code'] ?? '').toString().trim().toLowerCase();
-          if (success ||
-              code == 'unavailable' ||
-              code == 'deadline-exceeded' ||
-              response['timeout'] == true) {
-            if (success) {
-              await saveBackendUserFromResponse(response);
-            }
-            await _waitForRoleStateApplied(targetRoleState);
-            return;
-          }
-          debugPrint(
-            'updateUserPreferences background error: ${(response['error'] ?? '').toString().trim()}',
-          );
-        }).catchError((Object error, StackTrace stackTrace) {
-          debugPrint('updateUserPreferences background exception: $error');
-        }),
-      );
-    } finally {
+      var response = await makeCloudCall('updateUserPreferences', {
+        'userDocPath': currentUserDocument?.reference.path,
+        'targetRoleState': targetRoleState,
+      });
+      if (response['success'] != true) {
+        if (response['timeout'] == true ||
+            ['unavailable', 'deadline-exceeded']
+                .contains(response['code']?.toString().toLowerCase())) {
+          response = await makeCloudCall('getSessionBootstrap', {});
+        } else {
+          throw StateError(
+              response['error']?.toString() ?? 'Не удалось переключить режим');
+        }
+      }
+      if (response['success'] != true || response['user'] is! Map) {
+        throw StateError('Не удалось подтвердить режим на сервере. Повторите.');
+      }
+      currentUserDocument =
+          await applyBackendUserResponse(response) ?? currentUserDocument;
       if (!_matchesAuthoritativeTargetRoleState(targetRoleState)) {
-        // Keep transient mode while the authoritative user doc catches up.
+        throw StateError(
+            'Сервер не подтвердил переключение режима. Повторите.');
       }
-      if (mounted) {
-        safeSetState(() {
-          _isSwitchingRoleState = false;
-        });
+      if (!mounted) return;
+      if (targetRoleState == 'PASSENGER') {
+        FFAppState().forcePassengerMode();
       } else {
-        _isSwitchingRoleState = false;
+        FFAppState().clearForcedPassengerMode();
       }
+      UserModeResolver.clearTransientRoleState();
+      context.go(routePath);
+      FFAppState().update(() {});
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error.toString().replaceFirst('Bad state: ', ''))));
+    } finally {
+      if (mounted) setState(() => _isSwitchingRoleState = false);
     }
   }
 
@@ -1015,6 +991,14 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                             roleState: roleState,
                           );
                         },
+                      ),
+                      TextButton.icon(
+                        onPressed: _isSigningOut ? null : _signOut,
+                        icon: const Icon(Icons.logout),
+                        label: Text(FFLocalizations.of(context).getVariableText(
+                          ruText: 'Выйти из аккаунта',
+                          kkText: 'Аккаунттан шығу',
+                        )),
                       ),
                     ],
                   ),

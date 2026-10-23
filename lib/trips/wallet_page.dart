@@ -2,6 +2,7 @@ import '/component/select_balance/select_balance_widget.dart';
 import 'package:flutter/material.dart';
 import '/backend/backend_calls/backend_calls.dart';
 import '/design/mtaxi_theme.dart';
+import '/design/bottom_navigation.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/driver/home_driver/driver_bonus_card.dart';
 import 'passenger_wallet.dart';
@@ -16,6 +17,7 @@ class WalletPage extends StatefulWidget {
 
 class _WalletPageState extends State<WalletPage> {
   late Future<Map<String, dynamic>> _request;
+  bool? _wasActive;
   String tr(String ru, String kk) =>
       FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
   @override
@@ -31,10 +33,26 @@ class _WalletPageState extends State<WalletPage> {
     return Map<String, dynamic>.from(result);
   }
 
-  void _refresh() => setState(() => _request = _load());
+  void _refresh() => setState(() {
+        _request = _load();
+      });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = MTaxiTabActivity.isActive(context);
+    if (_wasActive == false && active) _request = _load();
+    _wasActive = active;
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
+            actions: [
+              IconButton(
+                  tooltip: tr('Обновить баланс', 'Теңгерімді жаңарту'),
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh)),
+            ],
             title: Text(widget.driver
                 ? tr('Счёт водителя', 'Жүргізуші шоты')
                 : tr('Кошелёк', 'Әмиян'))),

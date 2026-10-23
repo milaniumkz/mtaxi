@@ -361,11 +361,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       return;
     }
     if (status >= 5) {
-      FFAppState().markDriverOrderClosedLocally(orderRef);
-      UserModeResolver.setTransientRoleState(_postTripDriverRoleState());
-      if (!_leavingOrderScreen) {
-        await _leaveOrderScreen();
-      }
+      await _showDriverClosureAlert(
+          status: status, orderRef: orderRef, overrideMessage: message);
     }
   }
 

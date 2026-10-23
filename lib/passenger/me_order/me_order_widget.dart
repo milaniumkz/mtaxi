@@ -44,7 +44,9 @@ class _MeOrderWidgetState extends State<MeOrderWidget> {
         .toList();
   }
 
-  void _retry() => setState(() => _orders = _load());
+  void _retry() => setState(() {
+        _orders = _load();
+      });
   int _status(Map order) => (order['status'] as num?)?.toInt() ?? -1;
   String _label(int status) => switch (status) {
         0 => tr('Поиск водителя', 'Жүргізуші ізделуде'),

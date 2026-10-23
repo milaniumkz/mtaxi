@@ -67,6 +67,7 @@ UsersRecord? usersRecordFromBackendUser(Map<String, dynamic>? user) {
     'statusDriver': user['statusDriver'],
     'roleState': user['roleState'],
     'activeMode': user['activeMode'],
+    'preferredClientMode': user['preferredClientMode'],
     'driverRegistrationStatus': user['driverRegistrationStatus'],
     'profileCompleted': user['profileCompleted'],
     'registrationDraft': user['registrationDraft'],

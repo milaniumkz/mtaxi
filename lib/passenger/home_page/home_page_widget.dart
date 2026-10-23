@@ -537,8 +537,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
             },
           ),
         ),
-        floatingActionButton: const PassengerWalletButton(),
-        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
         bottomNavigationBar: AnimatedPadding(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,

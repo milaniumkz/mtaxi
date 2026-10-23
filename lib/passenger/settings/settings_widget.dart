@@ -433,9 +433,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                               padding: const EdgeInsetsDirectional.fromSTEB(
                                   0, 17, 34, 17),
                               child: Icon(
-                                Icons.crop_square,
+                                Icons.palette_outlined,
                                 color: mutedColor,
-                                size: 13.0,
+                                size: 24.0,
                               ),
                             ),
                             Expanded(
@@ -567,9 +567,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                               padding: const EdgeInsetsDirectional.fromSTEB(
                                   0, 17, 34, 17),
                               child: Icon(
-                                Icons.crop_square,
+                                Icons.language,
                                 color: mutedColor,
-                                size: 13.0,
+                                size: 24.0,
                               ),
                             ),
                             Expanded(
@@ -685,9 +685,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                               padding: const EdgeInsetsDirectional.fromSTEB(
                                   0, 17, 34, 17),
                               child: Icon(
-                                Icons.crop_square,
+                                Icons.location_on_outlined,
                                 color: mutedColor,
-                                size: 13.0,
+                                size: 24.0,
                               ),
                             ),
                             Expanded(
@@ -740,9 +740,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                             padding: const EdgeInsetsDirectional.fromSTEB(
                                 0, 17, 34, 17),
                             child: Icon(
-                              Icons.crop_square,
+                              Icons.volume_up_outlined,
                               color: mutedColor,
-                              size: 13.0,
+                              size: 24.0,
                             ),
                           ),
                           Expanded(
@@ -790,9 +790,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                               padding: const EdgeInsetsDirectional.fromSTEB(
                                   0, 17, 34, 17),
                               child: Icon(
-                                Icons.crop_square,
+                                Icons.delete_outline,
                                 color: mutedColor,
-                                size: 13.0,
+                                size: 24.0,
                               ),
                             ),
                             Expanded(

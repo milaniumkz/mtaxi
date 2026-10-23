@@ -66,13 +66,12 @@ class TripPanel extends StatelessWidget {
                   children: [
                 Text(
                     driver && status >= 4
-                        ? tr('Пункт назначения', 'Баратын жер')
+                        ? tr('Маршрут поездки', 'Сапар бағыты')
                         : tr('Место посадки', 'Отыру орны'),
                     style: const TextStyle(fontSize: 12)),
                 const SizedBox(height: 8),
                 Text(
-                    value(driver && status >= 4 ? 'kuda' : 'ot',
-                        tr('Адрес уточняется', 'Мекенжай нақтылануда')),
+                    value('ot', tr('Адрес уточняется', 'Мекенжай нақтылануда')),
                     style: const TextStyle(
                         fontSize: 17, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),

@@ -225,16 +225,18 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                       controller: _phone,
                       keyboardType: TextInputType.phone,
                       enabled: !_busy && !_uncertain && !_restoring,
-                      decoration: const InputDecoration(
-                          labelText: 'Номер Kaspi', hintText: '+7XXXXXXXXXX')),
+                      decoration: InputDecoration(
+                          labelText: tr('Номер Kaspi', 'Kaspi нөмірі'),
+                          hintText: '+7XXXXXXXXXX')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: _amount,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       enabled: !_busy && !_uncertain && !_restoring,
-                      decoration: const InputDecoration(
-                          labelText: 'Сумма пополнения, ₸')),
+                      decoration: InputDecoration(
+                          labelText: tr(
+                              'Сумма пополнения, ₸', 'Толықтыру сомасы, ₸'))),
                   const SizedBox(height: 16),
                   FilledButton(
                       onPressed: _busy || _restoring ? null : _submit,
@@ -246,15 +248,24 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                               : tr('Запросить счёт Kaspi',
                                   'Kaspi шотын сұрау'))),
                 ] else ...[
+                  Text(
+                    '${tr('Сумма заявки', 'Өтінім сомасы')}: ${_amount.text} ₸',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
                   Text(_status == 'success'
-                      ? 'Оплата подтверждена. Деньги зачислены на баланс.'
+                      ? tr('Оплата подтверждена. Деньги зачислены на баланс.',
+                          'Төлем расталды. Ақша теңгерімге түсті.')
                       : _status == 'failed'
-                          ? 'Заявка отклонена администратором.'
-                          : 'Заявка отправлена. Ожидайте счёт в Kaspi на номер ${_phone.text}. После оплаты администратор подтвердит пополнение.'),
+                          ? tr('Заявка отклонена администратором.',
+                              'Әкімші өтінімді қабылдамады.')
+                          : tr(
+                              'Заявка отправлена. Ожидайте счёт в Kaspi на номер ${_phone.text}. После оплаты администратор подтвердит пополнение.',
+                              'Өтінім жіберілді. ${_phone.text} нөміріне Kaspi шотын күтіңіз. Төлемнен кейін әкімші толықтыруды растайды.')),
                   if (_status == 'pending')
                     TextButton(
                         onPressed: _busy ? null : _refresh,
-                        child: const Text('Проверить оплату')),
+                        child: Text(tr('Проверить оплату', 'Төлемді тексеру'))),
                 ],
                 if (_uncertain)
                   Padding(
@@ -270,7 +281,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                               color: Theme.of(context).colorScheme.error))),
                 TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Закрыть')),
+                    child: Text(tr('Закрыть', 'Жабу'))),
               ]),
         ),
       ))),

@@ -66,6 +66,7 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
   int? _lastOrderStatus;
   bool _cancelInProgress = false;
   final Set<String> _ratingPrompts = {};
+  bool _receiptShowing = false;
   bool _recoveringPassengerOrder = false;
   bool _leavingClosedPassengerOrder = false;
   final List<_PassengerAlertEvent> _pendingPassengerAlerts = [];
@@ -677,8 +678,14 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
     String? overrideMessage,
   }) async {
     _pendingPassengerAlerts.clear();
+    if (_receiptShowing) return;
     if (status == 5 && mounted && _ratingPrompts.add(orderRef.path)) {
-      await showTripRating(context, orderRef.path);
+      _receiptShowing = true;
+      try {
+        await showTripRating(context, orderRef.path);
+      } finally {
+        _receiptShowing = false;
+      }
     }
     if (mounted) _exitClosedPassengerOrder(orderRef: orderRef);
   }
@@ -744,7 +751,7 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (status >= 5) {
-        _exitClosedPassengerOrder(orderRef: order.reference);
+        unawaited(_showPassengerClosureAlert(order));
         return;
       }
       unawaited(_showPassengerStatusAlert(order));

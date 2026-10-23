@@ -975,6 +975,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                 Text(
                   title,
                   style: FlutterFlowTheme.of(context).titleMedium.override(
+                        color: _mtaxiAdminText,
                         font: GoogleFonts.readexPro(
                           fontWeight: FontWeight.w600,
                           fontStyle: FlutterFlowTheme.of(context)
@@ -2464,6 +2465,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                         paymentId.isEmpty ? 'Платеж' : paymentId,
                         style:
                             FlutterFlowTheme.of(context).titleMedium.override(
+                                  color: _mtaxiAdminText,
                                   font: GoogleFonts.readexPro(
                                     fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
@@ -2691,6 +2693,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                         withdrawalId.isEmpty ? 'Заявка на вывод' : withdrawalId,
                         style:
                             FlutterFlowTheme.of(context).titleMedium.override(
+                                  color: _mtaxiAdminText,
                                   font: GoogleFonts.readexPro(
                                     fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
@@ -6036,6 +6039,34 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
   String _docSummary(Map<String, dynamic> data) {
     if (data.isEmpty) {
       return 'Пустой документ';
+    }
+
+    if (widget.collectionName == 'City') {
+      return [
+        if (data['priceDay'] != null)
+          'Днём: ${_formatSummaryValue(data['priceDay'])} ₸',
+        if (data['priceNight'] != null)
+          'Ночью: ${_formatSummaryValue(data['priceNight'])} ₸',
+        if (data['deliveryPrice'] != null)
+          'Доставка: ${_formatSummaryValue(data['deliveryPrice'])} ₸',
+      ].join(' • ');
+    }
+    if (widget.collectionName == 'appSettings') {
+      return [
+        if (data['intercityEnabled'] is bool)
+          'Межгород: ${data['intercityEnabled'] == true ? 'включён' : 'выключен'}',
+        if (data['driverBonusEnabled'] is bool)
+          'Акция водителей: ${data['driverBonusEnabled'] == true ? 'включена' : 'выключена'}',
+        if (data['driverBonusTargetOrders'] != null &&
+            data['driverBonusReward'] != null)
+          '${data['driverBonusTargetOrders']} заказов за сутки → ${data['driverBonusReward']} бонусных ₸',
+        if (data['passengerBonusPercent'] != null)
+          'Бонус пассажиру: ${data['passengerBonusPercent']}%',
+        if (data['passengerBonusSpendPercent'] != null)
+          'Оплата бонусами: до ${data['passengerBonusSpendPercent']}%',
+        if (data['orderCommissionPercent'] != null)
+          'Комиссия: ${data['orderCommissionPercent']}%',
+      ].join('\n');
     }
 
     final compositeName = buildAdminUserName(data);

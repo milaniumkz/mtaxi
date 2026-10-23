@@ -925,7 +925,12 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
             return;
           }
           if (!mounted) return;
-          if (_isOrderTakenByAnotherDriver(latest)) {
+          if (_isActiveOrderForCurrentDriver(latest) &&
+              _tabActive &&
+              !_openingAcceptedDriverOrder &&
+              (ModalRoute.of(context)?.isCurrent ?? false)) {
+            await _openAcceptedDriverOrder(latest.reference);
+          } else if (_isOrderTakenByAnotherDriver(latest)) {
             setState(() {
               _dismissedUnavailableOrderIds.add(orderId);
             });
@@ -1491,6 +1496,10 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                         );
                                         return;
                                       }
+                                      final previewStream =
+                                          orderDetailsStreamFromBackend(
+                                              driverOrderRecord.reference.path);
+                                      var openingAssignedOrder = false;
                                       await showModalBottomSheet(
                                         isScrollControlled: true,
                                         backgroundColor: surface,
@@ -1506,9 +1515,8 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                         builder: (context) {
                                           return WebViewAware(
                                             child: StreamBuilder<OrderRecord>(
-                                              stream: Stream.value(
-                                                driverOrderRecord,
-                                              ),
+                                              stream: previewStream,
+                                              initialData: driverOrderRecord,
                                               builder:
                                                   (context, orderSnapshot) {
                                                 final wasAcceptedLocally =
@@ -1576,6 +1584,24 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                                                     ?.path ==
                                                                 _authoritativeDriverPath() ||
                                                             wasAcceptedLocally);
+                                                if (isAssignedToCurrentDriver &&
+                                                    liveOrder.status >= 2 &&
+                                                    !openingAssignedOrder &&
+                                                    (ModalRoute.of(context)
+                                                            ?.isCurrent ??
+                                                        false)) {
+                                                  openingAssignedOrder = true;
+                                                  WidgetsBinding.instance
+                                                      .addPostFrameCallback(
+                                                          (_) async {
+                                                    if (!mounted ||
+                                                        !context.mounted)
+                                                      return;
+                                                    Navigator.of(context).pop();
+                                                    await _openAcceptedDriverOrder(
+                                                        liveOrder.reference);
+                                                  });
+                                                }
                                                 if (!isOrderAvailable &&
                                                     !isAssignedToCurrentDriver &&
                                                     !_takingOrderIds.contains(

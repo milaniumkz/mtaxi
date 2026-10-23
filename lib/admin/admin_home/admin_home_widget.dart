@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/backend_support_chat.dart';
@@ -33,6 +32,7 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
   static const Duration _recentRegistrationWindow = Duration(days: 3);
   static const int _cancelledOrderStatus = 6;
   Future<_AdminServerStatus>? _serverStatusFuture;
+  VoidCallback? _refreshDriverReviewDialog;
   final List<String> _collections = const [
     'users',
     'politika',
@@ -349,7 +349,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                           style: FlutterFlowTheme.of(context)
                               .headlineSmall
                               .override(
-                                font: GoogleFonts.readexPro(
+                                font: TextStyle(
+                                  fontFamily: 'Noto Sans',
                                   fontWeight: FontWeight.w700,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .headlineSmall
@@ -505,7 +506,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           Text(
             label,
             style: FlutterFlowTheme.of(context).labelMedium.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w700,
                     fontStyle:
                         FlutterFlowTheme.of(context).labelMedium.fontStyle,
@@ -545,7 +547,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           Text(
             label,
             style: FlutterFlowTheme.of(context).labelMedium.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w700,
                     fontStyle:
                         FlutterFlowTheme.of(context).labelMedium.fontStyle,
@@ -692,6 +695,7 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
         setState(() {
           _driverReviewLoadingPaths.remove(userRef.path);
         });
+        _refreshDriverReviewDialog?.call();
       }
     }
   }
@@ -847,7 +851,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
               const SizedBox(width: 10),
               Text(
                 'MTaxi',
-                style: GoogleFonts.readexPro(
+                style: TextStyle(
+                  fontFamily: 'Noto Sans',
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
@@ -874,7 +879,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
               width: double.infinity,
               height: 42,
               color: Colors.white.withValues(alpha: 0.08),
-              textStyle: GoogleFonts.readexPro(
+              textStyle: TextStyle(
+                fontFamily: 'Noto Sans',
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
               ),
@@ -888,35 +894,85 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
   }
 
   Widget _adminNavItem(
-    BuildContext context,
-    IconData icon,
-    String label,
-    bool selected,
-  ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(
+      BuildContext context, IconData icon, String label, bool selected) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
         color: selected ? _mtaxiMint : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 19, color: selected ? _mtaxiPageBg : Colors.white70),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.readexPro(
-                color: selected ? _mtaxiPageBg : Colors.white70,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => _openAdminSection(label),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            child: Row(children: [
+              Icon(icon,
+                  size: 19, color: selected ? _mtaxiPageBg : Colors.white70),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text(label,
+                      style: TextStyle(
+                        fontFamily: 'Noto Sans',
+                        color: selected ? _mtaxiPageBg : Colors.white70,
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
+                        fontSize: 13,
+                      ))),
+            ]),
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  void _openAdminSection(String label) {
+    if (label == 'Дашборд') {
+      _refreshServerStatus();
+      return;
+    }
+    if (label == 'Модерация водителей') {
+      showDialog<void>(
+          context: context,
+          builder: (dialogContext) =>
+              StatefulBuilder(builder: (dialogContext, refresh) {
+                _refreshDriverReviewDialog = () {
+                  if (dialogContext.mounted) refresh(() {});
+                };
+                return Dialog(
+                    child: SizedBox(
+                        width: 760,
+                        height: MediaQuery.sizeOf(dialogContext).height * .85,
+                        child: Column(children: [
+                          Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton(
+                                  tooltip: 'Закрыть',
+                                  onPressed: () => Navigator.pop(dialogContext),
+                                  icon: const Icon(Icons.close))),
+                          Expanded(
+                              child: SingleChildScrollView(
+                                  padding: const EdgeInsets.all(16),
+                                  child: _buildDriverReviewSection(
+                                      dialogContext))),
+                        ])));
+              })).whenComplete(() => _refreshDriverReviewDialog = null);
+      return;
+    }
+    if (label == 'Поддержка') {
+      context.pushNamed(AdminSupportChatsWidget.routeName);
+      return;
+    }
+    final collection = switch (label) {
+      'Пользователи' => 'users',
+      'Заказы' => 'order',
+      'Платежи' => 'payments',
+      'Настройки' => 'appSettings',
+      _ => null,
+    };
+    if (collection != null) {
+      context.pushNamed(AdminCollectionWidget.routeName,
+          queryParameters: {'collection': collection});
+    }
   }
 
   Widget _buildAdminWorkspace(BuildContext context) {
@@ -1012,7 +1068,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
             children: [
               Text(
                 'Дашборд',
-                style: GoogleFonts.readexPro(
+                style: TextStyle(
+                  fontFamily: 'Noto Sans',
                   color: _mtaxiAdminText,
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
@@ -1021,7 +1078,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
               const SizedBox(height: 4),
               Text(
                 'Ключевые показатели, заказы и проблемы на одном экране',
-                style: GoogleFonts.readexPro(
+                style: TextStyle(
+                  fontFamily: 'Noto Sans',
                   color: _mtaxiAdminMuted,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -1042,7 +1100,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           options: FFButtonOptions(
             height: 40,
             color: _mtaxiPageBg,
-            textStyle: GoogleFonts.readexPro(
+            textStyle: TextStyle(
+              fontFamily: 'Noto Sans',
               color: Colors.white,
               fontWeight: FontWeight.w700,
             ),
@@ -1096,7 +1155,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.readexPro(
+                    style: TextStyle(
+                      fontFamily: 'Noto Sans',
                       color: _mtaxiAdminText,
                       fontWeight: FontWeight.w800,
                       fontSize: 14,
@@ -1105,7 +1165,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: GoogleFonts.readexPro(
+                    style: TextStyle(
+                      fontFamily: 'Noto Sans',
                       color: _mtaxiAdminMuted,
                       fontWeight: FontWeight.w500,
                       fontSize: 12,
@@ -1134,7 +1195,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
         children: [
           Text(
             'Разделы управления',
-            style: GoogleFonts.readexPro(
+            style: TextStyle(
+              fontFamily: 'Noto Sans',
               color: _mtaxiAdminText,
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -1148,7 +1210,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
               leading: const Icon(Icons.storage, color: _mtaxiMint),
               title: Text(
                 _collectionLabels[collection] ?? collection,
-                style: GoogleFonts.readexPro(
+                style: TextStyle(
+                  fontFamily: 'Noto Sans',
                   color: _mtaxiAdminText,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1193,7 +1256,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
               'Доступ только для администратора',
               textAlign: TextAlign.center,
               style: FlutterFlowTheme.of(context).bodyLarge.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight: FontWeight.w600,
                       fontStyle:
                           FlutterFlowTheme.of(context).bodyLarge.fontStyle,
@@ -1214,7 +1278,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                 height: 44,
                 color: _mtaxiMint,
                 textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                      font: GoogleFonts.readexPro(
+                      font: TextStyle(
+                        fontFamily: 'Noto Sans',
                         fontWeight: FontWeight.w600,
                         fontStyle:
                             FlutterFlowTheme.of(context).titleSmall.fontStyle,
@@ -1301,7 +1366,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                               ? 'Сервер работает'
                               : 'Проблема с сервером',
                       style: FlutterFlowTheme.of(context).bodyLarge.override(
-                            font: GoogleFonts.readexPro(
+                            font: TextStyle(
+                              fontFamily: 'Noto Sans',
                               fontWeight: FontWeight.w700,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyLarge
@@ -1440,7 +1506,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           Text(
             'Статистика',
             style: FlutterFlowTheme.of(context).bodyLarge.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w700,
                     fontStyle: FlutterFlowTheme.of(context).bodyLarge.fontStyle,
                   ),
@@ -1514,6 +1581,24 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
     return FutureBuilder<Map<String, dynamic>>(
       future: makeCloudCall('adminListUsers', {'limit': 500}),
       builder: (context, snapshot) {
+        if (!snapshot.hasData && !snapshot.hasError) {
+          return const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError || snapshot.data?['success'] != true) {
+          return ListTile(
+            title: const Text('Не удалось загрузить анкеты'),
+            subtitle: const Text('Проверьте подключение и повторите.'),
+            trailing: IconButton(
+                tooltip: 'Обновить анкеты',
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  if (mounted) setState(() {});
+                  _refreshDriverReviewDialog?.call();
+                }),
+          );
+        }
         final rawUsers = snapshot.data?['users'];
         final docs = rawUsers is List
             ? rawUsers
@@ -1545,7 +1630,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           Text(
             'Проверка водителей',
             style: FlutterFlowTheme.of(context).bodyLarge.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w700,
                     fontStyle: FlutterFlowTheme.of(context).bodyLarge.fontStyle,
                   ),
@@ -1606,7 +1692,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                             _driverReviewName(data),
                             style:
                                 FlutterFlowTheme.of(context).bodyLarge.override(
-                                      font: GoogleFonts.readexPro(
+                                      font: TextStyle(
+                                        fontFamily: 'Noto Sans',
                                         fontWeight: FontWeight.w600,
                                         fontStyle: FlutterFlowTheme.of(context)
                                             .bodyLarge
@@ -1668,7 +1755,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                           color: Colors.white,
                           textStyle:
                               FlutterFlowTheme.of(context).bodyMedium.override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .bodyMedium
@@ -1775,7 +1863,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           Text(
             title,
             style: FlutterFlowTheme.of(context).bodySmall.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w600,
                     fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
                   ),
@@ -1788,7 +1877,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           Text(
             value,
             style: FlutterFlowTheme.of(context).headlineSmall.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w700,
                     fontStyle:
                         FlutterFlowTheme.of(context).headlineSmall.fontStyle,
@@ -1862,7 +1952,8 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                           'Чат поддержки',
                           style:
                               FlutterFlowTheme.of(context).bodyLarge.override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .bodyLarge

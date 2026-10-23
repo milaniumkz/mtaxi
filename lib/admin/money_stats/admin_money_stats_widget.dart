@@ -6,11 +6,10 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/admin/admin_utils.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-const _mtaxiPageBg = Color(0xFF12051B);
+const _mtaxiPageBg = Color(0xFFF4F7F8);
 const _mtaxiSurface = Color(0xFFFFFFFF);
-const _mtaxiMint = Color(0xFF28D8C6);
+const _mtaxiMint = Color(0xFF126E68);
 
 class AdminMoneyStatsWidget extends StatefulWidget {
   const AdminMoneyStatsWidget({super.key});
@@ -215,7 +214,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
     return Scaffold(
       backgroundColor: _mtaxiPageBg,
       appBar: AppBar(
-        backgroundColor: _mtaxiPageBg,
+        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF12051B),
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -227,7 +227,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
         title: Text(
           'Статистика денег',
           style: FlutterFlowTheme.of(context).headlineMedium.override(
-                font: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
+                font: TextStyle(
+                    fontFamily: 'Noto Sans', fontWeight: FontWeight.w600),
                 color: Colors.white,
                 letterSpacing: 0.0,
                 fontWeight: FontWeight.w600,
@@ -307,7 +308,7 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
       label: Text(label),
       onSelected: (_) => _setPeriod(value),
       selectedColor: FlutterFlowTheme.of(context).primary,
-      labelStyle: TextStyle(color: selected ? Colors.white : null),
+      labelStyle: TextStyle(color: selected ? const Color(0xFF1B242B) : null),
     );
   }
 
@@ -498,9 +499,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
         children: [
           Text(
             'Текущие балансы водителей',
-            style: FlutterFlowTheme.of(context)
-                .bodyLarge
-                .override(fontWeight: FontWeight.w700),
+            style: FlutterFlowTheme.of(context).bodyLarge.override(
+                color: const Color(0xFF1B242B), fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text('Всего на балансах: ${formatAppCurrency(stats.driverBalances)}'),
@@ -540,9 +540,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
         children: [
           Text(
             'Последние операции за период',
-            style: FlutterFlowTheme.of(context)
-                .bodyLarge
-                .override(fontWeight: FontWeight.w700),
+            style: FlutterFlowTheme.of(context).bodyLarge.override(
+                color: const Color(0xFF1B242B), fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           if (stats.operations.isEmpty)
@@ -596,9 +595,8 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: FlutterFlowTheme.of(context)
-                .titleMedium
-                .override(fontWeight: FontWeight.w700),
+            style: FlutterFlowTheme.of(context).titleMedium.override(
+                color: const Color(0xFF1B242B), fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(subtitle, style: FlutterFlowTheme.of(context).bodySmall),

@@ -856,6 +856,11 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
     if (!isMine) {
       return 'Получено';
     }
+    if (message.snapshotData['backendSource'] == true) {
+      return message.snapshotData['readByAdmin'] == true
+          ? 'Прочитано'
+          : 'Отправлено';
+    }
     final currentPath = _currentUserPath;
     final readByOther = message.readBy.any((ref) => ref.path != currentPath);
     if (readByOther) {
@@ -1219,6 +1224,8 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
                   child: Row(
                     children: [
                       IconButton(
+                        tooltip: FFLocalizations.of(context).getVariableText(
+                            ruText: 'Прикрепить фото', kkText: 'Фото тіркеу'),
                         onPressed: _isUploadingImage ? null : _sendImage,
                         icon: _isUploadingImage
                             ? SizedBox(
@@ -1244,7 +1251,9 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
                               .bodyMedium
                               .override(color: textColor),
                           decoration: InputDecoration(
-                            hintText: 'Сообщение',
+                            hintText: FFLocalizations.of(context)
+                                .getVariableText(
+                                    ruText: 'Сообщение', kkText: 'Хабарлама'),
                             hintStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .override(color: mutedColor),
@@ -1271,6 +1280,9 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
+                        tooltip: FFLocalizations.of(context).getVariableText(
+                            ruText: 'Отправить сообщение',
+                            kkText: 'Хабарлама жіберу'),
                         onPressed: _isUploadingImage ? null : _sendMessage,
                         icon: const Icon(Icons.send, size: 18),
                         color: _mtaxiOrange,

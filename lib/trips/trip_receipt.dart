@@ -83,7 +83,9 @@ class _TripReceiptState extends State<_TripReceipt> {
                     message: tr(
                         'Проверьте связь. Повторная загрузка не выполняет оплату.',
                         'Байланысты тексеріңіз. Қайта жүктеу төлем жасамайды.'),
-                    onRetry: () => setState(() => _request = _load()));
+                    onRetry: () => setState(() {
+                          _request = _load();
+                        }));
               final order = snapshot.data!;
               String money(dynamic value) =>
                   value is num ? formatAppCurrency(value.toDouble()) : '—';

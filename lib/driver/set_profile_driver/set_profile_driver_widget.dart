@@ -14,6 +14,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/upload_data.dart';
 import '/index.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -117,6 +118,10 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   final _techPhotoBlockKey = GlobalKey();
   final Map<String, String> _uploadErrors = {};
   int _designStep = 0;
+  late final String _draftUid;
+  bool _draftRestored = false;
+  Future<void> _draftWrites = Future<void>.value();
+  String get _draftKey => 'mtaxi_driver_registration_draft_$_draftUid';
   late Future<List<String>> _cities;
   bool _didAttemptSubmit = false;
   bool _isSubmittingRegistration = false;
@@ -381,6 +386,13 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                 ),
         );
       }
+      try {
+        await _draftWrites;
+        final draftPrefs = await SharedPreferences.getInstance();
+        await draftPrefs.remove(_draftKey);
+      } catch (_) {
+        // Registration is already confirmed by the server; draft cleanup is local.
+      }
       FFAppState().pendingRegistrationRole = '';
       FFAppState().update(() {});
       currentUserDocument =
@@ -396,7 +408,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
               )));
       if (!mounted) return;
       context.goNamedAuth(
-        HomePageWidget.routeName,
+        ProfileWidget.routeName,
         context.mounted,
       );
     } catch (e) {
@@ -594,21 +606,77 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   }
 
   Future<void> _refreshExistingRegistrationDraft() async {
-    safeSetState(() {
-      _hydrateFromUserRecord(currentUserDocument);
-    });
+    if (_draftRestored || _draftUid.isEmpty) return;
+    _draftRestored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || !mounted || currentUserUid != _draftUid) return;
+      final draft = jsonDecode(raw);
+      if (draft is! Map) return;
+      safeSetState(() {
+        final fields = <String, TextEditingController?>{
+          'name': _model.textController1,
+          'surname': _model.textController2,
+          'plate': _model.textController5,
+          'color': _model.textController6,
+          'city': _model.textController7,
+        };
+        for (final entry in fields.entries) {
+          if (draft[entry.key] is String) entry.value?.text = draft[entry.key];
+        }
+        _model.textFieldSelectedOption7 = _model.textController7?.text;
+        _model.datePicked =
+            DateTime.tryParse(draft['birthDate']?.toString() ?? '');
+        if (draft['avtoImage'] is String)
+          _model.uploadedFileUrl_uploadData2xm = draft['avtoImage'];
+        if (draft['techImage'] is String)
+          _model.uploadedFileUrl_techPhoto = draft['techImage'];
+        _designStep = draft['step'] == 1 ? 1 : 0;
+      });
+    } catch (_) {
+      // A malformed local draft must not prevent registration.
+    }
   }
 
-  Future<bool> _saveDriverRegistrationDraft({
-    String? avtoImage,
-    String? techImage,
-  }) async {
-    return true;
+  Future<bool> _saveDriverRegistrationDraft(
+      {String? avtoImage, String? techImage}) async {
+    if (_draftUid.isEmpty || currentUserUid != _draftUid) return false;
+    // Never persist either password controller in a registration draft.
+    final data = jsonEncode({
+      'name': _model.textController1?.text ?? '',
+      'surname': _model.textController2?.text ?? '',
+      'plate': _model.textController5?.text ?? '',
+      'color': _model.textController6?.text ?? '',
+      'city': _selectedCity(),
+      'birthDate': _model.datePicked?.toIso8601String(),
+      'avtoImage': avtoImage ?? _model.uploadedFileUrl_uploadData2xm,
+      'techImage': techImage ?? _model.uploadedFileUrl_techPhoto,
+      'step': _designStep,
+    });
+    final write = _draftWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      if (!await prefs.setString(_draftKey, data))
+        throw StateError('Draft not saved');
+    });
+    _draftWrites = write.catchError((_) {});
+    try {
+      await write;
+      return true;
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_tr(context,
+                ru: 'Не удалось сохранить черновик на устройстве. Не закрывайте анкету до отправки.',
+                kk: 'Құрылғыда жоба сақталмады. Жібергенше сауалнаманы жаппаңыз.'))));
+      return false;
+    }
   }
 
   Future<void> _clearDriverRegistrationDraftFields(
-    List<String> fieldKeys,
-  ) async {}
+      List<String> fieldKeys) async {
+    await _saveDriverRegistrationDraft();
+  }
 
   Future<void> _deleteVehiclePhotoFromDraft() async {
     safeSetState(() {
@@ -1096,6 +1164,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _draftUid = currentUserUid;
     _model = createModel(context, () => SetProfileDriverModel());
     _cities = _loadCityTitles();
 
@@ -1349,6 +1418,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                                   _designStep = 1;
                                   _didAttemptSubmit = false;
                                 });
+                                unawaited(_saveDriverRegistrationDraft());
                               },
                               child: Text(tr('Продолжить', 'Жалғастыру'))),
                         ] else ...[
