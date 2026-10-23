@@ -1,3 +1,4 @@
+import 'ledger_presentation.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend_calls/backend_calls.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -135,14 +136,15 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
       if (type.contains('refund')) {
         refundedCount++;
       }
-      final positive = type == 'driver_top_up' ||
-          type.contains('refund') ||
-          type == 'withdrawal_rejected';
+      final direction = ledgerDirection(entry);
       operations.add(_MoneyOperation(
         date: date,
         title: _backendOperationTitle(type),
         subtitle: [
           (entry['userId'] ?? '').toString(),
+          if (entry['wallet'] == 'bonus') 'Бонусный счёт',
+          if (entry['bonusAmount'] is num && entry['cashAmount'] is num)
+            'Деньгами: ${formatAppCurrency(_asDouble(entry['cashAmount']))} · бонусами: ${formatAppCurrency(_asDouble(entry['bonusAmount']))}',
           (entry['orderId'] ??
                   entry['paymentId'] ??
                   entry['withdrawalId'] ??
@@ -150,7 +152,7 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
               .toString(),
         ].where((item) => item.trim().isNotEmpty).join(' • '),
         amount: amount,
-        positive: positive,
+        direction: direction,
       ));
     }
     operations.sort((a, b) => (b.date ?? DateTime.fromMillisecondsSinceEpoch(0))
@@ -190,6 +192,18 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
 
   String _backendOperationTitle(String type) {
     switch (type) {
+      case 'driver_welcome_bonus':
+        return 'Приветственный бонус водителю';
+      case 'daily_driver_bonus':
+        return 'Награда за суточную акцию';
+      case 'passenger_cashback':
+        return 'Бонус пассажиру за поездку';
+      case 'passenger_trip_payment':
+        return 'Оплата поездки водителю';
+      case 'passenger_trip_reserve':
+        return 'Резерв на поездку';
+      case 'passenger_trip_refund':
+        return 'Возврат резерва поездки';
       case 'driver_top_up':
         return 'Пополнение';
       case 'payment_failed':
@@ -553,18 +567,30 @@ class _AdminMoneyStatsWidgetState extends State<AdminMoneyStatsWidget> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(
-                  item.positive ? Icons.arrow_downward : Icons.arrow_upward,
-                  color: item.positive ? Colors.green : Colors.red,
+                  item.direction == 0
+                      ? Icons.remove
+                      : item.positive
+                          ? Icons.arrow_downward
+                          : Icons.arrow_upward,
+                  color: item.direction == 0
+                      ? Colors.grey
+                      : item.positive
+                          ? Colors.green
+                          : Colors.red,
                 ),
                 title: Text(item.title),
                 subtitle: Text(
                   '${item.subtitle}\n${item.date == null ? '' : dateTimeFormat('d.MM HH:mm', item.date, locale: FFLocalizations.of(context).languageCode)}',
                 ),
                 trailing: Text(
-                  '${item.positive ? '+' : '-'}${formatAppCurrency(item.amount)}',
+                  '${item.direction == 0 ? '' : item.positive ? '+' : '-'}${formatAppCurrency(item.amount)}',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: item.positive ? Colors.green : Colors.red,
+                    color: item.direction == 0
+                        ? Colors.grey
+                        : item.positive
+                            ? Colors.green
+                            : Colors.red,
                   ),
                 ),
               ),
@@ -664,14 +690,15 @@ class _MoneyOperation {
     required this.title,
     required this.subtitle,
     required this.amount,
-    required this.positive,
+    required this.direction,
   });
 
   final DateTime? date;
   final String title;
   final String subtitle;
   final double amount;
-  final bool positive;
+  final int direction;
+  bool get positive => direction > 0;
 }
 
 class _DriverBalance {
