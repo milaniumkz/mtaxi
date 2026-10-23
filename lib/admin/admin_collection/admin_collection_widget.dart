@@ -1061,7 +1061,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           children: [
             _buildSingletonSettingsCard(
               context,
-              title: 'main',
+              title: _collectionLabels[widget.collectionName] ?? 'Параметры сервиса',
               data: data,
               onEdit: () => _openBackendContentEditor(
                 context,
@@ -1520,7 +1520,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           children: [
             _buildSingletonSettingsCard(
               context,
-              title: 'main',
+              title: _collectionLabels[widget.collectionName] ?? 'Параметры сервиса',
               data: data,
               onEdit: () => _openBackendAppSettingsEditor(
                 context,
@@ -4927,7 +4927,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     'routercitytocity': 'Маршруты межгород',
     'RouterCityToCity': 'Маршруты межгород',
     'intercityTariff': 'Тариф межгород (км)',
-    'appSettings': 'Настройки (runtime/комиссия/доставка)',
+    'appSettings': 'Настройки сервиса',
     'order': 'Заказы',
     'gruz': 'Доставка (заказы)',
     'GruzDriver': 'Водители доставки',
@@ -6060,7 +6060,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           'Акция водителей: ${data['driverBonusEnabled'] == true ? 'включена' : 'выключена'}',
         if (data['driverBonusTargetOrders'] != null &&
             data['driverBonusReward'] != null)
-          '${data['driverBonusTargetOrders']} заказов за сутки → ${data['driverBonusReward']} бонусных ₸',
+          '${data['driverBonusTargetOrders']} заказов за сутки; награда ${data['driverBonusReward']} бонусных ₸',
         if (data['passengerBonusPercent'] != null)
           'Бонус пассажиру: ${data['passengerBonusPercent']}%',
         if (data['passengerBonusSpendPercent'] != null)

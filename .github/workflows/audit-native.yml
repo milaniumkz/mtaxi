@@ -1,4 +1,5 @@
 name: Build isolated MTaxi audit APK without deployment
+# Reads the existing signing key; never deploys or modifies the VPS.
 on:
   push:
     branches: [codex/full-audit-20261023]
