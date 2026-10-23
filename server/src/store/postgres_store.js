@@ -1068,7 +1068,17 @@ async function writeStoreWithClient(client, store = {}, previous = null) {
 }
 
 async function readStoreAsync() {
-  return withPgClient(readStoreWithClient);
+  return withPgClient(async client => {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    try {
+      const result = await readStoreWithClient(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
 }
 
 async function writeStoreAsync(store) {

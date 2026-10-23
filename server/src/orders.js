@@ -511,7 +511,7 @@ async function getOrderDetailsAsync(data = {}, auth) {
     return { success: false, code: "UNAUTHENTICATED", error: "Пользователь не авторизован" };
   }
   const orderId = docId(data.orderDocPath || data.orderId);
-  return withStoreAsync(async (store) => {
+  return readStoreAsync().then(async (store) => {
     const order = store.orders.find((item) => item.id === orderId);
     if (!order) return { success: false, code: "ORDER_NOT_FOUND", error: "Заказ не найден" };
     const isOwner = order.userId === auth.user.id || order.driverId === auth.user.id;
@@ -530,7 +530,7 @@ async function listAvailableDriverOrdersAsync(data = {}, auth) {
   const radiusKm = asNumber(data.radiusKm) ?? 10;
   const driverPoint = geoPointFromData(data, "driver") || geoPointFromData(data);
   const limit = Math.max(1, Math.min(200, Math.trunc(asNumber(data.limit) || 100)));
-  return withStoreAsync(async (store) => {
+  return readStoreAsync().then(async (store) => {
     const driver = store.users.find((user) => user.id === auth.user.id);
     if (!driver) return { success: false, code: "DRIVER_NOT_FOUND", error: "Водитель не найден" };
     const orders = store.orders
@@ -558,7 +558,7 @@ async function listMyOrdersAsync(data = {}, auth) {
   }
   const includeClosed = data.includeClosed === true;
   const limit = Math.max(1, Math.min(200, Math.trunc(asNumber(data.limit) || 50)));
-  return withStoreAsync(async (store) => {
+  return readStoreAsync().then(async (store) => {
     const orders = store.orders
       .filter((order) => order.userId === auth.user.id || order.driverId === auth.user.id)
       .filter((order) => includeClosed || isActivePassengerOrder(order))
@@ -577,7 +577,7 @@ async function adminListOrdersAsync(data = {}, auth) {
   const driverId = docId(data.driverDocPath || data.driverId);
   const query = normalizeString(data.query).toLowerCase();
   const limit = Math.max(1, Math.min(500, Math.trunc(asNumber(data.limit) || 200)));
-  return withStoreAsync(async (store) => {
+  return readStoreAsync().then(async (store) => {
     const orders = store.orders
       .filter((order) => statusFilter == null || Number(order.status) === statusFilter)
       .filter((order) => !userId || order.userId === userId)

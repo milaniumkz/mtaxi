@@ -25,6 +25,15 @@ test('PostgreSQL preserves complete ledger and does not rewrite unchanged users'
     assert.equal(count.rows[0].n, 5001, 'Ordinary mutations must not delete old financial entries');
     const after = await db.query("SELECT xmin::text FROM users WHERE id='audit-retention'");
     assert.equal(after.rows[0].xmin, before.rows[0].xmin, 'Unchanged users must not be rewritten');
+    await store.withStoreAsync(s=>{s.users.find(u=>u.id==='audit-retention').roleState='PASSENGER';});
+    await db.query('BEGIN');
+    await db.query("SELECT pg_advisory_xact_lock(hashtext('mtaxi_store_write'))");
+    try {
+      const {getSessionBootstrapAsync}=require('../src/session');
+      const result=await Promise.race([getSessionBootstrapAsync({}, {user:{id:'audit-retention'}}),new Promise(resolve=>setTimeout(()=>resolve('timeout'),1500))]);
+      assert.notEqual(result,'timeout','An unchanged session read must not wait for the global write lock');
+      assert.equal(result.success,true);
+    } finally { await db.query('ROLLBACK'); }
   } finally {
     await db.query("DELETE FROM ledger WHERE id LIKE 'audit-retention-%'");
     await db.query("DELETE FROM users WHERE id='audit-retention'");

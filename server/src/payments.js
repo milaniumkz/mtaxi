@@ -1,4 +1,4 @@
-const { withStoreAsync, newId } = require("./store");
+const { withStoreAsync, readStoreAsync, newId } = require("./store");
 const { asDate, asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { publicUser } = require("./users");
 const { publicBaseUrl } = require("./media");
@@ -541,6 +541,18 @@ async function handleDriverTopUpPaymentCallbackAsync(data = {}, req) {
   return withStoreAsync(async (store) => {
     const payment = findPayment(store, paymentId);
     if (!payment) return { success: false, code: "PAYMENT_NOT_FOUND", error: "Платеж не найден" };
+    if (payment.provider === 'kaspi_manual') {
+      return { success: false, code: 'MANUAL_PAYMENT_CONFIRMATION_REQUIRED', error: 'Ручную оплату Kaspi подтверждает администратор' };
+    }
+    if (data.amount != null && asNumber(data.amount) !== asNumber(payment.amount)) {
+      return { success: false, code: 'PAYMENT_AMOUNT_MISMATCH', error: 'Сумма оплаты не совпадает со счётом' };
+    }
+    if (data.currency != null && normalizeString(data.currency).toUpperCase() !== 'KZT') {
+      return { success: false, code: 'PAYMENT_CURRENCY_MISMATCH', error: 'Валюта оплаты не совпадает со счётом' };
+    }
+    if (data.userId != null && normalizeString(data.userId) !== payment.userId) {
+      return { success: false, code: 'PAYMENT_USER_MISMATCH', error: 'Получатель платежа не совпадает со счётом' };
+    }
     if (normalizedStatus === "success") {
       const applied = applySuccessfulPayment(store, payment, { source: "kassa24_callback" });
       if (!applied.success) return applied;
@@ -761,7 +773,7 @@ async function getMoneyStatsAsync(data = {}, auth) {
   if (authError) return authError;
   const from = asDate(data.from);
   const to = asDate(data.to);
-  return withStoreAsync(async (store) => {
+  return readStoreAsync().then(async (store) => {
     const ledger = (store.ledger || []).filter((entry) => {
       const date = asDate(entry.createdAt);
       if (!date) return false;

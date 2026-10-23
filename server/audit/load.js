@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const { performance, monitorEventLoopDelay } = require('node:perf_hooks');
 const base = process.env.MTAXI_AUDIT_BASE || 'http://127.0.0.1:18080';
 const url = new URL(base);
-if (url.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(url.hostname) || !['18080','18081'].includes(url.port)) throw Error('Local audit target required');
+if (url.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(url.hostname) || !['18080','18081','18083'].includes(url.port)) throw Error('Local audit target required');
 const actors = JSON.parse(fs.readFileSync(process.env.MTAXI_AUDIT_ACTORS));
 if (actors.length !== 1000 || actors.some(x=>!x.id.startsWith('audit_'))) throw Error('Synthetic actors required');
 const output = process.env.MTAXI_AUDIT_RESULT || 'load-results.json';
@@ -50,7 +50,7 @@ async function call(actor,name,data={}) {
 const groups={admin:actors.filter(x=>x.role==='admin'),driver:actors.filter(x=>x.isDriver),passenger:actors.filter(x=>!x.isDriver&&x.role!=='admin')};
 const ordered=[];for(let i=0;i<600;i++){if(i%60===0)ordered.push(groups.admin.shift());ordered.push(groups.passenger.shift());if(i<390)ordered.push(groups.driver.shift());}
 async function vu(actor,index) {
- live++;maxLive=Math.max(maxLive,live);let ticks=0,nextStatus=3,assignmentAt=0;
+ live++;maxLive=Math.max(maxLive,live);let ticks=0,assignmentAt=0,phaseStatus=-1,phaseSince=0,lastGps=0;
  try {while(!stop&&index<target){
   const session=await call(actor,'getSessionBootstrap');ticks++;
   if(!diagnostic&&session.success){
@@ -59,14 +59,16 @@ async function vu(actor,index) {
     const ref=session.activeDriverOrderRef;
     if(ref){
      const order=session.activeDriverOrder;const status=Number(order?.status??session.activeDriverOrderStatus);
+     if(phaseStatus!==status){phaseStatus=status;phaseSince=Date.now();}
      if(assignmentAt){propagation.push(performance.now()-assignmentAt);assignmentAt=0;}
-     await call(actor,'updateUserPreferences',{coords:{latitude:53.53,longitude:76.68,accuracy:10}});
-     if(status>=2&&status<5){const r=await call(actor,'advanceDriverOrderStatus',{orderDocPath:ref,nextStatus:status+1});if(r.success&&status===4)completed++;}
+     if(Date.now()-lastGps>=5000){await call(actor,'updateUserPreferences',{coords:{latitude:53.53,longitude:76.68,accuracy:10}});lastGps=Date.now();}
+     const dwell={2:30000,3:15000,4:90000}[status];
+     if(status>=2&&status<5&&Date.now()-phaseSince>=dwell){const r=await call(actor,'advanceDriverOrderStatus',{orderDocPath:ref,nextStatus:status+1});if(r.success&&status===4)completed++;}
     }else{
      const feed=await call(actor,'listAvailableDriverOrders',{limit:30});const list=feed.orders||[];
      const order=list[index%Math.max(1,list.length)];
      if(order){const ref=order.orderDocPath||'order/'+order.id;
-      if(index%2){const result=await call(actor,'submitOrderOffer',{orderDocPath:ref,price:Number(order.price)+100});if(result.success)assignmentAt=performance.now();}
+      if(Number(actor.id.split('_')[1])%2){const result=await call(actor,'submitOrderOffer',{orderDocPath:ref,price:Number(order.price)+100});if(result.success)assignmentAt=performance.now();}
       else await call(actor,'acceptOrder',{orderDocPath:ref});
      }
     }
@@ -75,7 +77,7 @@ async function vu(actor,index) {
     if(!ref){await call(actor,'createPassengerOrder',{type:'taxi',city:'Железинка',ot:'Тестовая 1',kuda:'Тестовая 10',fromPoint:{latitude:53.53,longitude:76.68},toPoint:{latitude:53.54,longitude:76.69},price:500,paymentMode:index%3?'wallet':'cash',usePassengerBonuses:true});}
     else if(Number(session.activePassengerOrderStatus)===0){const offers=await call(actor,'listOrderOffers',{orderDocPath:ref});if(offers.offers?.length)await call(actor,'respondOrderOffer',{orderDocPath:ref,offerId:offers.offers[0].id,accept:true});}
     else{const at=performance.now();await call(actor,'getTripTracking',{orderDocPath:ref});positions.push(performance.now()-at);}
-    if(ticks%5===0)await call(actor,'listMyOrders',{limit:10});
+    if(ticks%15===0)await call(actor,'listMyOrders',{limit:10});
    }
   }
   await sleeper(diagnostic?2000:2000+(index%5)*150);

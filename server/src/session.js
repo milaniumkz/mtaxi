@@ -1,4 +1,5 @@
-const { withStoreAsync } = require("./store");
+const { isDeepStrictEqual } = require("node:util");
+const { withStoreAsync, readStoreAsync } = require("./store");
 const { compactOrder, ORDER_STATUS } = require("./orders");
 const { publicUser } = require("./users");
 const { bonusStatus } = require("./driver_bonuses");
@@ -16,6 +17,12 @@ async function getSessionBootstrapAsync(_data, auth) {
     };
   }
 
+  const snapshot = await readStoreAsync();
+  const user = snapshot.users.find(item => item.id === auth.user.id);
+  const before = user ? structuredClone(user) : null;
+  const result = buildSessionBootstrap(snapshot, auth.user);
+  if (isDeepStrictEqual(before, user || null)) return result;
+  // Stale active references and day rollover still need an atomic fresh write.
   return withStoreAsync(async (store) => buildSessionBootstrap(store, auth.user));
 }
 

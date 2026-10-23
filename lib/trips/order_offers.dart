@@ -8,45 +8,91 @@ import '/backend/backend_calls/backend_calls.dart';
 
 Future<void> proposeDriverPrice(BuildContext context, String path,
     {int initialPrice = 500}) async {
-  final price =
-      TextEditingController(text: initialPrice.clamp(500, 10000000).toString());
-  var submitted = false;
   final result = await showDialog<int>(
       context: context,
-      builder: (dialog) => AlertDialog(
-              title: const Text('Предложить свою цену'),
-              content: TextField(
-                  controller: price,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                      labelText: 'Цена, ₸',
-                      helperText:
-                          'Не менее 500 ₸. Время подачи рассчитывается по вашей геопозиции.')),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dialog),
-                    child: const Text('Отмена')),
-                FilledButton(
-                    onPressed: () {
-                      if (submitted) return;
-                      final v = int.tryParse(price.text);
-                      if (v != null && v >= 500 && v <= 10000000) {
-                        submitted = true;
-                        Navigator.pop(dialog, v);
-                      }
-                    },
-                    child: const Text('Предложить'))
-              ]));
-  price.dispose();
+      builder: (_) => _OfferPriceDialog(initialPrice: initialPrice));
   if (result == null || !context.mounted) return;
-  final r = await makeCloudCall(
-      'submitOrderOffer', {'orderDocPath': path, 'price': result});
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(r['success'] == true
-          ? 'Предложение отправлено пассажиру'
-          : r['error']?.toString() ?? 'Не удалось отправить предложение')));
+  String tr(String ru, String kk) =>
+      FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+  try {
+    final response = await makeCloudCall(
+        'submitOrderOffer', {'orderDocPath': path, 'price': result});
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(response['success'] == true
+            ? tr('Предложение отправлено пассажиру',
+                'Ұсыныс жолаушыға жіберілді')
+            : response['error']?.toString() ??
+                tr('Не удалось отправить предложение', 'Ұсыныс жіберілмеді'))));
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(tr('Ответ не получен. Проверьте предложения по заказу.',
+            'Жауап алынбады. Тапсырыс ұсыныстарын тексеріңіз.'))));
+  }
+}
+
+class _OfferPriceDialog extends StatefulWidget {
+  const _OfferPriceDialog({required this.initialPrice});
+  final int initialPrice;
+  @override
+  State<_OfferPriceDialog> createState() => _OfferPriceDialogState();
+}
+
+class _OfferPriceDialogState extends State<_OfferPriceDialog> {
+  late final TextEditingController _price = TextEditingController(
+      text: widget.initialPrice.clamp(500, 10000000).toString());
+  bool _decided = false;
+  String? _error;
+  void _finish(int? value) {
+    if (_decided) return;
+    _decided = true;
+    Navigator.pop(context, value);
+  }
+
+  @override
+  void dispose() {
+    _price.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String tr(String ru, String kk) =>
+        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    return AlertDialog(
+        title: Text(tr('Предложить свою цену', 'Өз бағаңызды ұсыныңыз')),
+        content: SingleChildScrollView(
+            child: TextField(
+                controller: _price,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                    labelText: tr('Цена, ₸', 'Баға, ₸'),
+                    errorText: _error,
+                    helperMaxLines: 3,
+                    errorMaxLines: 3,
+                    helperText: tr(
+                        'Не менее 500 ₸. Время подачи рассчитывается по вашей геопозиции.',
+                        'Кемінде 500 ₸. Келу уақыты геолокацияңыз бойынша есептеледі.')))),
+        actions: [
+          TextButton(
+              onPressed: () => _finish(null),
+              child: Text(tr('Отмена', 'Бас тарту'))),
+          FilledButton(
+              onPressed: () {
+                final value = int.tryParse(_price.text.trim());
+                if (value == null || value < 500 || value > 10000000) {
+                  setState(() => _error = tr(
+                      'Целая цена от 500 до 10 000 000 ₸',
+                      '500–10 000 000 ₸ аралығындағы бүтін баға'));
+                  return;
+                }
+                _finish(value);
+              },
+              child: Text(tr('Предложить', 'Ұсыну')))
+        ]);
+  }
 }
 
 class PassengerOffers extends StatefulWidget {
@@ -112,6 +158,7 @@ class _PassengerOffersState extends State<PassengerOffers> {
   Future<void> _show(Map<String, dynamic> offer) async {
     if (_dialog || _responding) return;
     _dialog = true;
+    var decided = false;
     final accept = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -120,8 +167,16 @@ class _PassengerOffersState extends State<PassengerOffers> {
           padding: const EdgeInsets.all(22),
           child: DriverOfferCard(
               offer: offer,
-              onAccept: () => Navigator.pop(dialog, true),
-              onDecline: () => Navigator.pop(dialog, false))),
+              onAccept: () {
+                if (decided) return;
+                decided = true;
+                Navigator.pop(dialog, true);
+              },
+              onDecline: () {
+                if (decided) return;
+                decided = true;
+                Navigator.pop(dialog, false);
+              })),
     );
     _dialog = false;
     if (accept == null || !mounted) return;
