@@ -1,7 +1,7 @@
 """Read-only resource sampling for the explicitly named local test container."""
 import json, os, subprocess, time
 from pathlib import Path
-out = Path(__file__).resolve().parents[2] / 'output/full-audit'
+out = Path(os.environ.get('MTAXI_AUDIT_RESOURCE_DIR', str(Path(__file__).resolve().parents[2] / 'output/full-audit')))
 env = {k:v for k,v in os.environ.items() if k not in ['DOCKER_HOST','DOCKER_CONTEXT','DOCKER_TLS','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH']}
 for _ in range(180):
     result = subprocess.run(['docker','--host=unix:///var/run/docker.sock','stats','--no-stream','--format','{{json .}}','mtaxi-audit-pg'],env=env,capture_output=True,text=True,timeout=20)

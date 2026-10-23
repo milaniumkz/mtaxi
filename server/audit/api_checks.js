@@ -4,7 +4,9 @@ const actors=JSON.parse(fs.readFileSync(process.env.MTAXI_AUDIT_ACTORS));
 const {readStoreAsync,withStoreAsync}=require('../src/store');
 const {handlerNames}=require('../src/call_router');
 const results=[];const output=process.env.MTAXI_AUDIT_API_RESULTS;
-async function call(index,name,data={}){const r=await fetch('http://127.0.0.1:18084/call/'+name,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+actors[index].token},body:JSON.stringify(data),signal:AbortSignal.timeout(20000)});assert.equal(r.status,200);return r.json();}
+const base=process.env.MTAXI_AUDIT_API_BASE||'http://127.0.0.1:18084';
+const target=new URL(base);if(target.protocol!=='http:'||!['127.0.0.1','localhost'].includes(target.hostname)||!['18084','18086'].includes(target.port))throw Error('Local audit API required');
+async function call(index,name,data={}){const r=await fetch(base+'/call/'+name,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+actors[index].token},body:JSON.stringify(data),signal:AbortSignal.timeout(20000)});assert.equal(r.status,200);return r.json();}
 async function check(name,role,expected,run){try{const actual=await run();results.push({name,role,expected,actual,status:'passed',evidence:'real HTTP → isolated PostgreSQL; audit fixture IDs only'});}catch(e){results.push({name,role,expected,status:'failed',error:e.message});}fs.writeFileSync(output,JSON.stringify(results,null,2));}
 const user=(s,i)=>s.users.find(u=>u.id===actors[i].id);
 const create=(i,extra={})=>call(i,'createPassengerOrder',{type:'taxi',city:'Железинка',ot:'Тестовая 1',kuda:'Тестовая 10',fromPoint:{latitude:53.53,longitude:76.68},toPoint:{latitude:53.54,longitude:76.69},price:500,paymentMode:'cash',...extra});
@@ -13,7 +15,15 @@ const create=(i,extra={})=>call(i,'createPassengerOrder',{type:'taxi',city:'Же
  for(const name of privileged)await check('API permission: '+name,'passenger','Administrative operation denied',async()=>{const r=await call(42,name,{});assert.equal(r.success,false);assert.match(r.code,/ADMIN|FORBIDDEN|UNAUTHENTICATED/);return {code:r.code};});
  let privacyOrder;
  await check('Foreign completed order and tracking','passenger','Other account cannot see completed order or GPS',async()=>{
-  const own=await call(40,'listMyOrders',{includeClosed:true});privacyOrder=own.orders.find(o=>o.status===5).orderDocPath;
+  let own=await call(40,'listMyOrders',{includeClosed:true});
+  if(!own.orders.some(o=>o.status===5)) {
+    const order=await create(40);assert.equal(order.success,true);
+    assert.equal((await call(25,'acceptOrder',{orderDocPath:order.orderDocPath})).accepted,true);
+    await call(25,'updateUserPreferences',{coords:{latitude:53.53,longitude:76.68,accuracy:10}});
+    for(const nextStatus of [3,4,5])assert.equal((await call(25,'advanceDriverOrderStatus',{orderDocPath:order.orderDocPath,nextStatus})).success,true);
+    own=await call(40,'listMyOrders',{includeClosed:true});
+  }
+  privacyOrder=own.orders.find(o=>o.status===5).orderDocPath;
   const detail=await call(42,'getOrderDetails',{orderDocPath:privacyOrder});const tracking=await call(42,'getTripTracking',{orderDocPath:privacyOrder});assert.equal(detail.success,false);assert.equal(tracking.success,false);return {detail:detail.code,tracking:tracking.code};
  });
  await check('Concurrent wallet creation and double cancellation','passenger','One order, one500 reserve; cancellation returns exactly500 once',async()=>{
