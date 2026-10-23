@@ -1,5 +1,5 @@
 name: Build isolated MTaxi audit APK without deployment
-# Includes role-tab deep link regression fixes; no VPS deployment or key changes.
+# Final audit candidate: document labels and role deep links; no VPS changes.
 on:
   push:
     branches: [codex/full-audit-20261023]

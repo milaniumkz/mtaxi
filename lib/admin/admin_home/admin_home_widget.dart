@@ -410,7 +410,7 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                             _driverReviewValue(data, ['password']),
                           ),
                           _buildDriverReviewImageRow(
-                            'Фото профиля/авто',
+                            'Фото автомобиля',
                             _driverReviewImageValue(
                                 data, ['avtoImage', 'photo_url']),
                             candidates: vehicleImageCandidates,
