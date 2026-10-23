@@ -41,6 +41,7 @@ class _ProfileWidgetState extends State<ProfileWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isSwitchingRoleState = false;
   bool _isSigningOut = false;
+  bool _isRefreshingProfile = false;
   final Set<String> _optimisticallyReadSupportChatPaths = {};
   final Set<String> _optimisticallyReadSupportChatKeys = {};
 
@@ -61,9 +62,32 @@ class _ProfileWidgetState extends State<ProfileWidget> {
   }
 
   Future<void> _refreshCurrentUserRecord() async {
+    final userPath = _currentUserPath;
+    if (userPath.isEmpty) return;
     final response = await makeCloudCall('getSessionBootstrap', {});
-    currentUserDocument =
-        await applyBackendUserResponse(response) ?? currentUserDocument;
+    if (!mounted || _currentUserPath != userPath) return;
+    final refreshed = await applyBackendUserResponse(response);
+    if (!mounted || _currentUserPath != userPath) return;
+    setState(() => currentUserDocument = refreshed ?? currentUserDocument);
+  }
+
+  Future<bool> _reloadProfile() async {
+    if (_isRefreshingProfile) return false;
+    _isRefreshingProfile = true;
+    try {
+      await _refreshCurrentUserRecord();
+      return mounted;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Не удалось обновить профиль. Откройте профиль повторно.'),
+        ));
+      }
+      return false;
+    } finally {
+      _isRefreshingProfile = false;
+    }
   }
 
   bool get _hasDriverAccount => userHasDriverAccount(currentUserDocument);
@@ -695,7 +719,9 @@ class _ProfileWidgetState extends State<ProfileWidget> {
     super.initState();
     _model = createModel(context, () => ProfileModel());
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_reloadProfile());
+    });
   }
 
   @override
@@ -786,14 +812,17 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                           leading: const Icon(Icons.verified_user_outlined),
                           title: const Text('Анкета на проверке'),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                  builder: (approvalContext) => DriverApproval(
-                                      onProfile: () =>
-                                          Navigator.pop(approvalContext),
-                                      onSupport: () =>
-                                          approvalContext.pushNamed(
-                                              SupportChatWidget.routeName)))))),
+                          onTap: () async {
+                            if (!await _reloadProfile() || !mounted) return;
+                            if (!isDriverRegistrationPendingReview()) return;
+                            await Navigator.of(context).push(MaterialPageRoute<
+                                    void>(
+                                builder: (approvalContext) => DriverApproval(
+                                    onProfile: () =>
+                                        Navigator.pop(approvalContext),
+                                    onSupport: () => approvalContext.pushNamed(
+                                        SupportChatWidget.routeName))));
+                          })),
                 ],
                 Column(
                   mainAxisSize: MainAxisSize.max,

@@ -35,7 +35,12 @@ Widget app(GoRouter router) => ChangeNotifierProvider<FFAppState>.value(
         ]));
 
 void main() {
-  for (final target in ['driver', 'passenger', 'logout']) {
+  for (final target in [
+    'driver',
+    'passenger',
+    'logout',
+    'approved-after-review'
+  ]) {
     testWidgets('profile action $target updates the session before navigating',
         (tester) async {
       PackageInfo.setMockInitialValues(
@@ -65,7 +70,13 @@ void main() {
       FFAppState.reset();
       await FFAppState().initializePersistedState();
       UserModeResolver.clearTransientRoleState();
-      activateBackendUser(user);
+      activateBackendUser(target == 'approved-after-review'
+          ? {
+              ...user,
+              'statusDriver': 'pending',
+              'driverRegistrationStatus': 'pending'
+            }
+          : user);
       final gate = Completer<Map<String, dynamic>>();
       final router = GoRouter(initialLocation: '/profile', routes: [
         GoRoute(path: '/profile', builder: (_, __) => const ProfileWidget()),
@@ -83,7 +94,10 @@ void main() {
         await tester.pumpWidget(app(router));
         await tester.pump(const Duration(seconds: 1));
         await tester.pump();
-        if (target == 'logout') {
+        if (target == 'approved-after-review') {
+          expect(find.text('Анкета на проверке'), findsNothing);
+          expect(currentUserDocument?.snapshotData['statusDriver'], 'approved');
+        } else if (target == 'logout') {
           await tester.ensureVisible(find.text('Выйти из аккаунта'));
           await tester.tap(find.text('Выйти из аккаунта'));
           for (var i = 0; i < 4; i++) {
