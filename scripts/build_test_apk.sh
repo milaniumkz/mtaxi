@@ -25,15 +25,21 @@ if (health.ok !== true || health.service !== 'mtaxi-backend' || health.store?.ty
 NODE
 cd "$root_dir"
 flutter build apk --profile --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define="MTAXI_BACKEND_URL=$backend_url"
+# Sign the final artifact explicitly. Flutter/AGP may select their own debug
+# signing configuration; that must never determine the published certificate.
+signed_apk="build/app/outputs/flutter-apk/app-profile-persistent.apk"
+"$apksigner_bin" sign --ks "$MTAXI_TEST_KEYSTORE" --ks-key-alias androiddebugkey \
+  --ks-pass pass:android --key-pass pass:android \
+  --out "$signed_apk" build/app/outputs/flutter-apk/app-profile.apk
 keytool -exportcert -keystore "$MTAXI_TEST_KEYSTORE" -storepass android -alias androiddebugkey -file "$certificate_file" >/dev/null
 expected_certificate="$(sha256sum "$certificate_file" | cut -d ' ' -f 1)"
-actual_certificate="$("$apksigner_bin" verify --print-certs build/app/outputs/flutter-apk/app-profile.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+actual_certificate="$("$apksigner_bin" verify --print-certs "$signed_apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
 if [[ "$actual_certificate" != "$expected_certificate" ]]; then
   printf 'APK signing certificate differs from the persistent test key; publication refused\n' >&2
   exit 1
 fi
 printf 'Verified persistent APK signing certificate SHA256: %s\n' "$actual_certificate"
 mkdir -p output
-cp build/app/outputs/flutter-apk/app-profile.apk output/mtaxi-staging.apk
+cp "$signed_apk" output/mtaxi-staging.apk
 (cd output && sha256sum mtaxi-staging.apk > mtaxi-staging.apk.sha256)
 printf 'Test APK built: %s/output/mtaxi-staging.apk\n' "$root_dir"
