@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { isDeepStrictEqual } = require("node:util");
 const { Pool } = require("pg");
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -84,6 +85,44 @@ function withStore() {
   return unsupportedSyncContract();
 }
 
+function userFromRow(row) {
+  return {
+      ...(row.data || {}),
+      id: row.id,
+      phone: row.phone,
+      passwordHash: row.password_hash || row.data?.passwordHash || row.data?.password || "",
+      displayName: row.display_name,
+      role: row.role,
+      roleState: row.role_state,
+      activeMode: row.active_mode,
+      preferredClientMode: row.preferred_client_mode,
+      isDriver: row.is_driver === true,
+      statusDriver: row.status_driver,
+      driverRegistrationStatus: row.driver_registration_status,
+      driverOnLine: row.driver_online === true,
+      blocked: row.blocked === true,
+      vip: row.vip === true,
+      balance: Number(row.balance) || 0,
+      activePassengerOrderId: row.active_passenger_order_id,
+      activeDriverOrderId: row.active_driver_order_id,
+      hasActivePassengerOrder: row.has_active_passenger_order === true,
+      hasActiveDriverOrder: row.has_active_driver_order === true,
+      city: row.city,
+      coords: row.lat == null || row.lng == null
+        ? row.data?.coords
+        : { latitude: Number(row.lat), longitude: Number(row.lng) },
+      createdAt: iso(row.created_at),
+      updatedAt: iso(row.updated_at),
+  };
+}
+
+async function lookupUserByIdAsync(id) {
+  return withPgClient(async client => {
+    const result = await client.query("SELECT * FROM users WHERE id = $1", [String(id)]);
+    return result.rows[0] ? userFromRow(result.rows[0]) : null;
+  });
+}
+
 async function readStoreWithClient(client) {
   const [
     settingsResult,
@@ -144,8 +183,7 @@ async function readStoreWithClient(client) {
       `SELECT id, user_id, order_id, payment_id, type, source, amount,
               balance_before, balance_after, data, created_at
        FROM ledger
-       ORDER BY created_at DESC
-       LIMIT 5000`,
+       ORDER BY created_at DESC`,
     ),
     client.query(
       `SELECT id, user_id, admin_id, support_chat_key, last_message,
@@ -229,34 +267,7 @@ async function readStoreWithClient(client) {
     });
   }
   return {
-    users: usersResult.rows.map((row) => ({
-      ...(row.data || {}),
-      id: row.id,
-      phone: row.phone,
-      passwordHash: row.password_hash || row.data?.passwordHash || row.data?.password || "",
-      displayName: row.display_name,
-      role: row.role,
-      roleState: row.role_state,
-      activeMode: row.active_mode,
-      preferredClientMode: row.preferred_client_mode,
-      isDriver: row.is_driver === true,
-      statusDriver: row.status_driver,
-      driverRegistrationStatus: row.driver_registration_status,
-      driverOnLine: row.driver_online === true,
-      blocked: row.blocked === true,
-      vip: row.vip === true,
-      balance: Number(row.balance) || 0,
-      activePassengerOrderId: row.active_passenger_order_id,
-      activeDriverOrderId: row.active_driver_order_id,
-      hasActivePassengerOrder: row.has_active_passenger_order === true,
-      hasActiveDriverOrder: row.has_active_driver_order === true,
-      city: row.city,
-      coords: row.lat == null || row.lng == null
-        ? row.data?.coords
-        : { latitude: Number(row.lat), longitude: Number(row.lng) },
-      createdAt: iso(row.created_at),
-      updatedAt: iso(row.updated_at),
-    })),
+    users: usersResult.rows.map(userFromRow),
     orders: ordersResult.rows.map((row) => ({
       ...(row.data || {}),
       id: row.id,
@@ -426,15 +437,27 @@ async function readStoreWithClient(client) {
   };
 }
 
-async function writeStoreWithClient(client, store = {}) {
+function changedRows(rows, previous) {
+  if (!previous) return rows;
+  const old = new Map(previous.map(item => [item.id, item]));
+  return rows.filter(item => !isDeepStrictEqual(item, old.get(item.id)));
+}
+
+function hasRemovedRows(rows, previous) {
+  if (!previous) return true;
+  const ids = new Set(rows.map(item => item.id));
+  return previous.some(item => !ids.has(item.id));
+}
+
+async function writeStoreWithClient(client, store = {}, previous = null) {
   const users = Array.isArray(store.users) ? store.users : [];
-  if (Array.isArray(store.users)) {
+  if (Array.isArray(store.users) && hasRemovedRows(users, previous?.users)) {
     await client.query(
       "DELETE FROM users WHERE NOT (id = ANY($1::text[]))",
       [users.map((user) => String(user.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const user of users) {
+  for (const user of changedRows(users, previous?.users)) {
     const c = coords(user.coords);
     await client.query(
       `INSERT INTO users (
@@ -502,6 +525,7 @@ async function writeStoreWithClient(client, store = {}) {
     );
   }
 
+  if (!previous || !isDeepStrictEqual(store.smsCodes, previous.smsCodes)) {
   await client.query("DELETE FROM sms_codes");
   for (const sms of store.smsCodes || []) {
     await client.query(
@@ -529,14 +553,15 @@ async function writeStoreWithClient(client, store = {}) {
     );
   }
 
+  }
   const orders = Array.isArray(store.orders) ? store.orders : [];
-  if (Array.isArray(store.orders)) {
+  if (Array.isArray(store.orders) && hasRemovedRows(orders, previous?.orders)) {
     await client.query(
       "DELETE FROM orders WHERE NOT (id = ANY($1::text[]))",
       [orders.map((order) => String(order.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const order of orders) {
+  for (const order of changedRows(orders, previous?.orders)) {
     const from = coords(order.fromPoint || order.otCoords || order.fromCoords);
     const to = coords(order.toPoint || order.kudaCoords || order.toCoords);
     await client.query(
@@ -597,13 +622,13 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const payments = Array.isArray(store.payments) ? store.payments : [];
-  if (Array.isArray(store.payments)) {
+  if (Array.isArray(store.payments) && hasRemovedRows(payments, previous?.payments)) {
     await client.query(
       "DELETE FROM payments WHERE NOT (id = ANY($1::text[]))",
       [payments.map((payment) => String(payment.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const payment of payments) {
+  for (const payment of changedRows(payments, previous?.payments)) {
     await client.query(
       `INSERT INTO payments (
         id, user_id, payment_id, status, amount, idempotency_key,
@@ -637,13 +662,13 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const withdrawals = Array.isArray(store.withdrawals) ? store.withdrawals : [];
-  if (Array.isArray(store.withdrawals)) {
+  if (Array.isArray(store.withdrawals) && hasRemovedRows(withdrawals, previous?.withdrawals)) {
     await client.query(
       "DELETE FROM withdrawals WHERE NOT (id = ANY($1::text[]))",
       [withdrawals.map((withdrawal) => String(withdrawal.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const withdrawal of withdrawals) {
+  for (const withdrawal of changedRows(withdrawals, previous?.withdrawals)) {
     await client.query(
       `INSERT INTO withdrawals (id, user_id, status, amount, data, created_at, updated_at, resolved_at)
        VALUES (
@@ -671,7 +696,7 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const ledger = Array.isArray(store.ledger) ? store.ledger : [];
-  if (Array.isArray(store.ledger)) {
+  if (Array.isArray(store.ledger) && hasRemovedRows(ledger, previous?.ledger)) {
     await client.query(
       "DELETE FROM ledger WHERE NOT (id = ANY($1::text[]))",
       [ledger.map((entry) => String(entry.id || "").trim()).filter(Boolean)],
@@ -679,7 +704,7 @@ async function writeStoreWithClient(client, store = {}) {
   }
   const currentUserIds = new Set(users.map(user => user.id));
   const currentOrderIds = new Set((store.orders || []).map(order => order.id));
-  for (const originalEntry of ledger) {
+  for (const originalEntry of changedRows(ledger, previous?.ledger)) {
     // Account deletion may remove orders owned by another ledger user's passenger.
     // Preserve that ledger history without restoring references cleared by SQL.
     const entry = {
@@ -721,13 +746,13 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const chats = Array.isArray(store.chats) ? store.chats : [];
-  if (Array.isArray(store.chats)) {
+  if (Array.isArray(store.chats) && hasRemovedRows(chats, previous?.chats)) {
     await client.query(
       "DELETE FROM support_chats WHERE NOT (id = ANY($1::text[]))",
       [chats.map((chat) => String(chat.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const chat of chats) {
+  for (const chat of changedRows(chats, previous?.chats)) {
     await client.query(
       `INSERT INTO support_chats (
         id, user_id, admin_id, support_chat_key, last_message,
@@ -761,13 +786,13 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const chatMessages = Array.isArray(store.chatMessages) ? store.chatMessages : [];
-  if (Array.isArray(store.chatMessages)) {
+  if (Array.isArray(store.chatMessages) && hasRemovedRows(chatMessages, previous?.chatMessages)) {
     await client.query(
       "DELETE FROM support_messages WHERE NOT (id = ANY($1::text[]))",
       [chatMessages.map((message) => String(message.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const message of chatMessages) {
+  for (const message of changedRows(chatMessages, previous?.chatMessages)) {
     await client.query(
       `INSERT INTO support_messages (id, chat_id, user_id, text, image_url, data, created_at)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb, COALESCE($7::timestamptz, now()))
@@ -790,13 +815,13 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const fcmTokens = Array.isArray(store.fcmTokens) ? store.fcmTokens : [];
-  if (Array.isArray(store.fcmTokens)) {
+  if (Array.isArray(store.fcmTokens) && hasRemovedRows(fcmTokens, previous?.fcmTokens)) {
     await client.query(
       "DELETE FROM fcm_tokens WHERE NOT (id = ANY($1::text[]))",
       [fcmTokens.map((token) => String(token.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const token of fcmTokens) {
+  for (const token of changedRows(fcmTokens, previous?.fcmTokens)) {
     const fcmToken = String(token.fcmToken || token.token || "").trim();
     if (!fcmToken) continue;
     await client.query(
@@ -825,13 +850,13 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const notifications = Array.isArray(store.notifications) ? store.notifications : [];
-  if (Array.isArray(store.notifications)) {
+  if (Array.isArray(store.notifications) && hasRemovedRows(notifications, previous?.notifications)) {
     await client.query(
       "DELETE FROM notifications WHERE NOT (id = ANY($1::text[]))",
       [notifications.map((notification) => String(notification.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const notification of notifications) {
+  for (const notification of changedRows(notifications, previous?.notifications)) {
     await client.query(
       `INSERT INTO notifications (id, dedupe_key, event_type, title, body, data, created_at)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb, COALESCE($7::timestamptz, now()))
@@ -856,13 +881,13 @@ async function writeStoreWithClient(client, store = {}) {
   const notificationDeliveries = Array.isArray(store.notificationDeliveries)
     ? store.notificationDeliveries
     : [];
-  if (Array.isArray(store.notificationDeliveries)) {
+  if (Array.isArray(store.notificationDeliveries) && hasRemovedRows(notificationDeliveries, previous?.notificationDeliveries)) {
     await client.query(
       "DELETE FROM notification_deliveries WHERE NOT (id = ANY($1::text[]))",
       [notificationDeliveries.map((delivery) => String(delivery.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const delivery of notificationDeliveries) {
+  for (const delivery of changedRows(notificationDeliveries, previous?.notificationDeliveries)) {
     await client.query(
       `INSERT INTO notification_deliveries (
         id, notification_id, token_id, user_id, status, attempts,
@@ -896,13 +921,13 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   const pushDeliveryAcks = Array.isArray(store.pushDeliveryAcks) ? store.pushDeliveryAcks : [];
-  if (Array.isArray(store.pushDeliveryAcks)) {
+  if (Array.isArray(store.pushDeliveryAcks) && hasRemovedRows(pushDeliveryAcks, previous?.pushDeliveryAcks)) {
     await client.query(
       "DELETE FROM push_delivery_acks WHERE NOT (id = ANY($1::text[]))",
       [pushDeliveryAcks.map((ack) => String(ack.id || "").trim()).filter(Boolean)],
     );
   }
-  for (const ack of pushDeliveryAcks) {
+  for (const ack of changedRows(pushDeliveryAcks, previous?.pushDeliveryAcks)) {
     await client.query(
       `INSERT INTO push_delivery_acks (id, user_id, notification_id, event_type, order_id, data, created_at)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb, COALESCE($7::timestamptz, now()))
@@ -926,6 +951,7 @@ async function writeStoreWithClient(client, store = {}) {
   }
 
   for (const [key, value] of Object.entries(store.settings || {})) {
+    if (previous && isDeepStrictEqual(value, previous.settings?.[key])) continue;
     await client.query(
       `INSERT INTO app_settings (key, value, updated_at)
        VALUES ($1, $2::jsonb, now())
@@ -933,7 +959,8 @@ async function writeStoreWithClient(client, store = {}) {
       [key, JSON.stringify(value)],
     );
   }
-  if (store.intercityTariff && typeof store.intercityTariff === "object") {
+  if (store.intercityTariff && typeof store.intercityTariff === "object" &&
+      (!previous || !isDeepStrictEqual(store.intercityTariff, previous.intercityTariff))) {
     await client.query(
       `INSERT INTO app_settings (key, value, updated_at)
        VALUES ('intercityTariff', $1::jsonb, now())
@@ -941,7 +968,7 @@ async function writeStoreWithClient(client, store = {}) {
       [JSON.stringify(store.intercityTariff)],
     );
   }
-  if (store.paymentSequence != null) {
+  if (store.paymentSequence != null && (!previous || store.paymentSequence !== previous.paymentSequence)) {
     await client.query(
       `INSERT INTO app_settings (key, value, updated_at)
        VALUES ('paymentSequence', $1::jsonb, now())
@@ -950,6 +977,7 @@ async function writeStoreWithClient(client, store = {}) {
     );
   }
   for (const [collection, fields] of Object.entries(store.content || {})) {
+    if (previous && isDeepStrictEqual(fields, previous.content?.[collection])) continue;
     await client.query(
       `INSERT INTO content_documents (collection, fields, updated_at)
        VALUES ($1, $2::jsonb, now())
@@ -957,7 +985,7 @@ async function writeStoreWithClient(client, store = {}) {
       [collection, JSON.stringify(fields || {})],
     );
   }
-  for (const item of store.cityPrices || []) {
+  for (const item of changedRows(store.cityPrices || [], previous?.cityPrices)) {
     await client.query(
       `INSERT INTO city_prices (id, title, price_day, price_night, delivery_price, data, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
@@ -978,7 +1006,7 @@ async function writeStoreWithClient(client, store = {}) {
       ],
     );
   }
-  for (const item of store.intercityRoutes || []) {
+  for (const item of changedRows(store.intercityRoutes || [], previous?.intercityRoutes)) {
     await client.query(
       `INSERT INTO intercity_routes (id, ot, kuda, tarif, com, data, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
@@ -1000,6 +1028,7 @@ async function writeStoreWithClient(client, store = {}) {
     );
   }
   for (const [collection, documents] of Object.entries(store.genericCollections || {})) {
+    if (previous && isDeepStrictEqual(documents, previous.genericCollections?.[collection])) continue;
     await client.query("DELETE FROM generic_documents WHERE collection = $1", [collection]);
     for (const item of documents || []) {
       await client.query(
@@ -1018,7 +1047,7 @@ async function writeStoreWithClient(client, store = {}) {
       );
     }
   }
-  for (const item of store.auditLogs || []) {
+  for (const item of changedRows(store.auditLogs || [], previous?.auditLogs)) {
     await client.query(
       `INSERT INTO audit_logs (id, action, target, admin_id, admin_phone, before_data, after_data, extra, created_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, COALESCE($9::timestamptz, now()))
@@ -1049,8 +1078,9 @@ async function writeStoreAsync(store) {
 async function withStoreAsync(mutator) {
   return withPgTransaction(async (client) => {
     const store = await readStoreWithClient(client);
+    const previous = structuredClone(store);
     const result = await mutator(store);
-    await writeStoreWithClient(client, store);
+    await writeStoreWithClient(client, store, previous);
     return result;
   });
 }
@@ -1093,6 +1123,7 @@ async function storeHealth() {
 }
 
 module.exports = {
+  lookupUserByIdAsync,
   storeHealth,
   createPool,
   getPool,

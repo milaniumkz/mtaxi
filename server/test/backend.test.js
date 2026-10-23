@@ -5001,7 +5001,7 @@ test("adminSavePolitika saves politica content through backend alias", async () 
   assert.equal(readStore().auditLogs.at(-1).action, "adminUpdateContentDocument");
 });
 
-test("uploadFile stores authenticated media and returns public url", async () => {
+test("uploadFile stores media with persistent ownership metadata", async () => {
   const login = await passwordLogin({
     phone: "7052597368",
     password: "123456",
@@ -5045,8 +5045,11 @@ test("uploadFile stores authenticated media and returns public url", async () =>
   assert.equal(result.success, true);
   assert.match(result.url, /^http:\/\/localhost:8080\/uploads\/.+\.jpg$/);
   const files = fs.readdirSync(process.env.MTAXI_UPLOAD_DIR);
-  assert.equal(files.length, 1);
-  assert.deepEqual(fs.readFileSync(path.join(process.env.MTAXI_UPLOAD_DIR, files[0])), jpegBytes);
+  const media = files.filter(name => !name.endsWith('.owner.json'));
+  assert.equal(media.length, 1);
+  assert.deepEqual(fs.readFileSync(path.join(process.env.MTAXI_UPLOAD_DIR, media[0])), jpegBytes);
+  const metadata = JSON.parse(fs.readFileSync(path.join(process.env.MTAXI_UPLOAD_DIR, media[0]+'.owner.json')));
+  assert.equal(metadata.ownerId, login.user.id);
 });
 
 test("publicBaseUrl uses configured URL or first forwarded proxy values", () => {

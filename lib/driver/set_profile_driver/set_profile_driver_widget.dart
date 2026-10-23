@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import '/design/driver_approval.dart';
 import '/design/mtaxi_theme.dart';
 import '/auth/backend_auth/auth_util.dart';
@@ -1063,7 +1064,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
         height: double.infinity,
       );
     }
-    return Image.network(
+    return MTaxiNetworkImage(
       imageUrl,
       fit: BoxFit.cover,
       width: double.infinity,

@@ -51,12 +51,17 @@ void main() {
   });
   const adaptive = bool.fromEnvironment('MTAXI_ADAPTIVE_REVIEW');
   final variants = adaptive
-      ? [(320.0, 1.3, 'ru'), (360.0, 2.0, 'kk'), (430.0, 2.0, 'ru')]
-      : [(390.0, 1.0, 'ru')];
-  for (final (width, scale, locale) in variants) {
+      ? [
+          for (final width in [320.0, 390.0, 768.0, 1024.0, 1440.0])
+            for (final locale in ['ru', 'kk'])
+              for (final brightness in Brightness.values)
+                (width, 2.0, locale, brightness)
+        ]
+      : [(390.0, 1.0, 'ru', Brightness.light)];
+  for (final (width, scale, locale, brightness) in variants) {
     for (var id = 1; id <= 32; id++) {
       testWidgets(
-          'visual ${id.toString().padLeft(2, '0')} at ${width}x844 scale $scale $locale',
+          'visual ${id.toString().padLeft(2, '0')} at ${width}x844 scale $scale $locale ${brightness.name}',
           (tester) async {
         tester.view.physicalSize = Size(width, 844);
         tester.view.devicePixelRatio = 1;
@@ -239,6 +244,7 @@ void main() {
               RepaintBoundary(
                   key: const ValueKey('visual-screen'), child: page),
               scale: scale,
+              brightness: brightness,
               locale: locale));
           for (var i = 0; i < 8; i++) {
             await tester.pump(const Duration(milliseconds: 100));

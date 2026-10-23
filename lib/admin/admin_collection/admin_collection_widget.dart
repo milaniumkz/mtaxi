@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -236,7 +237,7 @@ class _AdminImageWithFallbackState extends State<_AdminImageWithFallback> {
     if (widget.urls.isEmpty) {
       return widget.errorChild;
     }
-    return Image.network(
+    return MTaxiNetworkImage(
       widget.urls[_currentIndex],
       fit: widget.fit,
       errorBuilder: (_, __, ___) {

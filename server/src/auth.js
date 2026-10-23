@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { readStoreAsync, withStoreAsync, newId } = require("./store");
+const { readStoreAsync, withStoreAsync, newId, lookupUserByIdAsync } = require("./store");
 const { normalizePhone, normalizeString } = require("./utils/values");
 const { publicUser } = require("./users");
 const { isPasswordHash, setUserPassword, verifyPassword } = require("./passwords");
@@ -63,6 +63,7 @@ async function findUserByPhoneAsync(phone) {
 }
 
 async function findUserByIdAsync(id) {
+  if (lookupUserByIdAsync) return lookupUserByIdAsync(id);
   const store = await readStoreAsync();
   return store.users.find((user) => user.id === id) || null;
 }

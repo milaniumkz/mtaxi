@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/app_city_tariffs/app_city_tariffs.dart';
 import '/backend/backend.dart';
@@ -684,7 +685,7 @@ class _SetProfileWidgetState extends State<SetProfileWidget>
                                                           height: 42.0,
                                                           fit: BoxFit.cover,
                                                         )
-                                                      : Image.network(
+                                                      : MTaxiNetworkImage(
                                                           _model
                                                               .uploadedFileUrl_uploadData9bb,
                                                           width: 42.0,

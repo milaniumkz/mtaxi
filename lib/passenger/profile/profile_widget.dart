@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import '/design/mtaxi_theme.dart';
 import '/design/driver_approval.dart';
 import 'dart:async';
@@ -758,7 +759,7 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                                       .isEmpty
                                   ? Icon(Icons.person_outline,
                                       size: 32, color: mutedColor)
-                                  : Image.network(
+                                  : MTaxiNetworkImage(
                                       _effectiveProfileImageUrlForMode(
                                           roleState),
                                       fit: BoxFit.cover,
