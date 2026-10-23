@@ -168,7 +168,8 @@ async function updateFcmTokenStateAsync(data = {}, auth) {
 
 function tokenMatchesTarget(store, token, notification) {
   if (token.disabled) return false;
-  const user = store.users.find((item) => item.id === token.userId);
+  const user = store.users.find((item) => item.id === token.userId) ||
+    (store.pushAudience || []).find((item) => item.id === token.userId);
   if (!user) return false;
   if (notification.orderAlert === true && token.orderAlertsEnabled === false) return false;
 

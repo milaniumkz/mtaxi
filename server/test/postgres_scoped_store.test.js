@@ -78,7 +78,7 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
       }finally{clearTimeout(timer);release();}
     });
     await t.test('financial scope rejects modifying a user without its row lock',async()=>{
-      await assert.rejects(store.withStoreAsync(s=>{s.users.find(u=>u.id===prefix+'f').balance++;},financialOrderScope('',prefix+'e')));
+      await assert.rejects(store.withStoreAsync(s=>{s.users.push({id:prefix+'f',phone:'+70000000805',balance:9999});},financialOrderScope('',prefix+'e')));
       assert.equal((await store.lookupUserByIdAsync(prefix+'f')).balance,999);
     });
     await t.test('GPS automatically advances arrival and queues passenger push with complete audience',async()=>{
@@ -100,6 +100,9 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
       for(let i=0;i<10;i++) {
         const created=await ordersApi.createPassengerOrderAsync({type:'taxi',city:'Железинка',ot:'Тест1',kuda:'Тест10',price:500,fromPoint:{latitude:53.53,longitude:76.68},toPoint:{latitude:53.54,longitude:76.69}},{user:{id:prefix+'p'}});
         assert.equal(created.success,true);const request={orderDocPath:created.orderDocPath};
+        const orderId=created.orderDocPath.split('/').pop();
+        const deliveries=await db.query("SELECT d.user_id FROM notification_deliveries d JOIN notifications n ON n.id=d.notification_id WHERE n.event_type='ORDER_CREATED' AND n.data->>'orderId'=$1 ORDER BY d.user_id",[orderId]);
+        assert.deepEqual(deliveries.rows.map(row=>row.user_id),[prefix+'e',prefix+'f'],'Scoped creation must preserve the driver push audience');
         const gps=()=>updateUserPreferencesAsync({coords:{latitude:53.53,longitude:76.68,accuracy:10}},{user:{id:prefix+'d'}});
         const assigned=await Promise.all([ordersApi.acceptOrderAsync(request,{user:{id:prefix+'d'}}),gps()]);
         assert.ok(assigned.every(r=>r.success));
@@ -108,6 +111,15 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
         assert.ok(done.every(r=>r.success));
       }
       const driver=await store.lookupUserByIdAsync(prefix+'d');assert.equal(driver.balance,before-500);assert.equal(driver.activeDriverOrderId,null);
+    });
+    await t.test('session and authentication reads continue when all write connections are occupied',async()=>{
+      const held=await Promise.all(Array.from({length:store.getPool().options.max},()=>store.getPool().connect()));
+      let timer;
+      try {
+        const reads=Promise.all([store.lookupUserByIdAsync(prefix+'p'),require('../src/session').getSessionBootstrapAsync({},{user:{id:prefix+'p'}})]);
+        const result=await Promise.race([reads,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Reads starved behind writer connections')),1500);})]);
+        assert.equal(result[0].id,prefix+'p');assert.equal(result[1].success,true);
+      }finally{clearTimeout(timer);for(const client of held)client.release();}
     });
   }finally{
     await db.query("DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE data->>'orderId' IN (SELECT id FROM orders WHERE user_id LIKE 'audit-scope-%')) OR user_id LIKE 'audit-scope-%'");

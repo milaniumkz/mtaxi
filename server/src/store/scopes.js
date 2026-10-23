@@ -48,7 +48,7 @@ function offerReadScope(orderId, actorId = '') {
 }
 function financialOrderScope(orderId = '', actorId = '', offerId = '') {
   // The transaction locks this order and its current participants; broadcasts
-  // still read all drivers/tokens without modifying their account records.
+  // read minimal token-owner role flags without modifying their accounts.
   return {financial:{orderId,actorId,offerId},tables: {
     users:true,
     orders:filter('id=$1',orderId),

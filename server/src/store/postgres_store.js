@@ -130,6 +130,11 @@ async function lookupUserByIdAsync(id) {
 }
 
 async function readStoreWithClient(client, scope = null) {
+  // Push targeting needs only role flags of token owners, not their complete
+  // password/profile/GPS records. Participants still use the locked full rows.
+  const pushAudience = scope?.financial ? (await client.query(
+    'SELECT id,role,role_state,is_driver FROM users WHERE id IN (SELECT user_id FROM fcm_tokens)',
+  )).rows.map(row=>({id:row.id,role:row.role,roleState:row.role_state,isDriver:row.is_driver})) : null;
   const readQuery = (sql) => {
     if (!scope) return client.query(sql);
     const table = /\bFROM\s+(\w+)/i.exec(sql)?.[1];
@@ -284,6 +289,7 @@ async function readStoreWithClient(client, scope = null) {
     });
   }
   return {
+    ...(pushAudience ? {pushAudience} : {}),
     users: usersResult.rows.map(userFromRow),
     orders: ordersResult.rows.map((row) => ({
       ...(row.data || {}),
@@ -1154,7 +1160,7 @@ async function withFinancialTransaction(callback, scope) {
       scope.lockedUserIds=new Set(users.map(u=>u.id));
       const orderIds=[...new Set([orderId,...users.flatMap(u=>[u.active_passenger_order_id,u.active_driver_order_id])].filter(Boolean))];
       scope.tables.orders={where:'id=ANY($1::text[]) OR (status=5 AND driver_id=$2)',values:[orderIds,actorId]};
-      scope.tables.users={where:'is_driver=true OR id=ANY($1::text[])',values:[ids]};
+      scope.tables.users={where:'id=ANY($1::text[])',values:[ids]};
       const result=await callback(client);
       await client.query('COMMIT');return result;
     } catch(error) {await client.query('ROLLBACK');throw error;}
