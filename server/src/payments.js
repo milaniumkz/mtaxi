@@ -1,3 +1,4 @@
+const { moneyStatsScope } = require("./store/scopes");
 const { withStoreAsync, readStoreAsync, newId } = require("./store");
 const { asDate, asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { publicUser } = require("./users");
@@ -773,7 +774,7 @@ async function getMoneyStatsAsync(data = {}, auth) {
   if (authError) return authError;
   const from = asDate(data.from);
   const to = asDate(data.to);
-  return readStoreAsync().then(async (store) => {
+  return readStoreAsync(moneyStatsScope()).then(async (store) => {
     const ledger = (store.ledger || []).filter((entry) => {
       const date = asDate(entry.createdAt);
       if (!date) return false;

@@ -40,4 +40,26 @@ function feedScope(userId) {
     app_settings:true,
   }};
 }
-module.exports = {sessionScope,preferencesScope,orderScope,trackingScope,historyScope,feedScope};
+function offerReadScope(orderId, actorId = '') {
+  return {tables: {
+    orders:filter('id=$1',orderId),
+    users:filter("id=$2 OR id IN (SELECT user_id FROM orders WHERE id=$1) OR id IN (SELECT item->>'driverId' FROM orders CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(data->'offers')='array' THEN data->'offers' ELSE '[]'::jsonb END) AS item WHERE orders.id=$1)",orderId,actorId),
+  }};
+}
+function financialOrderScope(orderId = '', actorId = '') {
+  // Financial transitions still use the exclusive store lock. Existing ledger
+  // history is not needed to append a posting: idempotence lives on the order.
+  // Keep all users/tokens for broadcasts, but omit unrelated history/documents.
+  return {tables: {
+    users:true,
+    orders:filter('id=$1 OR status IN (0,1,2,3,4) OR (status=5 AND driver_id=$2)',orderId,actorId),
+    ledger:filter('order_id=$1',orderId),
+    app_settings:true, city_prices:true, intercity_routes:true, fcm_tokens:true,
+    notifications:filter("data->>'orderId'=$1",orderId),
+    notification_deliveries:filter("notification_id IN (SELECT id FROM notifications WHERE data->>'orderId'=$1)",orderId),
+  }};
+}
+function moneyStatsScope() {
+  return {tables:{users:true,ledger:true,payments:true,withdrawals:true}};
+}
+module.exports = {sessionScope,preferencesScope,orderScope,trackingScope,historyScope,feedScope,offerReadScope,financialOrderScope,moneyStatsScope};

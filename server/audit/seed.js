@@ -21,6 +21,8 @@ const { configureLaunchDefaultsInStore } = require('../scripts/configure_launch_
     const user = { id: `audit_${i}`, phone: `+7001${String(i).padStart(7,'0')}`,
       displayName: `Synthetic ${role} ${i}`, city: 'Железинка', passwordHash: template.passwordHash,
       roleState: role === 'admin' ? 'ADMIN' : role === 'driver' ? 'DRIVER_ONLINE' : 'PASSENGER',
+      activeMode: role === 'driver' ? 'driver' : 'passenger',
+      preferredClientMode: role === 'driver' ? 'driver' : 'passenger',
       isDriver: role === 'driver', role: role === 'admin' ? 'admin' : 'user',
       isAdmin: role === 'admin', statusDriver: role === 'driver' ? 'approved' : '',
       driverOnLine: role === 'driver', balance: 1000000, bonusBalance: role === 'driver' ? 1000 : 0,

@@ -7,7 +7,7 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
   process.env.MTAXI_STORE='postgres';process.env.DATABASE_URL=url.href;
   const db=new Client({connectionString:url.href}); await db.connect();
   const store=require('../src/store');
-  const {sessionScope,preferencesScope,trackingScope}=require('../src/store/scopes');
+  const {sessionScope,preferencesScope,trackingScope,financialOrderScope,offerReadScope}=require('../src/store/scopes');
   const {updateUserPreferencesAsync}=require('../src/users');
   const prefix='audit-scope-';
   try {
@@ -23,6 +23,15 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
       assert.deepEqual(scoped.orders.map(o=>o.id),[prefix+'trip']);assert.deepEqual(scoped.ledger,[]);
       const tracked=await store.readStoreAsync(trackingScope(prefix+'trip'));
       assert.equal(tracked.orders.filter(o=>o.status===5).length,1);
+    });
+    await t.test('partial financial writes preserve unrelated history and tolerate null offers',async()=>{
+      await db.query("INSERT INTO ledger(id,user_id,order_id,type,amount) VALUES($1,$2,$3,'scope_probe',0)",[prefix+'history',prefix+'p',prefix+'old']);
+      await db.query("UPDATE orders SET data=jsonb_build_object('offers',NULL) WHERE id=$1",[prefix+'trip']);
+      const offers=await store.readStoreAsync(offerReadScope(prefix+'trip',prefix+'d'));
+      assert.ok(offers.users.some(u=>u.id===prefix+'d'));
+      await store.withStoreAsync(s=>{s.users.find(u=>u.id===prefix+'d').language='ru';},financialOrderScope(prefix+'trip',prefix+'d'));
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM ledger WHERE id=$1',[prefix+'history'])).rows[0].n,1);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM orders WHERE id=$1',[prefix+'old'])).rows[0].n,1);
     });
     await t.test('shared user writers are concurrent across users and serialize same user',async()=>{
       let release;const gate=new Promise(r=>release=r);let entered;const ready=new Promise(r=>entered=r);
@@ -67,6 +76,7 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
     await db.query("DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE data->>'orderId' LIKE 'audit-scope-%')");
     await db.query("DELETE FROM notifications WHERE data->>'orderId' LIKE 'audit-scope-%'");
     await db.query("DELETE FROM fcm_tokens WHERE id LIKE 'audit-scope-%'");
+    await db.query("DELETE FROM ledger WHERE id LIKE 'audit-scope-%'");
     await db.query("DELETE FROM orders WHERE id LIKE 'audit-scope-%'");
     await db.query("DELETE FROM users WHERE id LIKE 'audit-scope-%'");await db.end();await store.getPool().end();
   }

@@ -1,4 +1,4 @@
-const { trackingScope } = require("./store/scopes");
+const { trackingScope, offerReadScope, financialOrderScope } = require("./store/scopes");
 const { withStoreAsync, readStoreAsync, newId } = require("./store");
 const { acceptOrderInStore } = require("./orders");
 const { routeLookup } = require("./geocoding");
@@ -43,7 +43,7 @@ async function submitOrderOfferAsync(data, auth) {
   const price = Number(data.price);
   if (!Number.isSafeInteger(price) || price < 500 || price > 10000000)
     return fail("PRICE_MINIMUM", "Цена — целое число от 500 ₸");
-  const snapshot = await readStoreAsync();
+  const snapshot = await readStoreAsync(offerReadScope(idOf(data), auth.user.id));
   const order = snapshot.orders.find((o) => o.id === idOf(data));
   const driver = snapshot.users.find((u) => u.id === auth.user.id);
   if (
@@ -107,11 +107,11 @@ async function submitOrderOfferAsync(data, auth) {
       initialPageName: "seachDriver",
     });
     return { success: true, offer };
-  });
+  }, financialOrderScope(order.id, driver.id));
 }
 async function listOrderOffersAsync(data, auth) {
   if (!auth?.user) return fail("UNAUTHENTICATED", "Войдите в приложение");
-  const store = await readStoreAsync();
+  const store = await readStoreAsync(offerReadScope(idOf(data)));
   const o = store.orders.find((x) => x.id === idOf(data));
   if (!o || o.userId !== auth.user.id)
     return fail("ORDER_FORBIDDEN", "Нет доступа к предложениям");
@@ -204,7 +204,7 @@ async function respondOrderOfferAsync(data, auth) {
       x.status = x.id === offer.id ? "accepted" : "closed";
     });
     return result;
-  });
+  }, financialOrderScope(idOf(data), auth.user.id));
 }
 async function getTripTrackingAsync(data, auth) {
   if (!auth?.user) return fail("UNAUTHENTICATED", "Войдите в приложение");
