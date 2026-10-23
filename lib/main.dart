@@ -1324,7 +1324,20 @@ class _NavBarPageState extends State<NavBarPage> {
           _tabsDriverMode = isDriverMode;
         }
         if (!tabs.containsKey(_currentPageName)) {
-          _currentPageName = tabs.keys.first;
+          final aliases = isDriverMode
+              ? const {
+                  'HomePage': 'driverOrders',
+                  'wallet': 'driverWallet',
+                  'history': 'driverHistory',
+                  'profile': 'driverProfile'
+                }
+              : const {
+                  'driverOrders': 'HomePage',
+                  'driverWallet': 'wallet',
+                  'driverHistory': 'history',
+                  'driverProfile': 'profile'
+                };
+          _currentPageName = aliases[_currentPageName] ?? tabs.keys.first;
           _currentPage = null;
         }
 

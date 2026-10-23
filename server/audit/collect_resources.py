@@ -8,7 +8,7 @@ for _ in range(180):
     sample={'at':time.time(),'docker':json.loads(result.stdout) if result.returncode==0 else {'error':result.stderr[:300]}}
     for name in ['cpu.stat','cpu.max','memory.current','memory.max','memory.events']:
         sample[name]=Path('/sys/fs/cgroup',name).read_text().strip()
-    with (out/'load-resource-host.jsonl').open('a') as f:f.write(json.dumps(sample)+'\n')
-    log=out/'load-latest.log'
+    with (out/os.environ.get('MTAXI_AUDIT_RESOURCE_FILE','load-resource-host.jsonl')).open('a') as f:f.write(json.dumps(sample)+'\n')
+    log=out/os.environ.get('MTAXI_AUDIT_LOAD_LOG','load-latest.log')
     if log.exists() and '"finished":true' in log.read_text():break
     time.sleep(15)

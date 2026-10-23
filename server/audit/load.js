@@ -18,6 +18,7 @@ const expected = new Set(['ORDER_ALREADY_EXISTS','ORDER_NOT_AVAILABLE','OFFER_FO
 const hist = new Map(), stages=[], events=[], propagation=[], positions=[];
 const mutations = new Map(), delivery = [], locationAge = [];
 let stop=false,abortReason=null,target=0,live=0,maxLive=0,inflight=0,maxInflight=0,stageName='',requests=0,unexpected=0,business=0,completed=0;
+const startedAt=new Date().toISOString();
 const started=performance.now(); const sleeper=ms=>new Promise(r=>setTimeout(r,ms));
 function record(name,ms,bad,code) {
  let h=hist.get(name);if(!h)hist.set(name,h={count:0,errors:0,business:0,bins:{},codes:{}});
@@ -61,7 +62,7 @@ async function vu(actor,index) {
      const order=session.activeDriverOrder;const status=Number(order?.status??session.activeDriverOrderStatus);
      if(phaseStatus!==status){phaseStatus=status;phaseSince=Date.now();}
      if(assignmentAt){propagation.push(performance.now()-assignmentAt);assignmentAt=0;}
-     if(Date.now()-lastGps>=5000){await call(actor,'updateUserPreferences',{coords:{latitude:53.53,longitude:76.68,accuracy:10}});lastGps=Date.now();}
+     if(Date.now()-lastGps>=3000){await call(actor,'updateUserPreferences',{coords:{latitude:53.53,longitude:76.68,accuracy:10}});lastGps=Date.now();}
      const dwell={2:30000,3:15000,4:90000}[status];
      if(status>=2&&status<5&&Date.now()-phaseSince>=dwell){const r=await call(actor,'advanceDriverOrderStatus',{orderDocPath:ref,nextStatus:status+1});if(r.success&&status===4)completed++;}
     }else{
@@ -88,7 +89,7 @@ function setTarget(n){target=n;for(let i=0;i<n;i++)if(!running.has(i)){const tas
 const loop=monitorEventLoopDelay();loop.enable();let cpu=process.cpuUsage(),sampleAt=performance.now();
 function percentile(bins,q){const items=Object.entries(bins).map(([ms,n])=>[Number(ms),n]).sort((a,b)=>a[0]-b[0]);const total=items.reduce((s,x)=>s+x[1],0);let n=0;for(const [ms,count]of items){n+=count;if(n>=total*q)return ms;}return null;}
 function distribution(values){if(!values.length)return {count:0,p50:null,p95:null,p99:null};const a=[...values].sort((a,b)=>a-b);return {count:a.length,p50:a[Math.floor((a.length-1)*.5)],p95:a[Math.floor((a.length-1)*.95)],p99:a[Math.floor((a.length-1)*.99)]};}
-function snapshot(){return {revision:process.env.MTAXI_AUDIT_REVISION||null,diagnostic,plan,stages,aborted:!!abortReason,abortReason,maxLive,maxInflight,requests,unexpected,business,completedTrips:completed,durationSeconds:(performance.now()-started)/1000,operations:Object.fromEntries([...hist].map(([name,h])=>[name,{...h,bins:undefined,p50:percentile(h.bins,.5),p95:percentile(h.bins,.95),p99:percentile(h.bins,.99)}])),realtimeDelivery:distribution(delivery),gpsPositionAge:distribution(locationAge),notes:['Realtime transport is HTTP polling, not WebSocket','Delivery measures mutation response to first matching poll by another user; overwritten intermediate transitions are omitted','GPS position age includes polling interval; synthetic foreground coordinates only','JWT sessions are seeded; password login tested separately','Map/geocoding adapters synthetic; FCM/SMS disabled; manual Kaspi not sent']};}
+function snapshot(){return {startedAt,model:{passengers:600,drivers:390,admins:10,statusPollMs:2000,gpsMinIntervalMs:3000,tripDwellMs:{assigned:30000,arrived:15000,started:90000}},revision:process.env.MTAXI_AUDIT_REVISION||null,diagnostic,plan,stages,aborted:!!abortReason,abortReason,maxLive,maxInflight,requests,unexpected,business,completedTrips:completed,durationSeconds:(performance.now()-started)/1000,operations:Object.fromEntries([...hist].map(([name,h])=>[name,{...h,bins:undefined,p50:percentile(h.bins,.5),p95:percentile(h.bins,.95),p99:percentile(h.bins,.99)}])),realtimeDelivery:distribution(delivery),gpsPositionAge:distribution(locationAge),notes:['Realtime transport is HTTP polling, not WebSocket','Delivery measures mutation response to first matching poll by another user; overwritten intermediate transitions are omitted','GPS position age includes polling interval; synthetic foreground coordinates only','JWT sessions are seeded; password login tested separately','Map/geocoding adapters synthetic; FCM/SMS disabled; manual Kaspi not sent']};}
 const timer=setInterval(()=>{
  if(!stop)setTarget(target);
  const current=process.cpuUsage(),now=performance.now();const progress={at:new Date().toISOString(),stage:stageName,target,live,inflight,requests,unexpected,rss:process.memoryUsage().rss,cpuPercent:((current.user-cpu.user)+(current.system-cpu.system))/(now-sampleAt)/10,eventLoopP95Ms:loop.percentile(95)/1e6};
