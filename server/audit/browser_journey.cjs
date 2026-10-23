@@ -8,8 +8,10 @@ module.exports=async function journey(){
   await p.getByRole('button',{name:'Куда едем?',exact:true}).click();
   await p.getByRole('textbox',{name:'Откуда',exact:true}).fill('Тестовая 1');
   await p.getByRole('textbox',{name:'Откуда',exact:true}).press('Enter');
+  await p.waitForTimeout(600); // Let Flutter finish applying the submitted address before editing another field.
   await p.getByRole('textbox',{name:'Куда',exact:true}).fill('Тестовая 10');
-  await p.getByRole('button',{name:'Тестовая 10, Железинка',exact:true}).click({timeout:15000});
+  await p.getByRole('textbox',{name:'Куда',exact:true}).press('Enter');
+  await p.waitForTimeout(600);
   await p.getByRole('button',{name:'Готово',exact:true}).click();
   await p.getByRole('button',{name:'Заказать',exact:true}).click();
   await p.getByRole('textbox',{name:'Цена поездки',exact:true}).fill('500');
