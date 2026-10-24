@@ -29,6 +29,7 @@ class DriverBackgroundLocation {
         permission == LocationPermission.deniedForever) return;
     _stream = Geolocator.getPositionStream(
             locationSettings: AndroidSettings(
+                forceLocationManager: true,
                 accuracy: LocationAccuracy.high,
                 distanceFilter: 5,
                 intervalDuration: const Duration(seconds: 3),
