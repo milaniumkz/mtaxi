@@ -46,64 +46,56 @@ class ServiceTypeCards extends StatelessWidget {
                           width: selected ? 1.5 : 1)),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                      key: ValueKey('service-card-$type'),
-                      onTap: () => onChanged(type),
-                      child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(children: [
-                                  Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                          color: selected
-                                              ? MTaxiDesign.gold
-                                              : (dark
-                                                  ? scheme
-                                                      .surfaceContainerHighest
-                                                  : Colors.white),
-                                          borderRadius:
-                                              BorderRadius.circular(12)),
-                                      child: MTaxiIcon(icon,
-                                          color: selected
-                                              ? MTaxiDesign.ink
-                                              : scheme.onSurface,
-                                          size: 28)),
-                                  const Spacer(),
-                                  if (selected)
-                                    Container(
-                                      width: 20,
-                                      height: 20,
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: dark
-                                            ? MTaxiDesign.gold
-                                            : MTaxiDesign.ink,
-                                      ),
-                                      child: MTaxiIcon('check',
-                                          size: 12,
-                                          color: dark
-                                              ? MTaxiDesign.ink
-                                              : Colors.white),
-                                    ),
-                                ]),
-                                const SizedBox(height: 10),
-                                Text(title,
+                    key: ValueKey('service-card-$type'),
+                    onTap: () => onChanged(type),
+                    child: Tooltip(
+                        message: description,
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Row(children: [
+                            Container(
+                                width: 32,
+                                height: 32,
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                    color: selected
+                                        ? MTaxiDesign.gold
+                                        : (dark
+                                            ? scheme.surfaceContainerHighest
+                                            : Colors.white),
+                                    borderRadius: BorderRadius.circular(9)),
+                                child: MTaxiIcon(icon,
+                                    size: 26,
+                                    color: selected
+                                        ? MTaxiDesign.ink
+                                        : scheme.onSurface)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: Text(title,
                                     style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 15,
                                         fontWeight: FontWeight.w700,
-                                        color: scheme.onSurface)),
-                                const SizedBox(height: 3),
-                                Text(description,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        height: 1.3,
-                                        color: scheme.onSurfaceVariant)),
-                              ]))),
+                                        color: scheme.onSurface))),
+                            if (selected) ...[
+                              const SizedBox(width: 4),
+                              Container(
+                                  width: 16,
+                                  height: 16,
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: dark
+                                          ? MTaxiDesign.gold
+                                          : MTaxiDesign.ink),
+                                  child: MTaxiIcon('check',
+                                      size: 12,
+                                      color: dark
+                                          ? MTaxiDesign.ink
+                                          : Colors.white)),
+                            ],
+                          ]),
+                        )),
+                  ),
                 )));
       }
 

@@ -6506,7 +6506,7 @@ test("runMaintenanceTasks expires stale orders and flushes push queue", async ()
   }, { user: admin });
   assert.equal(result.success, true);
   assert.equal(result.expiredOrders.expiredCount, 1);
-  assert.equal(result.push.numSent, 1);
+  assert.equal(result.push.numSent, 0); // Expired orders must not produce new-order alerts.
   assert.equal(readStore().orders.find((item) => item.id === orderId).status, 7);
   assert.equal(readStore().users.find((user) => user.id === passenger.id).hasActivePassengerOrder, false);
 });

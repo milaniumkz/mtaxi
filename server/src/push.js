@@ -1,6 +1,7 @@
 const { withStoreAsync, readStoreAsync, writeStoreAsync, newId } = require("./store");
 const { requireAdmin } = require("./admin");
 const { asNumber, normalizeString } = require("./utils/values");
+const {newOrderNotification,onlineDriver,recipientOrderNotification}=require('./driver_order_alerts');
 const { sendPushBatch } = require("./push_transport");
 
 function docId(value) {
@@ -144,6 +145,7 @@ function upsertToken(store, data, auth) {
   } else if (token.orderAlertsEnabled == null) {
     token.orderAlertsEnabled = true;
   }
+  if (typeof data.supportsOrderOverlay === 'boolean') token.supportsOrderOverlay = data.supportsOrderOverlay;
   token.disabled = false;
   token.updatedAt = now;
 
@@ -172,6 +174,7 @@ function tokenMatchesTarget(store, token, notification) {
     (store.pushAudience || []).find((item) => item.id === token.userId);
   if (!user) return false;
   if (notification.orderAlert === true && token.orderAlertsEnabled === false) return false;
+  if (newOrderNotification(notification) && !onlineDriver(user)) return false;
 
   const role = normalizeRole(notification.targetRole);
   if (role === 'admin' && user.role !== 'admin' && user.roleState !== 'ADMIN') return false;
@@ -425,9 +428,11 @@ async function flushQueuedPushDeliveriesForStore(store, limit, persistStore) {
       continue;
     }
     try {
+      const recipientNotification = recipientOrderNotification(store,notification,token);
+      if (!recipientNotification) { delivery.status='cancelled'; delivery.updatedAt=new Date().toISOString(); delivery.error='Order unavailable or driver offline'; continue; }
       const sent = await sendPushBatch({
         tokens: [token.fcmToken],
-        notification,
+        notification: recipientNotification,
       });
       mode = sent.mode;
       const result = sent.responses[0] || {};
@@ -505,7 +510,7 @@ function queueOrderPushEventInStore(store, {
     initialPageName: initialPageName || (role === "driver" ? "homeDriver" : "seachDriver"),
     dedupeKey: `${order.id}:${normalizedEvent}:${role}:${targetUserIds.join(",")}${eventId ? ":" + eventId : ""}`,
     dataPayload: {
-      type: normalizedEvent,
+      type: normalizedEvent === 'ORDER_CREATED' ? 'ORDER_AVAILABLE' : normalizedEvent,
       orderDocPath,
       orderId: order.id,
       orderStatus: String(status),

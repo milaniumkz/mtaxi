@@ -270,12 +270,6 @@ void main() {
             await tester
                 .tap(find.text(locale == 'kk' ? 'Жалғастыру' : 'Продолжить'));
           }
-          if (id == 24) {
-            await tester.ensureVisible(find.text(
-                locale == 'kk' ? 'Тапсырыстарды қарау' : 'Смотреть заказы'));
-            await tester.tap(find.text(
-                locale == 'kk' ? 'Тапсырыстарды қарау' : 'Смотреть заказы'));
-          }
           for (var i = 0; i < 8; i++) {
             await tester.pump(const Duration(milliseconds: 100));
           }

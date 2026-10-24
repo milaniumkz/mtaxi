@@ -34,7 +34,8 @@ test('web worker and Flutter configuration use the same Firebase project and sen
   assert.ok(result.workerSource.includes('"projectId":"mtaxi-52990"'));
   assert.throws(() => prepareFirebaseWeb({ ...config, projectId: 'old-project' }, 'https://api.example.test'), /projectId/);
   assert.throws(() => prepareFirebaseWeb({ ...config, messagingSenderId: '999' }, 'https://api.example.test'), /matching/);
-  assert.throws(() => prepareFirebaseWeb({ ...config, vapidKey: '' }, 'https://api.example.test'), /VAPID/);
+  assert.equal(prepareFirebaseWeb({...config,vapidKey:''},'https://api.example.test').defines.FIREBASE_WEB_PUSH_ENABLED,true);
+  assert.throws(() => prepareFirebaseWeb({...config,vapidKey:'invalid'},'https://api.example.test'), /VAPID/);
 });
 
 test('queued admin push cannot be delivered after its browser token moves to another account', async () => {

@@ -91,7 +91,7 @@ async function submitOrderOfferAsync(data, auth) {
       price,
       etaMinutes,
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 120000).toISOString(),
+      expiresAt: new Date(Date.now() + 30000).toISOString(),
       status: "pending",
     };
     o.offers.push(offer);
@@ -113,8 +113,12 @@ async function listOrderOffersAsync(data, auth) {
   if (!auth?.user) return fail("UNAUTHENTICATED", "Войдите в приложение");
   const store = await readStoreAsync(offerReadScope(idOf(data)));
   const o = store.orders.find((x) => x.id === idOf(data));
-  if (!o || o.userId !== auth.user.id)
-    return fail("ORDER_FORBIDDEN", "Нет доступа к предложениям");
+  if (!o) return fail("ORDER_FORBIDDEN", "Нет доступа к предложениям");
+  if (o.userId !== auth.user.id) {
+    const own = (o.offers || []).filter(x => x.driverId === auth.user.id);
+    if (!own.length && o.driverId !== auth.user.id) return fail("ORDER_FORBIDDEN", "Нет доступа к предложениям");
+    return {success:true, orderStatus:Number(o.status), assignedToCurrentDriver:o.driverId === auth.user.id && [2,3,4].includes(Number(o.status)), offers:own.map(x => ({...x,status:x.status === 'pending' && Date.parse(x.expiresAt) <= Date.now() ? 'expired' : x.status}))};
+  }
   return {
     success: true,
     offers:

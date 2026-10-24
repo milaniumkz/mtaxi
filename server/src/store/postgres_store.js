@@ -133,8 +133,8 @@ async function readStoreWithClient(client, scope = null) {
   // Push targeting needs only role flags of token owners, not their complete
   // password/profile/GPS records. Participants still use the locked full rows.
   const pushAudience = scope?.financial ? (await client.query(
-    'SELECT id,role,role_state,is_driver FROM users WHERE id IN (SELECT user_id FROM fcm_tokens)',
-  )).rows.map(row=>({id:row.id,role:row.role,roleState:row.role_state,isDriver:row.is_driver})) : null;
+    'SELECT id,role,role_state,is_driver,status_driver,driver_online,blocked,has_active_driver_order FROM users WHERE id IN (SELECT user_id FROM fcm_tokens)',
+  )).rows.map(row=>({id:row.id,role:row.role,roleState:row.role_state,isDriver:row.is_driver,statusDriver:row.status_driver,driverOnLine:row.driver_online,blocked:row.blocked,hasActiveDriverOrder:row.has_active_driver_order})) : null;
   const readQuery = (sql) => {
     if (!scope) return client.query(sql);
     const table = /\bFROM\s+(\w+)/i.exec(sql)?.[1];

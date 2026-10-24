@@ -190,6 +190,7 @@ function updatePreferencesInStore(store, data, auth) {
     if (targetRoleState.startsWith("DRIVER") && user.isDriver !== true) {
       return { success: false, code: "DRIVER_PROFILE_REQUIRED", error: "Профиль водителя не заполнен" };
     }
+    if (targetRoleState === 'DRIVER_ONLINE' && (user.statusDriver !== 'approved' || user.blocked)) return {success:false,code:'DRIVER_APPROVAL_REQUIRED',error:'Для выхода на линию дождитесь подтверждения водителя'};
     user.roleState = targetRoleState;
     if (targetRoleState === "PASSENGER") {
       user.activeMode = "passenger";

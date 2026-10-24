@@ -1,4 +1,5 @@
 import 'dart:async';
+import '/backend/push_notifications/driver_order_notifications.dart';
 
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
@@ -117,6 +118,12 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
         )) {
       return;
     }
+    if (audience == 'driver' &&
+        type == PushDeepLinkRouter.orderAvailableType &&
+        data['overlayEligible']?.toString() == 'true') {
+      unawaited(showNearbyDriverOrder(data));
+      return;
+    }
     final message = _foregroundPushMessage(
       data,
       notification: notification,
@@ -141,6 +148,7 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
         ),
       );
     if (audience == 'driver' &&
+        data['overlayEligible']?.toString() == 'true' &&
         (type == PushDeepLinkRouter.orderAvailableType ||
             type == PushDeepLinkRouter.orderCancelledType)) {
       unawaited(_playDriverPushSound());
@@ -343,7 +351,7 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
   }
 
   Future handleOpenedPushNotification() async {
-    if (isWeb && !firebaseWebPushEnabled) {
+    if (!firebasePushInitialized || (isWeb && !firebaseWebPushEnabled)) {
       return;
     }
 

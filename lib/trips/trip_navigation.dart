@@ -1,6 +1,10 @@
 import '/design/bottom_navigation.dart';
 import '/design/map_attribution.dart';
 import 'dart:async';
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import '/design/mtaxi_icon.dart';
+import '/design/mtaxi_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -15,18 +19,40 @@ CameraFit navigationRouteFit(List<LatLng> points, double height) =>
       padding: EdgeInsets.fromLTRB(24, height * .18, 24, height * .60),
     );
 
+String? navigationSpeechText(String instruction, double distance,
+    {required bool pickup}) {
+  if (!distance.isFinite || distance < 0) return null;
+  final arrival = instruction.toLowerCase().contains('прибы') ||
+      instruction.toLowerCase().contains('arriv');
+  if (arrival)
+    return distance <= 25
+        ? (pickup ? 'Вы на месте посадки.' : 'Вы приехали.')
+        : null;
+  if (distance >= 200) return null;
+  return distance < 35
+      ? instruction
+      : 'Через ${(distance / 50).round() * 50} метров, $instruction';
+}
+
 /// Driver positions are published by the active trip screen with GPS accuracy.
 /// This view only displays positions the server considers fresh.
 class TripNavigation extends StatefulWidget {
   const TripNavigation(
-      {super.key, required this.orderDocPath, this.isDriver = false});
+      {super.key,
+      required this.orderDocPath,
+      this.isDriver = false,
+      this.driverPosition,
+      this.driverHeading});
   final String orderDocPath;
   final bool isDriver;
+  final LatLng? driverPosition;
+  final double? driverHeading;
   @override
   State<TripNavigation> createState() => _TripNavigationState();
 }
 
-class _TripNavigationState extends State<TripNavigation> {
+class _TripNavigationState extends State<TripNavigation>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _map = MapController();
   final _tts = FlutterTts();
   bool _tabActive = true;
@@ -37,7 +63,14 @@ class _TripNavigationState extends State<TripNavigation> {
   List<Map> _steps = [];
   DateTime? _routedAt;
   int? _routedStatus;
-  String _message = 'Загружаем маршрут…', _spoken = '';
+  String _message = 'Загружаем маршрут…';
+  final Set<String> _spoken = {};
+  bool _voiceBusy = false, _follow = true;
+  int _speechGeneration = 0;
+  late final AnimationController _motion;
+  LatLng? _display, _motionFrom, _motionTo, _lastRaw;
+  double _heading = 0, _headingFrom = 0, _headingTo = 0;
+  DateTime? _lastSpokenAt;
   int _step = 1;
   LatLng? _p(dynamic value) {
     if (value is! Map) return null;
@@ -57,6 +90,22 @@ class _TripNavigationState extends State<TripNavigation> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _motion = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..addListener(() {
+        final a = _motionFrom, b = _motionTo;
+        if (a == null || b == null || !mounted) return;
+        final t = Curves.easeOut.transform(_motion.value);
+        setState(() {
+          _display = LatLng(a.latitude + (b.latitude - a.latitude) * t,
+              a.longitude + (b.longitude - a.longitude) * t);
+          _heading = _headingFrom +
+              ((_headingTo - _headingFrom + 540) % 360 - 180) * t;
+        });
+        _followCamera();
+      });
+    _updatePosition(widget.driverPosition, widget.driverHeading);
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) {
       if ((ModalRoute.of(context)?.isCurrent ?? true) &&
@@ -64,6 +113,76 @@ class _TripNavigationState extends State<TripNavigation> {
               WidgetsBinding.instance.lifecycleState ==
                   AppLifecycleState.resumed)) _refresh();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant TripNavigation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isDriver && widget.driverPosition != null)
+      _updatePosition(widget.driverPosition, widget.driverHeading);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      _speechGeneration++;
+      unawaited(_tts.stop());
+    }
+  }
+
+  void _updatePosition(LatLng? next, [double? heading]) {
+    if (next == null) return;
+    final previous = _lastRaw;
+    final moved = previous == null ? 0.0 : const Distance()(previous, next);
+    final nextHeading = heading != null && heading.isFinite && heading >= 0
+        ? heading % 360
+        : previous != null && moved >= 5
+            ? const Distance().bearing(previous, next) % 360
+            : _heading;
+    _lastRaw = next;
+    if (_display == null) {
+      _display = next;
+      _heading = nextHeading;
+      return;
+    }
+    if (moved < .5 && ((_heading - nextHeading + 540) % 360 - 180).abs() < 1)
+      return;
+    _motionFrom = _display;
+    _motionTo = next;
+    _headingFrom = _heading;
+    _headingTo = nextHeading;
+    _motion.forward(from: 0);
+  }
+
+  void _followCamera() {
+    if (!_ready ||
+        !widget.isDriver ||
+        !_follow ||
+        _display == null ||
+        !_tabActive) return;
+    _map.rotate(-_heading);
+    _map.move(_display!, _map.camera.zoom,
+        offset: Offset(0, -_map.camera.nonRotatedSize.y * .24));
+  }
+
+  Future<void> _speak(String text, String key) async {
+    if (!_voice || !_tabActive || _spoken.contains(key)) return;
+    if (_lastSpokenAt != null &&
+        DateTime.now().difference(_lastSpokenAt!).inSeconds < 4 &&
+        !key.endsWith(':near') &&
+        !key.endsWith(':arrival')) return;
+    _spoken.add(key);
+    _lastSpokenAt = DateTime.now();
+    if (_spoken.length > 100) _spoken.remove(_spoken.first);
+    final generation = ++_speechGeneration;
+    try {
+      await _tts.stop().timeout(const Duration(seconds: 1));
+      if (!mounted || !_voice || !_tabActive || generation != _speechGeneration)
+        return;
+      await _tts.speak(text).timeout(const Duration(seconds: 2));
+    } catch (_) {
+      /* A speech engine must never stall route and position updates. */
+    }
   }
 
   Future<void> _refresh() async {
@@ -77,18 +196,23 @@ class _TripNavigationState extends State<TripNavigation> {
         setState(() => _message = 'Маршрут недоступен');
         return;
       }
-      final position = _p(trip['driverPosition']);
+      final position = widget.isDriver
+          ? widget.driverPosition ?? _p(trip['driverPosition'])
+          : _p(trip['driverPosition']);
+      _updatePosition(position, widget.isDriver ? widget.driverHeading : null);
       final status = (trip['status'] as num?)?.toInt() ?? 0;
       final pickup = _p(trip['from']), destination = _p(trip['to']);
       final target = status < 4 ? pickup : destination;
       setState(() => _trip = trip);
       if (position == null) {
-        setState(() => _message = 'Ожидаем свежую геопозицию водителя');
+        _motion.stop();
+        setState(() {
+          _display = null;
+          _lastRaw = null;
+          _message = 'Ожидаем свежую геопозицию водителя';
+        });
         return;
       }
-      if (_ready && widget.isDriver)
-        _map.move(position, _map.camera.zoom,
-            offset: Offset(0, -_map.camera.nonRotatedSize.y * .26));
       if (target != null &&
           (_routedAt == null ||
               _routedStatus != status ||
@@ -136,17 +260,16 @@ class _TripNavigationState extends State<TripNavigation> {
                   (location[0] as num).toDouble()));
           final instruction = _steps[_step]['instruction']?.toString() ??
               'Продолжайте движение';
-          if (distance < 200) {
-            final text = distance < 35
-                ? instruction
-                : 'Через ${((distance / 50).round() * 50)} метров. $instruction';
-            setState(() => _message = text);
-            final key =
-                '${location.join(',')}:${distance < 35 ? 'near' : 'ahead'}';
-            if (_voice && key != _spoken) {
-              _spoken = key;
-              await _tts.speak(text);
-            }
+          final arrival = instruction.toLowerCase().contains('прибы') ||
+              instruction.toLowerCase().contains('arriv');
+          final text =
+              navigationSpeechText(instruction, distance, pickup: status < 4);
+          if (text != null) {
+            if (!widget.isDriver) setState(() => _message = text);
+            final key = arrival
+                ? '$status:arrival'
+                : '$status:${location.join(',')}:${distance < 35 ? 'near' : 'ahead'}';
+            unawaited(_speak(text, key));
           }
           if (distance < 25 && _step < _steps.length - 1) _step++;
         }
@@ -160,28 +283,39 @@ class _TripNavigationState extends State<TripNavigation> {
   }
 
   Future<void> _toggleVoice() async {
+    if (_voiceBusy) return;
     if (_voice) {
-      await _tts.stop();
+      _speechGeneration++;
       if (mounted) setState(() => _voice = false);
+      await _tts.stop();
       return;
     }
+    _voiceBusy = true;
     try {
+      await _tts.awaitSpeakCompletion(false);
       await _tts.setLanguage('ru-RU');
-      await _tts.setSpeechRate(0.45);
+      await _tts.setSpeechRate(kIsWeb ? 1.0 : 0.5);
       await _tts.setPitch(1.0);
-      final voices = await _tts.getVoices;
+      final voices = await _tts.getVoices.timeout(const Duration(seconds: 2));
       if (voices is List) {
         final russian = voices
             .whereType<Map>()
             .where((v) => v['locale'].toString().startsWith('ru'))
             .toList();
-        final preferred = russian
-            .where((v) =>
-                '${v['name']} ${v['gender']}'.toLowerCase().contains('female'))
-            .toList();
-        final voice = preferred.isNotEmpty
-            ? preferred.first
-            : (russian.isNotEmpty ? russian.first : null);
+        int score(Map v) {
+          final text = '${v['name']} ${v['gender']}'.toLowerCase();
+          return (RegExp('natural|neural|premium|enhanced').hasMatch(text)
+                  ? 30
+                  : 0) +
+              (RegExp('google|microsoft').hasMatch(text) ? 10 : 0) +
+              (RegExp('female|svetlana|milena|irina|elena|светлана|ирина|жен')
+                      .hasMatch(text)
+                  ? 8
+                  : 0);
+        }
+
+        russian.sort((a, b) => score(b).compareTo(score(a)));
+        final voice = russian.isEmpty ? null : russian.first;
         if (voice != null)
           await _tts.setVoice({
             'name': voice['name'].toString(),
@@ -190,19 +324,24 @@ class _TripNavigationState extends State<TripNavigation> {
       }
       if (!mounted || !_tabActive) return;
       setState(() => _voice = true);
-      _spoken = '';
-      await _tts.speak('Голосовые подсказки включены');
+      _spoken.clear();
+      unawaited(_speak('Голосовые подсказки включены', 'enabled'));
     } catch (_) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
                 'Русская озвучка недоступна. Проверьте голосовые пакеты устройства.')));
+    } finally {
+      _voiceBusy = false;
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _motion.dispose();
     _timer?.cancel();
+    _speechGeneration++;
     _tts.stop();
     _map.dispose();
     super.dispose();
@@ -210,7 +349,7 @@ class _TripNavigationState extends State<TripNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final position = _p(_trip?['driverPosition']),
+    final position = _display ?? _p(_trip?['driverPosition']),
         pickup = _p(_trip?['from']),
         destination = _p(_trip?['to']);
     final center = position ?? pickup ?? const LatLng(53.538, 75.313);
@@ -224,6 +363,11 @@ class _TripNavigationState extends State<TripNavigation> {
               maxZoom: 19,
               onMapReady: () {
                 _ready = true;
+                _followCamera();
+              },
+              onPositionChanged: (_, gesture) {
+                if (gesture && widget.isDriver && _follow)
+                  setState(() => _follow = false);
               }),
           children: [
             TileLayer(
@@ -256,28 +400,63 @@ class _TripNavigationState extends State<TripNavigation> {
                     point: position,
                     width: 44,
                     height: 44,
-                    child: const Icon(Icons.local_taxi,
-                        color: const Color(0xFF1B242B), size: 38)),
+                    child: Transform.rotate(
+                        angle: _heading * math.pi / 180,
+                        child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: const BoxDecoration(
+                                color: MTaxiDesign.gold,
+                                shape: BoxShape.circle),
+                            child: const MTaxiIcon('car',
+                                size: 32, color: MTaxiDesign.ink)))),
             ]),
             const MTaxiMapAttribution(),
           ]),
-      Positioned(
-          top: 90,
-          left: 12,
-          right: 12,
-          child: Card(
-              child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Row(children: [
-                    Expanded(child: Text(_message)),
-                    if (widget.isDriver)
-                      IconButton(
-                          tooltip:
-                              _voice ? 'Выключить озвучку' : 'Включить озвучку',
-                          onPressed: _toggleVoice,
-                          icon:
-                              Icon(_voice ? Icons.volume_up : Icons.volume_off))
-                  ])))),
+      if (widget.isDriver)
+        Positioned(
+            top: 16,
+            right: 12,
+            child: Column(children: [
+              Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                      tooltip:
+                          _voice ? 'Выключить озвучку' : 'Включить озвучку',
+                      onPressed: _toggleVoice,
+                      icon: Icon(_voice ? Icons.volume_up : Icons.volume_off))),
+              const SizedBox(height: 8),
+              Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                      tooltip: 'Следовать за машиной',
+                      onPressed: () {
+                        setState(() => _follow = true);
+                        _followCamera();
+                      },
+                      icon: Icon(Icons.my_location,
+                          color: _follow ? MTaxiDesign.teal : null))),
+            ])),
+      if (!widget.isDriver)
+        Positioned(
+            top: 90,
+            left: 12,
+            right: 12,
+            child: Card(
+                child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(children: [
+                      Expanded(child: Text(_message)),
+                      if (widget.isDriver)
+                        IconButton(
+                            tooltip: _voice
+                                ? 'Выключить озвучку'
+                                : 'Включить озвучку',
+                            onPressed: _toggleVoice,
+                            icon: Icon(
+                                _voice ? Icons.volume_up : Icons.volume_off))
+                    ])))),
     ]);
   }
 }

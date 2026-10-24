@@ -1,4 +1,8 @@
 import 'trip_receipt.dart';
+import 'dart:math' as math;
+import 'package:go_router/go_router.dart';
+import 'driver_offer_waiting.dart';
+import '/flutter_flow/flutter_flow_util.dart' show formatAppCurrency;
 import '/design/offer_card.dart';
 import '/design/mtaxi_theme.dart';
 import '/flutter_flow/internationalization.dart';
@@ -18,12 +22,20 @@ Future<void> proposeDriverPrice(BuildContext context, String path,
     final response = await makeCloudCall(
         'submitOrderOffer', {'orderDocPath': path, 'price': result});
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(response['success'] == true
-            ? tr('Предложение отправлено пассажиру',
-                'Ұсыныс жолаушыға жіберілді')
-            : response['error']?.toString() ??
-                tr('Не удалось отправить предложение', 'Ұсыныс жіберілмеді'))));
+    if (response['success'] == true && response['offer'] is Map) {
+      final offer = Map<String, dynamic>.from(response['offer'] as Map);
+      final accepted = await Navigator.of(context).push<bool>(MaterialPageRoute(
+          builder: (_) =>
+              DriverOfferWaiting(orderDocPath: path, offer: offer)));
+      if (accepted == true && context.mounted) {
+        context.goNamed('homeDriverOrder',
+            queryParameters: {'orderDocPath': path});
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(response['error']?.toString() ??
+              tr('Не удалось отправить предложение', 'Ұсыныс жіберілмеді'))));
+    }
   } catch (_) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -39,11 +51,24 @@ class _OfferPriceDialog extends StatefulWidget {
   State<_OfferPriceDialog> createState() => _OfferPriceDialogState();
 }
 
+/// Three proportional surcharges, rounded to 50 tenge for everyday fares.
+List<int> driverOfferIncrements(int passengerPrice) {
+  final base = passengerPrice.clamp(500, 10000000);
+  final room = 10000000 - base;
+  if (room <= 0) return const [];
+  final quantum = room >= 150 ? 50 : 1;
+  final proportional = math.max(100, (base / 250).round() * 50);
+  final step = math.min(
+      proportional, math.max(quantum, (room ~/ 3 ~/ quantum) * quantum));
+  return [
+    for (var n = 1; n <= 3; n++)
+      if (n * step <= room) n * step
+  ];
+}
+
 class _OfferPriceDialogState extends State<_OfferPriceDialog> {
-  late final TextEditingController _price = TextEditingController(
-      text: widget.initialPrice.clamp(500, 10000000).toString());
   bool _decided = false;
-  String? _error;
+  int? _selected;
   void _finish(int? value) {
     if (_decided) return;
     _decided = true;
@@ -51,47 +76,105 @@ class _OfferPriceDialogState extends State<_OfferPriceDialog> {
   }
 
   @override
-  void dispose() {
-    _price.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     String tr(String ru, String kk) =>
         FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    final base = widget.initialPrice.clamp(500, 10000000);
+    final increments = driverOfferIncrements(base);
+    String money(int value) => formatAppCurrency(value.toDouble());
     return AlertDialog(
-        title: Text(tr('Предложить свою цену', 'Өз бағаңызды ұсыныңыз')),
-        content: SingleChildScrollView(
-            child: TextField(
-                controller: _price,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                    labelText: tr('Цена, ₸', 'Баға, ₸'),
-                    errorText: _error,
-                    helperMaxLines: 3,
-                    errorMaxLines: 3,
-                    helperText: tr(
-                        'Не менее 500 ₸. Время подачи рассчитывается по вашей геопозиции.',
-                        'Кемінде 500 ₸. Келу уақыты геолокацияңыз бойынша есептеледі.')))),
-        actions: [
-          TextButton(
-              onPressed: () => _finish(null),
-              child: Text(tr('Отмена', 'Бас тарту'))),
-          FilledButton(
-              onPressed: () {
-                final value = int.tryParse(_price.text.trim());
-                if (value == null || value < 500 || value > 10000000) {
-                  setState(() => _error = tr(
-                      'Целая цена от 500 до 10 000 000 ₸',
-                      '500–10 000 000 ₸ аралығындағы бүтін баға'));
-                  return;
-                }
-                _finish(value);
-              },
-              child: Text(tr('Предложить', 'Ұсыну')))
-        ]);
+      title: Text(tr('Предложить цену', 'Баға ұсыну')),
+      content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+              child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(tr('Цена пассажира', 'Жолаушы бағасы')),
+              const SizedBox(height: 6),
+              Text(money(base),
+                  style: const TextStyle(
+                      fontSize: 28, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              Text(tr('Выберите доплату к этой цене',
+                  'Осы бағаға қосымша ақыны таңдаңыз')),
+              const SizedBox(height: 12),
+              LayoutBuilder(builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 300 ||
+                    MediaQuery.textScalerOf(context).scale(16) > 24;
+                final width = stacked
+                    ? constraints.maxWidth
+                    : (constraints.maxWidth - 16) / 3;
+                return Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final extra in increments)
+                    SizedBox(
+                        width: width,
+                        child: OutlinedButton(
+                          key: ValueKey('driver-offer-plus-$extra'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 14),
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onSurface,
+                            backgroundColor: _selected == extra
+                                ? MTaxiDesign.gold.withValues(alpha: .25)
+                                : Theme.of(context).colorScheme.surface,
+                            side: BorderSide(
+                                color: _selected == extra
+                                    ? MTaxiDesign.gold
+                                    : Theme.of(context).dividerColor,
+                                width: _selected == extra ? 2 : 1),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () => setState(() => _selected = extra),
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Text('+',
+                                style: TextStyle(
+                                    fontSize: 32,
+                                    height: 1,
+                                    fontWeight: FontWeight.w700)),
+                            Text(money(extra),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    fontSize: 17, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            Text(tr('Итого', 'Барлығы'),
+                                style: const TextStyle(fontSize: 12)),
+                            Text(money(base + extra),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 13)),
+                          ]),
+                        )),
+                ]);
+              }),
+              const SizedBox(height: 14),
+              Text(
+                  increments.isEmpty
+                      ? tr(
+                          'Достигнута максимальная цена. Можно принять цену пассажира.',
+                          'Ең жоғары бағаға жетті. Жолаушы бағасын қабылдауға болады.')
+                      : tr(
+                          'Предложение отправится после подтверждения. Заказ начнётся только с согласия пассажира.',
+                          'Ұсыныс растаудан кейін жіберіледі. Тапсырыс жолаушы келіскенде ғана басталады.'),
+                  style: const TextStyle(fontSize: 12)),
+            ],
+          ))),
+      actions: [
+        TextButton(
+            onPressed: () => _finish(null),
+            child: Text(tr('Отмена', 'Бас тарту'))),
+        FilledButton(
+            onPressed:
+                _selected == null ? null : () => _finish(base + _selected!),
+            child: Text(_selected == null
+                ? tr('Предложить', 'Ұсыну')
+                : tr('Предложить за ${money(base + _selected!)}',
+                    '${money(base + _selected!)} ұсыну'))),
+      ],
+    );
   }
 }
 

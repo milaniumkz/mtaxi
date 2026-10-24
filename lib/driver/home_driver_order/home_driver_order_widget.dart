@@ -2,6 +2,7 @@ import '/design/bottom_navigation.dart';
 import '/trips/trip_receipt.dart';
 import '/design/trip_panel.dart';
 import '/trips/trip_navigation.dart';
+import '/trips/driver_background_location.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/backend_orders.dart';
@@ -20,6 +21,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' as navigation_geo;
 import 'home_driver_order_model.dart';
 export 'home_driver_order_model.dart';
 
@@ -697,7 +699,9 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
     );
   }
 
-  double? _lastGpsAccuracy;
+  double? _lastGpsAccuracy, _gpsHeading;
+  Future<void>? _locationFuture;
+  bool _locationTickBusy = false;
 
   bool _shouldSyncDriverLocation(LatLng nextLocation) {
     final lastWriteAt = _lastLocationWriteAt;
@@ -774,14 +778,51 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       _pendingOrderStatus = nextStatus;
     });
 
-    final response = await makeCloudCall(
-      'advanceDriverOrderStatus',
-      {
-        'orderDocPath': order.reference.path,
-        'userDocPath': _authoritativeDriverPath(),
-        'nextStatus': nextStatus,
-      },
-    );
+    Map<String, dynamic> response;
+    try {
+      if (nextStatus == 3) {
+        await _resolveLocation();
+        final location = currentUserLocationValue, accuracy = _lastGpsAccuracy;
+        if (location == null ||
+            accuracy == null ||
+            !accuracy.isFinite ||
+            accuracy <= 0 ||
+            accuracy > 40) {
+          throw StateError(
+              'Для прибытия включите точную геолокацию и дождитесь GPS рядом с местом посадки.');
+        }
+        final synced = await makeCloudCall('updateUserPreferences', {
+          'coords': {
+            'latitude': location.latitude,
+            'longitude': location.longitude,
+            'accuracy': accuracy
+          }
+        });
+        if (synced['success'] != true)
+          throw StateError(
+              'Не удалось передать геопозицию. Проверьте связь и повторите.');
+        _rememberSyncedDriverLocation(location);
+      }
+      response = await makeCloudCall(
+        'advanceDriverOrderStatus',
+        {
+          'orderDocPath': order.reference.path,
+          'userDocPath': _authoritativeDriverPath(),
+          'nextStatus': nextStatus,
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _statusActionInFlight = false;
+        _statusActionTarget = null;
+        _pendingOrderStatus = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              error is StateError ? error.message.toString() : fallbackError)));
+      return;
+    }
 
     if (!mounted) return;
 
@@ -853,10 +894,22 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   }
 
   Future<void> _resolveLocation() async {
+    if (_locationFuture != null) return _locationFuture;
+    final future = _resolveLocationOnce();
+    _locationFuture = future;
+    try {
+      await future;
+    } finally {
+      _locationFuture = null;
+    }
+  }
+
+  Future<void> _resolveLocationOnce() async {
     if (!_tabActive) return;
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        if (!mounted) return;
         setState(() {
           currentUserLocationValue = null;
         });
@@ -868,21 +921,33 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
         setState(() {
           currentUserLocationValue = null;
         });
         return;
       }
-      final position = await getSafeCurrentPosition(
-        accuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 8),
-      );
+      final cached = DriverBackgroundLocation.latest;
+      final position = cached != null &&
+              DateTime.now().difference(cached.timestamp).inSeconds <= 5
+          ? cached
+          : await getSafeCurrentPosition(
+              accuracy: LocationAccuracy.high,
+              timeLimit: const Duration(seconds: 8),
+            );
+      if (!mounted) return;
       setState(() {
+        _gpsHeading = position.speed > 1.5 &&
+                position.heading.isFinite &&
+                position.heading >= 0
+            ? position.heading
+            : _gpsHeading;
         _lastGpsAccuracy = position.accuracy;
         currentUserLocationValue =
             LatLng(position.latitude, position.longitude);
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         currentUserLocationValue = null;
       });
@@ -913,23 +978,30 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
               (WidgetsBinding.instance.lifecycleState != null &&
                   WidgetsBinding.instance.lifecycleState !=
                       AppLifecycleState.resumed)) return;
-          await _resolveLocation();
-          if (!_tabActive || !mounted) return;
-          final nextLocation = currentUserLocationValue;
-          if (nextLocation != null && _shouldSyncDriverLocation(nextLocation)) {
-            await makeCloudCall(
-              'updateUserPreferences',
-              {
-                'coords': {
-                  'latitude': nextLocation.latitude,
-                  'longitude': nextLocation.longitude,
-                  'accuracy': _lastGpsAccuracy,
+          if (_locationTickBusy) return;
+          _locationTickBusy = true;
+          try {
+            await _resolveLocation();
+            if (!_tabActive || !mounted) return;
+            final nextLocation = currentUserLocationValue;
+            if (nextLocation != null &&
+                _shouldSyncDriverLocation(nextLocation)) {
+              await makeCloudCall(
+                'updateUserPreferences',
+                {
+                  'coords': {
+                    'latitude': nextLocation.latitude,
+                    'longitude': nextLocation.longitude,
+                    'accuracy': _lastGpsAccuracy,
+                  },
                 },
-              },
-            );
-            _rememberSyncedDriverLocation(nextLocation);
+              );
+              _rememberSyncedDriverLocation(nextLocation);
+            }
+            await _pollDriverOrderState();
+          } finally {
+            _locationTickBusy = false;
           }
-          await _pollDriverOrderState();
         },
         startImmediately: true,
       );
@@ -1167,7 +1239,14 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                     children: [
                       Positioned.fill(
                         child: TripNavigation(
-                            orderDocPath: order.reference.path, isDriver: true),
+                            orderDocPath: order.reference.path,
+                            isDriver: true,
+                            driverPosition: currentUserLocationValue == null
+                                ? null
+                                : navigation_geo.LatLng(
+                                    currentUserLocationValue!.latitude,
+                                    currentUserLocationValue!.longitude),
+                            driverHeading: _gpsHeading),
                       ),
                       Align(
                         alignment: Alignment.bottomCenter,

@@ -1615,7 +1615,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                   maxHeight: MediaQuery.sizeOf(context).height *
                       (keyboard ? .75 : .55)),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
@@ -1624,7 +1624,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                         Expanded(
                             child: Text(_tr('Куда поедем?', 'Қайда барамыз?'),
                                 style: const TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.w700))),
                         if (_editorOpen)
                           IconButton(
@@ -1654,7 +1654,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                               icon: const Icon(Icons.alt_route),
                               label: Text(_tr('Межгород', 'Қалааралық')),
                             )),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       Container(
                         key: const ValueKey('passenger_route_fields'),
                         clipBehavior: Clip.antiAlias,
@@ -1677,6 +1677,13 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                                       'Адрес отправления', 'Жөнелту мекенжайы'),
                                   floatingLabelBehavior:
                                       FloatingLabelBehavior.always,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
                                   border: InputBorder.none,
                                   enabledBorder: InputBorder.none,
                                   focusedBorder: InputBorder.none,
@@ -1714,6 +1721,13 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                                       'Адрес назначения', 'Баратын мекенжай'),
                                   floatingLabelBehavior:
                                       FloatingLabelBehavior.always,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
                                   border: InputBorder.none,
                                   enabledBorder: InputBorder.none,
                                   focusedBorder: InputBorder.none,

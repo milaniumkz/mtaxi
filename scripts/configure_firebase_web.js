@@ -9,7 +9,7 @@ function prepareFirebaseWeb(input, backendUrl, vapidKey = input.vapidKey) {
   if (!/^1:\d+:web:[a-z0-9]+$/i.test(input.appId) || input.appId.split(':')[1] !== input.messagingSenderId) {
     throw new Error('Use the Firebase WEB appId and matching messagingSenderId');
   }
-  if (!vapidKey || !/^[A-Za-z0-9_-]{80,}$/.test(vapidKey)) throw new Error('Firebase web public VAPID key is required');
+  if (vapidKey && !/^[A-Za-z0-9_-]{80,}$/.test(vapidKey)) throw new Error('Firebase web public VAPID key is invalid');
   const url = new URL(backendUrl);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('HTTP(S) backend URL required');
   const options = Object.fromEntries(['apiKey', 'appId', 'projectId', 'messagingSenderId'].map(key => [key, input[key]]));
@@ -17,7 +17,7 @@ function prepareFirebaseWeb(input, backendUrl, vapidKey = input.vapidKey) {
     workerSource: `self.MTAXI_FIREBASE_CONFIG = ${JSON.stringify(options)};\n`,
     defines: { FIREBASE_PROJECT_ID: input.projectId, FIREBASE_WEB_API_KEY: input.apiKey,
       FIREBASE_WEB_APP_ID: input.appId, FIREBASE_MESSAGING_SENDER_ID: input.messagingSenderId,
-      FIREBASE_WEB_VAPID_KEY: vapidKey, FIREBASE_WEB_PUSH_ENABLED: true, MTAXI_BACKEND_URL: backendUrl },
+      FIREBASE_WEB_VAPID_KEY: vapidKey || '', FIREBASE_WEB_PUSH_ENABLED: true, MTAXI_BACKEND_URL: backendUrl },
   };
 }
 
