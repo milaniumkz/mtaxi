@@ -1,0 +1,26 @@
+name: Demonstrate isolated store review overlay
+on:
+  push:
+    branches: [release/store-publication-20261024]
+    paths: [server/scripts/demonstrate_store_review_overlay.js]
+permissions:
+  contents: read
+jobs:
+  demonstrate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Send a temporary fixture only to the dedicated review driver
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+          sshpass -e scp -o StrictHostKeyChecking=yes server/scripts/demonstrate_store_review_overlay.js root@89.126.192.185:/opt/mtaxi-incoming/demonstrate_store_review_overlay.js
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'cd /opt/mtaxi && container=$(docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml ps -q backend) && test -n "$container" && docker cp /opt/mtaxi-incoming/demonstrate_store_review_overlay.js "$container":/app/scripts/demonstrate_store_review_overlay.js && docker exec "$container" node scripts/demonstrate_store_review_overlay.js'
