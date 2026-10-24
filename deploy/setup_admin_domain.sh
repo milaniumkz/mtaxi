@@ -4,6 +4,28 @@ host=mtaxi-controls.89.126.192.185.sslip.io
 exec 9>/run/lock/mtaxi-deploy.lock
 flock -w 300 9
 cd /opt/mtaxi
+configure_renewal() {
+  install -d -m 755 /etc/letsencrypt/renewal-hooks/deploy
+  cat > /etc/letsencrypt/renewal-hooks/deploy/mtaxi-nginx-reload.sh <<'HOOK'
+#!/bin/sh
+set -eu
+nginx -t
+systemctl reload nginx
+HOOK
+  chmod 755 /etc/letsencrypt/renewal-hooks/deploy/mtaxi-nginx-reload.sh
+  systemctl enable --now certbot.timer
+}
+# Repeated configuration must preserve the live TLS virtual host and backend sessions.
+if test -f "/etc/letsencrypt/live/$host/fullchain.pem" &&
+   test -f /etc/nginx/sites-enabled/mtaxi-controls &&
+   grep -q 'listen 443 ssl' /etc/nginx/sites-available/mtaxi-controls &&
+   grep '^MTAXI_CORS_ORIGINS=' server/.env | grep -Fq "https://$host"; then
+  configure_renewal
+  nginx -t
+  curl --fail --silent --show-error "https://$host/readyz"
+  echo 'Existing admin domain preserved; automatic certificate renewal configured'
+  exit 0
+fi
 test -f .git-deploy-managed
 test -f /var/www/mtaxi/main.dart.js
 backup="/var/backups/mtaxi/admin-domain-$(date -u +%Y%m%dT%H%M%SZ)"
@@ -89,5 +111,6 @@ PY
 systemctl reload nginx
 curl --fail --silent --show-error "https://$host/readyz"
 curl --fail --silent --show-error --output /dev/null "https://$host/"
+configure_renewal
 printf 'Admin domain ready: https://%s/; configuration backup: %s\n' "$host" "$backup"
 trap - ERR

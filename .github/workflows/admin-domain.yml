@@ -1,5 +1,5 @@
 name: Configure separate MTaxi admin domain
-# Verify ACME file access before requesting the certificate.
+# Configure certificate renewal and preserve an already live admin hostname.
 on:
   push:
     branches: [codex/full-audit-20261023]
