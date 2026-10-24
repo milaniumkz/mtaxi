@@ -1,9 +1,6 @@
 name: Deploy audited MTaxi and publish APK
 # Deploy passenger route form with both addresses visible; preserve uploads and signing identity.
 on:
-  push:
-    branches: [codex/full-audit-20261023]
-    paths: [.github/workflows/activate-vps.yml]
   workflow_dispatch:
 permissions:
   contents: read

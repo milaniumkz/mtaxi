@@ -1,0 +1,43 @@
+name: Publish MTaxi web only
+on:
+  push:
+    branches: [codex/full-audit-20261023]
+    paths: [.github/workflows/deploy-web.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mtaxi-vps
+  cancel-in-progress: false
+jobs:
+  web:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install pinned Flutter
+        run: |
+          git clone --depth 1 --branch 3.41.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = 90673a4eef275d1a6692c26ac80d6d746d41a73a
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Test and build web only
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter test --no-pub
+          flutter analyze --no-pub
+          flutter build web --no-pub --no-web-resources-cdn --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define=MTAXI_BACKEND_URL=https://mtaxi.89.126.192.185.sslip.io
+          tar -czf "$RUNNER_TEMP/web.tar.gz" -C build/web .
+      - name: Publish web without building or publishing Android
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'install -d -m 700 /opt/mtaxi-incoming'
+          sshpass -e scp -o StrictHostKeyChecking=yes "$RUNNER_TEMP/web.tar.gz" deploy/publish_web_only.sh root@89.126.192.185:/opt/mtaxi-incoming/
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 "bash /opt/mtaxi-incoming/publish_web_only.sh '$GITHUB_SHA'"
+          curl --fail --silent --show-error https://mtaxi.89.126.192.185.sslip.io/version.json
