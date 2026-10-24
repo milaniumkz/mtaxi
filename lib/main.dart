@@ -1,4 +1,6 @@
 import '/design/bottom_navigation.dart';
+import '/backend/push_notifications/driver_order_notifications.dart';
+import '/trips/driver_background_location.dart';
 import '/trips/wallet_page.dart';
 import '/design/mtaxi_theme.dart';
 import 'dart:async';
@@ -44,6 +46,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   await initFirebase();
   await persistPendingPushMessage(message);
+  try {
+    await showNearbyDriverOrder(Map<String, dynamic>.from(message.data));
+  } catch (_) {}
+}
+
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const DriverOrderOverlayApp());
 }
 
 void main() async {
@@ -51,8 +62,12 @@ void main() async {
   GoRouter.optionURLReflectsImperativeAPIs = true;
   usePathUrlStrategy();
 
-  await initFirebase();
-  if (!kIsWeb) {
+  try {
+    await initFirebase();
+  } catch (_) {
+    debugPrint('Push initialization unavailable; continuing without push.');
+  }
+  if (!kIsWeb && firebasePushInitialized) {
     FirebaseMessaging.onBackgroundMessage(
       firebaseMessagingBackgroundHandler,
     );
@@ -439,6 +454,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   Future<void> _handleAuthenticatedUserDoc(UsersRecord? user) async {
     if (user == null) {
+      unawaited(DriverBackgroundLocation.sync(null));
       _isSigningOutBlockedUser = false;
       _isSigningOutWebOnlyUser = false;
       _bootstrappedSessionUid = null;
@@ -453,6 +469,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       return;
     }
 
+    unawaited(DriverBackgroundLocation.sync(
+        Map<String, dynamic>.from(user.snapshotData)));
+    if (user.snapshotData['isDriver'] == true &&
+        user.snapshotData['statusDriver'] == 'approved' &&
+        user.snapshotData['blocked'] != true) {
+      unawaited(registerDriverOverlayCapability());
+      unawaited(consumePendingDriverOverlayAction());
+    }
     final authUid = currentUserUid.trim();
     if (authUid.isNotEmpty) {
       _ensureSessionBootstrap(authUid);
@@ -1324,7 +1348,20 @@ class _NavBarPageState extends State<NavBarPage> {
           _tabsDriverMode = isDriverMode;
         }
         if (!tabs.containsKey(_currentPageName)) {
-          _currentPageName = tabs.keys.first;
+          final aliases = isDriverMode
+              ? const {
+                  'HomePage': 'driverOrders',
+                  'wallet': 'driverWallet',
+                  'history': 'driverHistory',
+                  'profile': 'driverProfile'
+                }
+              : const {
+                  'driverOrders': 'HomePage',
+                  'driverWallet': 'wallet',
+                  'driverHistory': 'history',
+                  'driverProfile': 'profile'
+                };
+          _currentPageName = aliases[_currentPageName] ?? tabs.keys.first;
           _currentPage = null;
         }
 

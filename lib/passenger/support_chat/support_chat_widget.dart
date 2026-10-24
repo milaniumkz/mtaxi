@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import 'dart:async';
 
 import '/auth/backend_auth/auth_util.dart';
@@ -761,7 +762,7 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
         insetPadding: const EdgeInsets.all(16),
         backgroundColor: Colors.black,
         child: InteractiveViewer(
-          child: Image.network(url, fit: BoxFit.contain),
+          child: MTaxiNetworkImage(url, fit: BoxFit.contain),
         ),
       ),
     );
@@ -932,7 +933,7 @@ class _SupportChatWidgetState extends State<SupportChatWidget> {
                   onTap: () => _openImagePreview(normalizedImageUrl),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
+                    child: MTaxiNetworkImage(
                       normalizedImageUrl,
                       fit: BoxFit.cover,
                     ),

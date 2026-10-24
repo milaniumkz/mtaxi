@@ -1,4 +1,5 @@
 import '/design/map_attribution.dart';
+import '/design/service_type_cards.dart';
 import '/design/mtaxi_theme.dart';
 // ignore_for_file: unused_import, unused_element, unnecessary_import, deprecated_member_use
 
@@ -1614,19 +1615,16 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                   maxHeight: MediaQuery.sizeOf(context).height *
                       (keyboard ? .75 : .55)),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(children: [
                         Expanded(
-                            child: Text(
-                                _editorOpen
-                                    ? _tr('Куда поедем?', 'Қайда барамыз?')
-                                    : _tr('Куда поедем?', 'Қайда барамыз?'),
+                            child: Text(_tr('Куда поедем?', 'Қайда барамыз?'),
                                 style: const TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.w700))),
                         if (_editorOpen)
                           IconButton(
@@ -1638,75 +1636,125 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                               icon: const Icon(Icons.check))
                       ]),
                       const SizedBox(height: 12),
-                      if (!_editorOpen) ...[
-                        InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () => setState(() {
-                                  _editorOpen = true;
-                                  _activeField = 'to';
-                                }),
-                            child: Container(
-                                padding: const EdgeInsets.all(18),
-                                decoration: BoxDecoration(
-                                    color: Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? scheme.surface
-                                        : MTaxiDesign.surface,
-                                    borderRadius: BorderRadius.circular(14)),
-                                child: Row(children: [
-                                  const Icon(Icons.search),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                      child: Text(_toController.text.isEmpty
-                                          ? _tr('Куда едем?', 'Қайда барамыз?')
-                                          : _toController.text)),
-                                  const Icon(Icons.chevron_right)
-                                ]))),
-                        const SizedBox(height: 10),
-                        TextButton.icon(
-                            onPressed: () => setState(() {
-                                  _editorOpen = true;
-                                  _activeField = 'from';
-                                }),
-                            icon: const Icon(Icons.my_location, size: 18),
-                            label: Text(_fromController.text.isEmpty
-                                ? _tr('Указать место посадки',
-                                    'Отыру орнын көрсету')
-                                : _fromController.text)),
-                      ] else ...[
-                        TextField(
-                            controller: _fromController,
-                            decoration: InputDecoration(
-                                labelText: _tr('Откуда', 'Қайдан'),
-                                prefixIcon:
-                                    const Icon(Icons.radio_button_checked),
-                                suffixIcon: IconButton(
-                                    tooltip:
-                                        _tr('Найти адрес', 'Мекенжайды табу'),
-                                    icon: const Icon(Icons.search),
-                                    onPressed: () => _searchAddress(
-                                        _fromController.text, 'from'))),
-                            onTap: () => setState(() => _activeField = 'from'),
-                            onChanged: _onFromChanged,
-                            onSubmitted: (value) =>
-                                _searchAddress(value, 'from')),
-                        const SizedBox(height: 10),
-                        TextField(
-                            controller: _toController,
-                            decoration: InputDecoration(
-                                labelText: _tr('Куда', 'Қайда'),
-                                prefixIcon:
-                                    const Icon(Icons.location_on_outlined),
-                                suffixIcon: IconButton(
-                                    tooltip:
-                                        _tr('Найти адрес', 'Мекенжайды табу'),
-                                    icon: const Icon(Icons.search),
-                                    onPressed: () => _searchAddress(
-                                        _toController.text, 'to'))),
-                            onTap: () => setState(() => _activeField = 'to'),
-                            onChanged: _onToChanged,
-                            onSubmitted: (value) =>
-                                _searchAddress(value, 'to')),
+                      ServiceTypeCards(
+                        value: _serviceType,
+                        onChanged: _changeServiceType,
+                        taxiLabel: _tr('Такси', 'Такси'),
+                        deliveryLabel: _tr('Доставка', 'Жеткізу'),
+                        taxiDescription:
+                            _tr('Поездки по посёлку', 'Ауыл ішіндегі сапарлар'),
+                        deliveryDescription: _tr('Посылки и покупки',
+                            'Сәлемдемелер мен сатып алулар'),
+                      ),
+                      if (widget.intercityEnabled)
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => _changeServiceType('intercity'),
+                              icon: const Icon(Icons.alt_route),
+                              label: Text(_tr('Межгород', 'Қалааралық')),
+                            )),
+                      const SizedBox(height: 10),
+                      Container(
+                        key: const ValueKey('passenger_route_fields'),
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? scheme.surface
+                              : MTaxiDesign.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                              color:
+                                  scheme.outlineVariant.withValues(alpha: .45)),
+                        ),
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                          TextField(
+                              controller: _fromController,
+                              decoration: InputDecoration(
+                                  labelText: _tr('Откуда', 'Қайдан'),
+                                  hintText: _tr(
+                                      'Адрес отправления', 'Жөнелту мекенжайы'),
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  prefixIcon:
+                                      const Icon(Icons.radio_button_checked),
+                                  suffixIcon: IconButton(
+                                      tooltip:
+                                          _tr('Найти адрес', 'Мекенжайды табу'),
+                                      icon: const Icon(Icons.search),
+                                      onPressed: () {
+                                        setState(() {
+                                          _editorOpen = true;
+                                          _activeField = 'from';
+                                        });
+                                        _searchAddress(
+                                            _fromController.text, 'from');
+                                      })),
+                              onTap: () => setState(() {
+                                    _editorOpen = true;
+                                    _activeField = 'from';
+                                  }),
+                              onChanged: _onFromChanged,
+                              onSubmitted: (value) =>
+                                  _searchAddress(value, 'from')),
+                          Divider(
+                              height: 1,
+                              indent: 48,
+                              endIndent: 16,
+                              color: scheme.outlineVariant),
+                          TextField(
+                              controller: _toController,
+                              decoration: InputDecoration(
+                                  labelText: _tr('Куда', 'Қайда'),
+                                  hintText: _tr(
+                                      'Адрес назначения', 'Баратын мекенжай'),
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  prefixIcon:
+                                      const Icon(Icons.location_on_outlined),
+                                  suffixIcon: IconButton(
+                                      tooltip:
+                                          _tr('Найти адрес', 'Мекенжайды табу'),
+                                      icon: const Icon(Icons.search),
+                                      onPressed: () {
+                                        setState(() {
+                                          _editorOpen = true;
+                                          _activeField = 'to';
+                                        });
+                                        _searchAddress(
+                                            _toController.text, 'to');
+                                      })),
+                              onTap: () => setState(() {
+                                    _editorOpen = true;
+                                    _activeField = 'to';
+                                  }),
+                              onChanged: _onToChanged,
+                              onSubmitted: (value) =>
+                                  _searchAddress(value, 'to')),
+                        ]),
+                      ),
+                      if (_editorOpen) ...[
                         if (suggestions.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           for (final item in suggestions)
@@ -1748,24 +1796,6 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                                 },
                                 child: Text(_tr('Забрать отсюда',
                                     'Осы жерден алып кету')))),
-                      Wrap(spacing: 8, children: [
-                        ChoiceChip(
-                            label: Text(_tr('Такси', 'Такси')),
-                            selected: _serviceType == 'taxi',
-                            selectedColor: MTaxiDesign.gold,
-                            onSelected: (_) => _changeServiceType('taxi')),
-                        ChoiceChip(
-                            label: Text(_tr('Доставка', 'Жеткізу')),
-                            selected: _serviceType == 'delivery',
-                            selectedColor: MTaxiDesign.gold,
-                            onSelected: (_) => _changeServiceType('delivery')),
-                        if (widget.intercityEnabled)
-                          ChoiceChip(
-                              label: Text(_tr('Межгород', 'Қалааралық')),
-                              selected: false,
-                              onSelected: (_) =>
-                                  _changeServiceType('intercity')),
-                      ]),
                     ]),
               ))),
     ]);

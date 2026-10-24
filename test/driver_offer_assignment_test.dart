@@ -97,7 +97,7 @@ void main() {
                 ])));
         await tester.pump(const Duration(seconds: 1));
         await tester.pump();
-        await tester.tap(find.text('Смотреть заказы'));
+        expect(find.text('Смотреть заказы'), findsNothing);
         await tester.pump(const Duration(seconds: 1));
         await tester.pump();
         await tester.tap(find.text('Посмотреть'));

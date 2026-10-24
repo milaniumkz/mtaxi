@@ -138,6 +138,8 @@ CREATE TABLE IF NOT EXISTS ledger (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS ledger_order_idx ON ledger(order_id);
+
 CREATE INDEX IF NOT EXISTS ledger_user_created_idx ON ledger(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ledger_type_created_idx ON ledger(type, created_at DESC);
 
@@ -193,6 +195,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS notifications_order_idx ON notifications ((data->>'orderId'));
+
 CREATE TABLE IF NOT EXISTS notification_deliveries (
   id text PRIMARY KEY DEFAULT ('delivery_' || gen_random_uuid()::text),
   notification_id text REFERENCES notifications(id) ON DELETE CASCADE,
@@ -205,6 +209,8 @@ CREATE TABLE IF NOT EXISTS notification_deliveries (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS notification_deliveries_notification_idx ON notification_deliveries(notification_id);
 
 CREATE INDEX IF NOT EXISTS notification_deliveries_status_idx
   ON notification_deliveries(status, created_at);
@@ -289,3 +295,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE INDEX IF NOT EXISTS audit_logs_created_idx ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_logs_action_idx ON audit_logs(action);
+
+INSERT INTO schema_migrations(version, description)
+VALUES ('2026-10-23-scoped-load-indexes', 'Indexes for per-order financial and GPS/push queries')
+ON CONFLICT (version) DO NOTHING;

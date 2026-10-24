@@ -1,15 +1,12 @@
-name: Deploy and publish MTaxi test app
-# Includes the zero-distance and small-screen navigation regression fix.
+name: Deploy audited MTaxi and publish APK
+# Deploy passenger route form with both addresses visible; preserve uploads and signing identity.
 on:
-  push:
-    branches: [codex/free-staging-20261021]
-    paths: [.github/workflows/activate-vps.yml]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: mtaxi-vps
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   publish:
     runs-on: ubuntu-22.04
@@ -47,19 +44,6 @@ jobs:
           flutter analyze --no-pub
           flutter build web --no-pub --no-web-resources-cdn --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define="MTAXI_BACKEND_URL=$APP_URL"
           tar -czf "$RUNNER_TEMP/web.tar.gz" -C build/web .
-      - name: Activate PostgreSQL backend and real FCM
-        env:
-          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
-        run: sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'bash -s' < deploy/activate_vps.sh
-      - name: Publish web version
-        env:
-          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
-        run: |
-          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'install -d -m 700 /opt/mtaxi-incoming'
-          sshpass -e scp -o StrictHostKeyChecking=yes "$RUNNER_TEMP/web.tar.gz" "root@$VPS_HOST:/opt/mtaxi-incoming/web.tar.gz"
-          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'tar -xzf /opt/mtaxi-incoming/web.tar.gz -C /var/www/mtaxi && find /var/www/mtaxi -type d -exec chmod 755 {} + && find /var/www/mtaxi -type f -exec chmod 644 {} +'
-          curl --fail --silent --output /dev/null "$APP_URL/"
-          curl --fail --silent --output /dev/null "$APP_URL/admin"
       - name: Preserve test APK signing key between builds
         env:
           SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
@@ -69,20 +53,20 @@ jobs:
           if sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'test -f /etc/mtaxi/test-debug.keystore'; then
             sshpass -e scp -o StrictHostKeyChecking=yes "root@$VPS_HOST:/etc/mtaxi/test-debug.keystore" ~/.android/debug.keystore
           else
-            keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=MTaxi Test, O=MTaxi, C=KZ" -keyalg RSA -keysize 3072 -validity 3650
-            sshpass -e scp -o StrictHostKeyChecking=yes ~/.android/debug.keystore "root@$VPS_HOST:/etc/mtaxi/test-debug.keystore"
-            sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'chmod 600 /etc/mtaxi/test-debug.keystore'
+            echo "Existing signing key missing; refusing to create a replacement" >&2
+            exit 1
           fi
       - name: Build phone APK against live HTTPS backend
         run: bash scripts/build_test_apk.sh "$APP_URL"
-      - name: Publish APK and checksum
+      - name: Back up, deploy audited revision and publish web and APK
         env:
           SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'install -d -m 755 /var/www/mtaxi/downloads'
+          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'install -d -m 755 /var/www/mtaxi/downloads && install -d -m 700 /opt/mtaxi-incoming'
           node -e 'const fs=require("fs");const version=JSON.parse(fs.readFileSync("build/web/version.json","utf8"));fs.writeFileSync("output/test-build.json",JSON.stringify({...version,revision:process.env.GITHUB_SHA,apkSha256:fs.readFileSync("output/mtaxi-staging.apk.sha256","utf8").trim().split(/\s+/)[0],publishedAt:new Date().toISOString()}));'
           sshpass -e scp -o StrictHostKeyChecking=yes deploy/publish_test_apk.sh output/test-build.json output/mtaxi-staging.apk output/mtaxi-staging.apk.sha256 "root@$VPS_HOST:/opt/mtaxi-incoming/"
-          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" 'bash /opt/mtaxi-incoming/publish_test_apk.sh /opt/mtaxi-incoming /var/www/mtaxi/downloads'
+          sshpass -e scp -o StrictHostKeyChecking=yes "$RUNNER_TEMP/web.tar.gz" deploy/deploy_audited.sh "root@$VPS_HOST:/opt/mtaxi-incoming/"
+          sshpass -e ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" "bash /opt/mtaxi-incoming/deploy_audited.sh '$GITHUB_SHA'"
           apksigner_bin="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
           "$apksigner_bin" verify output/mtaxi-staging.apk
           curl --fail --head "$APP_URL/downloads/mtaxi-staging.apk"

@@ -92,7 +92,7 @@ const {
   flushQueuedPushDeliveriesAsync,
   ackPushDeliveryAsync,
 } = require("./push");
-const { uploadFileAsync } = require("./media");
+const { uploadFileAsync, downloadFileAsync } = require("./media");
 const { runMaintenanceTasksAsync } = require("./maintenance");
 const {
   forwardGeocodeLookup,
@@ -226,6 +226,7 @@ const handlers = {
   flushQueuedPushDeliveries: async ({ data, auth }) => flushQueuedPushDeliveriesAsync(data, auth),
   ackPushDelivery: async ({ data, auth }) => ackPushDeliveryAsync(data, auth),
   uploadFile: async ({ data, auth, req }) => uploadFileAsync(data, auth, req),
+  downloadFile: async ({ data, auth }) => downloadFileAsync(data, auth),
   runMaintenanceTasks: async ({ data, auth }) => runMaintenanceTasksAsync(data, auth),
   forwardGeocodeLookup: async ({ data }) => forwardGeocodeLookup(data),
   reverseGeocodeLookup: async ({ data }) => reverseGeocodeLookup(data),

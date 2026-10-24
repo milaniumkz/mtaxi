@@ -92,3 +92,19 @@ test('production no longer requires paid SMS configuration', async () => {
   assert.ok(checks.length > 0);
   assert.deepEqual(checks.filter(check => !check.ok), []);
 });
+
+test('registration records only explicit acceptance of the published legal edition', async () => {
+  const accepted = await registerWithPassword({ phone: '+77017770001', password: 'legal-test-password', legalAccepted: true, legalVersion: '2026-10-24' });
+  assert.equal(accepted.success, true);
+  for (const [phone, extra] of [['+77017770002', {}], ['+77017770003', { legalAccepted: 'true', legalVersion: '2026-10-24' }], ['+77017770004', { legalAccepted: true, legalVersion: 'invented' }]]) {
+    assert.equal((await registerWithPassword({ phone, password: 'legal-test-password', ...extra })).success, true);
+  }
+  const store = await readStoreAsync();
+  const records = store.auditLogs.filter(row => row.action === 'userLegalAcceptance');
+  assert.equal(records.length, 1);
+  assert.equal(records[0].target, accepted.userDocPath);
+  assert.equal(records[0].after.version, '2026-10-24');
+  assert.ok(records[0].after.acceptedAt);
+  assert.ok(records[0].after.documents.includes('privacy'));
+  assert.ok(!JSON.stringify(records).includes('legal-test-password'));
+});

@@ -106,6 +106,7 @@ function uploadFile(data = {}, auth, req) {
   const filename = `${Date.now()}_${crypto.randomUUID()}${ext}`;
   const diskPath = path.join(uploadDir, filename);
   fs.writeFileSync(diskPath, buffer);
+  fs.writeFileSync(`${diskPath}.owner.json`, JSON.stringify({ ownerId: auth.user.id, contentType: data.contentType }), { mode: 0o600 });
   const url = `${publicBaseUrl(req)}/uploads/${filename}`;
   return {
     success: true,
@@ -145,6 +146,7 @@ async function uploadFileAsync(data = {}, auth, req) {
   const filename = `${Date.now()}_${crypto.randomUUID()}${ext}`;
   const diskPath = path.join(uploadDir, filename);
   await fs.promises.writeFile(diskPath, buffer);
+  await fs.promises.writeFile(`${diskPath}.owner.json`, JSON.stringify({ ownerId: auth.user.id, contentType: data.contentType }), { mode: 0o600 });
   const url = `${publicBaseUrl(req)}/uploads/${filename}`;
   return {
     success: true,
@@ -155,7 +157,45 @@ async function uploadFileAsync(data = {}, auth, req) {
   };
 }
 
+function mediaFilename(value) {
+  try {
+    const pathname = new URL(String(value), 'http://local.invalid').pathname;
+    const match = /^\/uploads\/(\d+_[0-9a-f-]+\.(?:jpg|png|heic|heif|webp|pdf|mp4))$/.exec(pathname);
+    return match?.[1] || null;
+  } catch (_) { return null; }
+}
+
+async function authorizeMediaAsync(filename, auth) {
+  if (!auth?.user || auth.user.blocked) return false;
+  if (auth.user.role === 'admin') return true;
+  let owner;
+  try { owner = JSON.parse(await fs.promises.readFile(path.join(uploadDir, `${filename}.owner.json`), 'utf8')); }
+  catch (_) { return false; } // Legacy unowned files require an explicit admin reconciliation.
+  if (owner.ownerId === auth.user.id) return true;
+  const { readStoreAsync } = require('./store');
+  const store = await readStoreAsync();
+  // A driver's published avatar is distinct from private registration files.
+  const user = store.users.find(u => u.id === owner.ownerId);
+  if (user?.statusDriver === 'approved' && mediaFilename(user.photoUrl) === filename) return true;
+  return store.chatMessages.some(message =>
+    message.userId === owner.ownerId && mediaFilename(message.imageUrl) === filename &&
+    store.chats.some(chat => chat.id === message.chatId && chat.userId === auth.user.id));
+}
+
+async function downloadFileAsync(data, auth) {
+  if (!auth?.user) return {success:false,code:'UNAUTHENTICATED',error:'Войдите в приложение'};
+  const filename = mediaFilename(data.url);
+  if (!filename || !await authorizeMediaAsync(filename, auth)) return {success:false,code:'MEDIA_FORBIDDEN',error:'Нет доступа к файлу'};
+  try {
+    const bytes = await fs.promises.readFile(path.join(uploadDir, filename));
+    return {success:true,code:'MEDIA_DOWNLOADED',base64:bytes.toString('base64')};
+  } catch (_) { return {success:false,code:'MEDIA_NOT_FOUND',error:'Файл не найден'}; }
+}
+
 module.exports = {
+  mediaFilename,
+  authorizeMediaAsync,
+  downloadFileAsync,
   uploadFile,
   uploadFileAsync,
   uploadDir,

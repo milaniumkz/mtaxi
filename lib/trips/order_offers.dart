@@ -1,4 +1,8 @@
 import 'trip_receipt.dart';
+import 'dart:math' as math;
+import 'package:go_router/go_router.dart';
+import 'driver_offer_waiting.dart';
+import '/flutter_flow/flutter_flow_util.dart' show formatAppCurrency;
 import '/design/offer_card.dart';
 import '/design/mtaxi_theme.dart';
 import '/flutter_flow/internationalization.dart';
@@ -8,45 +12,170 @@ import '/backend/backend_calls/backend_calls.dart';
 
 Future<void> proposeDriverPrice(BuildContext context, String path,
     {int initialPrice = 500}) async {
-  final price =
-      TextEditingController(text: initialPrice.clamp(500, 10000000).toString());
-  var submitted = false;
   final result = await showDialog<int>(
       context: context,
-      builder: (dialog) => AlertDialog(
-              title: const Text('Предложить свою цену'),
-              content: TextField(
-                  controller: price,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                      labelText: 'Цена, ₸',
-                      helperText:
-                          'Не менее 500 ₸. Время подачи рассчитывается по вашей геопозиции.')),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dialog),
-                    child: const Text('Отмена')),
-                FilledButton(
-                    onPressed: () {
-                      if (submitted) return;
-                      final v = int.tryParse(price.text);
-                      if (v != null && v >= 500 && v <= 10000000) {
-                        submitted = true;
-                        Navigator.pop(dialog, v);
-                      }
-                    },
-                    child: const Text('Предложить'))
-              ]));
-  price.dispose();
+      builder: (_) => _OfferPriceDialog(initialPrice: initialPrice));
   if (result == null || !context.mounted) return;
-  final r = await makeCloudCall(
-      'submitOrderOffer', {'orderDocPath': path, 'price': result});
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(r['success'] == true
-          ? 'Предложение отправлено пассажиру'
-          : r['error']?.toString() ?? 'Не удалось отправить предложение')));
+  String tr(String ru, String kk) =>
+      FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+  try {
+    final response = await makeCloudCall(
+        'submitOrderOffer', {'orderDocPath': path, 'price': result});
+    if (!context.mounted) return;
+    if (response['success'] == true && response['offer'] is Map) {
+      final offer = Map<String, dynamic>.from(response['offer'] as Map);
+      final accepted = await Navigator.of(context).push<bool>(MaterialPageRoute(
+          builder: (_) =>
+              DriverOfferWaiting(orderDocPath: path, offer: offer)));
+      if (accepted == true && context.mounted) {
+        context.goNamed('homeDriverOrder',
+            queryParameters: {'orderDocPath': path});
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(response['error']?.toString() ??
+              tr('Не удалось отправить предложение', 'Ұсыныс жіберілмеді'))));
+    }
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(tr('Ответ не получен. Проверьте предложения по заказу.',
+            'Жауап алынбады. Тапсырыс ұсыныстарын тексеріңіз.'))));
+  }
+}
+
+class _OfferPriceDialog extends StatefulWidget {
+  const _OfferPriceDialog({required this.initialPrice});
+  final int initialPrice;
+  @override
+  State<_OfferPriceDialog> createState() => _OfferPriceDialogState();
+}
+
+/// Three proportional surcharges, rounded to 50 tenge for everyday fares.
+List<int> driverOfferIncrements(int passengerPrice) {
+  final base = passengerPrice.clamp(500, 10000000);
+  final room = 10000000 - base;
+  if (room <= 0) return const [];
+  final quantum = room >= 150 ? 50 : 1;
+  final proportional = math.max(100, (base / 250).round() * 50);
+  final step = math.min(
+      proportional, math.max(quantum, (room ~/ 3 ~/ quantum) * quantum));
+  return [
+    for (var n = 1; n <= 3; n++)
+      if (n * step <= room) n * step
+  ];
+}
+
+class _OfferPriceDialogState extends State<_OfferPriceDialog> {
+  bool _decided = false;
+  int? _selected;
+  void _finish(int? value) {
+    if (_decided) return;
+    _decided = true;
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String tr(String ru, String kk) =>
+        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    final base = widget.initialPrice.clamp(500, 10000000);
+    final increments = driverOfferIncrements(base);
+    String money(int value) => formatAppCurrency(value.toDouble());
+    return AlertDialog(
+      title: Text(tr('Предложить цену', 'Баға ұсыну')),
+      content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+              child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(tr('Цена пассажира', 'Жолаушы бағасы')),
+              const SizedBox(height: 6),
+              Text(money(base),
+                  style: const TextStyle(
+                      fontSize: 28, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              Text(tr('Выберите доплату к этой цене',
+                  'Осы бағаға қосымша ақыны таңдаңыз')),
+              const SizedBox(height: 12),
+              LayoutBuilder(builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 300 ||
+                    MediaQuery.textScalerOf(context).scale(16) > 24;
+                final width = stacked
+                    ? constraints.maxWidth
+                    : (constraints.maxWidth - 16) / 3;
+                return Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final extra in increments)
+                    SizedBox(
+                        width: width,
+                        child: OutlinedButton(
+                          key: ValueKey('driver-offer-plus-$extra'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 14),
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onSurface,
+                            backgroundColor: _selected == extra
+                                ? MTaxiDesign.gold.withValues(alpha: .25)
+                                : Theme.of(context).colorScheme.surface,
+                            side: BorderSide(
+                                color: _selected == extra
+                                    ? MTaxiDesign.gold
+                                    : Theme.of(context).dividerColor,
+                                width: _selected == extra ? 2 : 1),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () => setState(() => _selected = extra),
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Text('+',
+                                style: TextStyle(
+                                    fontSize: 32,
+                                    height: 1,
+                                    fontWeight: FontWeight.w700)),
+                            Text(money(extra),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    fontSize: 17, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            Text(tr('Итого', 'Барлығы'),
+                                style: const TextStyle(fontSize: 12)),
+                            Text(money(base + extra),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 13)),
+                          ]),
+                        )),
+                ]);
+              }),
+              const SizedBox(height: 14),
+              Text(
+                  increments.isEmpty
+                      ? tr(
+                          'Достигнута максимальная цена. Можно принять цену пассажира.',
+                          'Ең жоғары бағаға жетті. Жолаушы бағасын қабылдауға болады.')
+                      : tr(
+                          'Предложение отправится после подтверждения. Заказ начнётся только с согласия пассажира.',
+                          'Ұсыныс растаудан кейін жіберіледі. Тапсырыс жолаушы келіскенде ғана басталады.'),
+                  style: const TextStyle(fontSize: 12)),
+            ],
+          ))),
+      actions: [
+        TextButton(
+            onPressed: () => _finish(null),
+            child: Text(tr('Отмена', 'Бас тарту'))),
+        FilledButton(
+            onPressed:
+                _selected == null ? null : () => _finish(base + _selected!),
+            child: Text(_selected == null
+                ? tr('Предложить', 'Ұсыну')
+                : tr('Предложить за ${money(base + _selected!)}',
+                    '${money(base + _selected!)} ұсыну'))),
+      ],
+    );
+  }
 }
 
 class PassengerOffers extends StatefulWidget {
@@ -57,7 +186,7 @@ class PassengerOffers extends StatefulWidget {
 }
 
 class _PassengerOffersState extends State<PassengerOffers> {
-  Timer? _timer;
+  Timer? _timer, _offerExpiryTimer;
   final Set<String> _seen = {};
   List<Map<String, dynamic>> _offers = [];
   bool _busy = false, _dialog = false;
@@ -72,6 +201,7 @@ class _PassengerOffersState extends State<PassengerOffers> {
   @override
   void dispose() {
     _timer?.cancel();
+    _offerExpiryTimer?.cancel();
     super.dispose();
   }
 
@@ -111,18 +241,42 @@ class _PassengerOffersState extends State<PassengerOffers> {
 
   Future<void> _show(Map<String, dynamic> offer) async {
     if (_dialog || _responding) return;
+    final expires = DateTime.tryParse(offer['expiresAt']?.toString() ?? '');
+    if (expires != null && !expires.isAfter(DateTime.now())) return;
     _dialog = true;
+    var decided = false;
     final accept = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (dialog) => SingleChildScrollView(
-          padding: const EdgeInsets.all(22),
-          child: DriverOfferCard(
-              offer: offer,
-              onAccept: () => Navigator.pop(dialog, true),
-              onDecline: () => Navigator.pop(dialog, false))),
+      builder: (dialog) {
+        if (expires != null)
+          _offerExpiryTimer ??= Timer(expires.difference(DateTime.now()), () {
+            if (!mounted ||
+                decided ||
+                !dialog.mounted ||
+                !(ModalRoute.of(dialog)?.isCurrent ?? false)) return;
+            decided = true;
+            Navigator.pop(dialog);
+          });
+        return SingleChildScrollView(
+            padding: const EdgeInsets.all(22),
+            child: DriverOfferCard(
+                offer: offer,
+                onAccept: () {
+                  if (decided) return;
+                  decided = true;
+                  Navigator.pop(dialog, true);
+                },
+                onDecline: () {
+                  if (decided) return;
+                  decided = true;
+                  Navigator.pop(dialog, false);
+                }));
+      },
     );
+    _offerExpiryTimer?.cancel();
+    _offerExpiryTimer = null;
     _dialog = false;
     if (accept == null || !mounted) return;
     setState(() => _responding = true);

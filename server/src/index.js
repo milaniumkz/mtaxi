@@ -12,7 +12,8 @@ const {
   trustProxyForEnv,
   uploadStaticOptionsForEnv,
 } = require("./http_config");
-const { uploadDir } = require("./media");
+const { uploadDir, mediaFilename, authorizeMediaAsync } = require("./media");
+const { verifyBearerToken } = require('./auth');
 const {
   handleDriverTopUpPaymentCallbackAsync,
   localPaymentPageEnabled,
@@ -40,7 +41,16 @@ app.use(securityHeadersMiddleware);
 app.use(requestIdMiddleware);
 app.use(accessLogMiddleware());
 app.use(express.json({ limit: jsonBodyLimitForEnv() }));
-app.use("/uploads", express.static(uploadDir, uploadStaticOptionsForEnv()));
+app.use("/uploads", async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    const auth = await verifyBearerToken(req);
+    if (!auth?.user) return res.status(401).json({success:false,code:'UNAUTHENTICATED'});
+    const filename = mediaFilename(`/uploads${req.path}`);
+    if (!filename || !await authorizeMediaAsync(filename, auth)) return res.status(403).json({success:false,code:'MEDIA_FORBIDDEN'});
+    next();
+  } catch (error) { next(error); }
+}, express.static(uploadDir, {...uploadStaticOptionsForEnv(), maxAge:0, cacheControl:false}));
 
 async function sendReadiness(res) {
   const store = await storeHealth();

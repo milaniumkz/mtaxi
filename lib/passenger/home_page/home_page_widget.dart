@@ -544,9 +544,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
             16.0,
             8.0,
             16.0,
-            keyboardInset > 0
-                ? keyboardInset + 8.0
-                : bottomSafeInset + kBottomNavigationBarHeight + 28.0,
+            keyboardInset > 0 ? keyboardInset + 8.0 : bottomSafeInset + 8.0,
           ),
           child: FFButtonWidget(
             onPressed: canSubmitOrder

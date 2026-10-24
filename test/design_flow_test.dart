@@ -27,12 +27,15 @@ import 'package:mtaxi/trips/wallet_page.dart';
 import 'package:mtaxi/trips/trip_receipt.dart';
 import 'package:mtaxi/driver/set_profile_driver/set_profile_driver_widget.dart';
 
-Widget wrap(Widget child, {double scale = 1, String locale = 'ru'}) =>
+Widget wrap(Widget child,
+        {double scale = 1,
+        String locale = 'ru',
+        Brightness brightness = Brightness.light}) =>
     ChangeNotifierProvider<FFAppState>.value(
         value: FFAppState(),
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          theme: MTaxiDesign.theme(Brightness.light),
+          theme: MTaxiDesign.theme(brightness),
           locale: Locale(locale),
           supportedLocales: const [Locale('ru'), Locale('kk')],
           localizationsDelegates: const [
@@ -228,7 +231,12 @@ void main() {
             enableTileLayer: false,
             enableRemoteGeocoding: false))));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Указать место посадки'));
+    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.text('Адрес отправления'), findsOneWidget);
+    expect(find.text('Адрес назначения'), findsOneWidget);
+    expect(tester.getTopLeft(find.byType(TextField).first).dy,
+        lessThan(tester.getTopLeft(find.byType(TextField).at(1)).dy));
+    await tester.tap(find.byType(TextField).first);
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNWidgets(3));
     expect(find.byIcon(Icons.my_location), findsNothing);

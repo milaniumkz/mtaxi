@@ -1,5 +1,9 @@
 package com.milanium.mtaxi
 
+import android.content.Context
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,6 +15,20 @@ import androidx.annotation.RequiresApi
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity: FlutterActivity() {
+    companion object { private const val DRIVER_ENGINE = "mtaxi_driver_main_engine" }
+
+    // Keep the Dart location stream alive while the driver's foreground
+    // location service is running, even after the activity is dismissed.
+    override fun provideFlutterEngine(context: Context): FlutterEngine? =
+        FlutterEngineCache.getInstance().get(DRIVER_ENGINE)
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        FlutterEngineCache.getInstance().put(DRIVER_ENGINE, flutterEngine)
+    }
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

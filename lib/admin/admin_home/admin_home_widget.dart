@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import 'package:flutter/material.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
@@ -409,7 +410,7 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                             _driverReviewValue(data, ['password']),
                           ),
                           _buildDriverReviewImageRow(
-                            'Фото профиля/авто',
+                            'Фото автомобиля',
                             _driverReviewImageValue(
                                 data, ['avtoImage', 'photo_url']),
                             candidates: vehicleImageCandidates,
@@ -2121,7 +2122,7 @@ class _DriverReviewImagePreviewState extends State<_DriverReviewImagePreview> {
         width: double.infinity,
         height: 240,
         color: const Color(0xFFF2F4F7),
-        child: Image.network(
+        child: MTaxiNetworkImage(
           imageUrl,
           fit: BoxFit.cover,
           loadingBuilder: (context, child, loadingProgress) {
