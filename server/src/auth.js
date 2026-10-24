@@ -133,6 +133,19 @@ async function registerWithPassword(data = {}) {
     };
     setUserPassword(user, password);
     store.users.push(user);
+    // Only record an explicit acknowledgement; old installed clients do not
+    // acquire a fabricated acceptance when they register without these fields.
+    if (data.legalAccepted === true && data.legalVersion === "2026-10-24") {
+      store.auditLogs ||= [];
+      store.auditLogs.push({
+        id: newId("audit"), action: "userLegalAcceptance",
+        target: `users/${user.id}`, adminId: user.id,
+        before: null,
+        after: { version: data.legalVersion, acceptedAt: now,
+          documents: ["terms", "offer", "privacy", "consent", "payments"] },
+        createdAt: now,
+      });
+    }
     return { success: true, token: createAccessToken(user), userId: user.id,
       userDocPath: `users/${user.id}`, user: publicUser(user) };
   });

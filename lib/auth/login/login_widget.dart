@@ -514,13 +514,13 @@ class _LoginWidgetState extends State<LoginWidget> {
                                 : (value) =>
                                     setState(() => _accepted = value ?? false),
                             title: Text(_tr(
-                                'Принимаю пользовательское соглашение',
-                                'Пайдаланушы келісімін қабылдаймын'))),
+                                'Принимаю соглашение и оферту, даю согласие на обработку данных и ознакомлен с политикой конфиденциальности',
+                                'Келісім мен офертаны қабылдаймын, деректерді өңдеуге келісемін және құпиялық саясатымен таныстым'))),
                         TextButton(
                             onPressed: () =>
                                 context.pushNamed(PolitikaWidget.routeName),
-                            child: Text(_tr('Пользовательское соглашение',
-                                'Пайдаланушы келісімі'))),
+                            child: Text(_tr('Документы и условия MTaxi',
+                                'MTaxi құжаттары мен шарттары'))),
                       ],
                       if (_error.isNotEmpty)
                         Padding(

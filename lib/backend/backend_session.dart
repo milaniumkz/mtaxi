@@ -190,6 +190,8 @@ Future<Map<String, dynamic>> backendRegisterWithPassword({
     {
       'phone': phone,
       'password': password,
+      'legalAccepted': true,
+      'legalVersion': '2026-10-24',
     },
   );
   if (result['success'] == true) {
