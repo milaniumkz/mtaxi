@@ -1,0 +1,26 @@
+name: Approve dedicated store review driver
+on:
+  push:
+    branches: [release/store-publication-20261024]
+    paths: [.github/workflows/store-review-accounts.yml]
+permissions:
+  contents: read
+jobs:
+  approve-review-driver:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Approve only the owner-authorized review driver without deploying
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+          sshpass -e scp -o StrictHostKeyChecking=yes server/scripts/approve_store_review_driver.js root@89.126.192.185:/opt/mtaxi-incoming/approve_store_review_driver.js
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'cd /opt/mtaxi && container=$(docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml ps -q backend) && test -n "$container" && docker cp /opt/mtaxi-incoming/approve_store_review_driver.js "$container":/app/scripts/approve_store_review_driver.js && docker exec "$container" node scripts/approve_store_review_driver.js'
