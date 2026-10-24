@@ -1,0 +1,33 @@
+name: Configure separate MTaxi admin domain
+on:
+  push:
+    branches: [codex/full-audit-20261023]
+    paths: [.github/workflows/admin-domain.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mtaxi-vps
+  cancel-in-progress: false
+jobs:
+  admin-domain:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Configure HTTPS admin hostname without compiling APK
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'bash -s' < deploy/setup_admin_domain.sh
+      - name: Verify both public HTTPS endpoints
+        run: |
+          curl --fail --silent --show-error https://mtaxi.89.126.192.185.sslip.io/readyz
+          curl --fail --silent --show-error https://mtaxi-controls.89.126.192.185.sslip.io/readyz
+          curl --fail --silent --show-error --head https://mtaxi-controls.89.126.192.185.sslip.io/
