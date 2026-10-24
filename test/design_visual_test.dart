@@ -256,13 +256,7 @@ void main() {
                 find.text(locale == 'kk' ? 'Аккаунт құру' : 'Создать аккаунт'));
           }
           if (id == 4 || id == 5) {
-            await tester.tap(find
-                .text(id == 5
-                    ? 'Железинка, улица Абая, 14'
-                    : locale == 'kk'
-                        ? 'Қайда барамыз?'
-                        : 'Куда едем?')
-                .last);
+            await tester.tap(find.byType(TextField).at(id == 5 ? 0 : 1));
           }
           if (id == 12 || id == 29) {
             await tester.tap(find.text('Итог'));

@@ -1,5 +1,5 @@
 name: Deploy audited MTaxi and publish APK
-# Deploy the exact tested revision, preserving database, uploads and signing identity.
+# Deploy passenger route form with both addresses visible; preserve uploads and signing identity.
 on:
   push:
     branches: [codex/full-audit-20261023]

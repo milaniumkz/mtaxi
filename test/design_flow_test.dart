@@ -231,7 +231,12 @@ void main() {
             enableTileLayer: false,
             enableRemoteGeocoding: false))));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Указать место посадки'));
+    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.text('Адрес отправления'), findsOneWidget);
+    expect(find.text('Адрес назначения'), findsOneWidget);
+    expect(tester.getTopLeft(find.byType(TextField).first).dy,
+        lessThan(tester.getTopLeft(find.byType(TextField).at(1)).dy));
+    await tester.tap(find.byType(TextField).first);
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNWidgets(3));
     expect(find.byIcon(Icons.my_location), findsNothing);
