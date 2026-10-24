@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Publish public legal documents and registration acknowledgement; reviewed registration baseline.
+# Publish public legal documents and registration acknowledgement; reviewed full-suite registration baseline.
 on:
   push:
     branches: [codex/full-audit-20261023]
