@@ -2,6 +2,7 @@
 set -euo pipefail
 revision="${1:?Pinned Git revision required}"
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+[[ "${2:-}" == "" || "${2:-}" == "--skip-apk" ]]
 exec 9>/run/lock/mtaxi-deploy.lock
 flock -w 300 9
 cd /opt/mtaxi
@@ -46,7 +47,11 @@ find /var/www/mtaxi -mindepth 1 -maxdepth 1 ! -name downloads -exec rm -rf -- {}
 tar -xzf /opt/mtaxi-incoming/web.tar.gz -C /var/www/mtaxi
 find /var/www/mtaxi -type d -exec chmod 755 {} +
 find /var/www/mtaxi -type f -exec chmod 644 {} +
-bash deploy/publish_test_apk.sh /opt/mtaxi-incoming /var/www/mtaxi/downloads
+if [[ "${2:-}" != "--skip-apk" ]]; then
+  bash deploy/publish_test_apk.sh /opt/mtaxi-incoming /var/www/mtaxi/downloads
+else
+  echo "APK publication skipped; existing downloads preserved"
+fi
 curl --fail --silent https://mtaxi.89.126.192.185.sslip.io/readyz
 printf 'Deployed revision: %s; previous revision: %s; backup: %s\n' "$revision" "$previous" "$backup"
 trap - ERR

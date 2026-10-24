@@ -1,6 +1,7 @@
 import '/design/bottom_navigation.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '/design/order_preview.dart';
+import '/design/mtaxi_icon.dart';
 import '/design/mtaxi_theme.dart';
 import '/backend/push_notifications/push_notifications_util.dart'
     show syncCurrentFcmTokenState;
@@ -435,7 +436,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
       Text(from,
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
       const SizedBox(height: 10),
-      Text('→ $to'),
+      MTaxiDestinationLine(to),
       if (_orderDistanceLabel(order) != null) ...[
         const SizedBox(height: 10),
         _orderDistanceText(order)

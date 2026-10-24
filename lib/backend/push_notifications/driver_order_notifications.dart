@@ -144,52 +144,58 @@ Future<bool> _showNearbyDriverOrder(
       'getOrderDetails', {'orderDocPath': payload['orderDocPath']});
   final order = details['order'];
   if (order is! Map || order['status'] != 0) return false;
-  final coords = user['coords'], pickup = order['fromPoint'];
-  if (coords is! Map || pickup is! Map) return false;
-  double? n(dynamic value) => num.tryParse(value?.toString() ?? '')?.toDouble();
-  final lat = n(coords['latitude'] ?? coords['lat']),
-      lng = n(coords['longitude'] ?? coords['lng']),
-      a = n(pickup['latitude'] ?? pickup['lat']),
-      b = n(pickup['longitude'] ?? pickup['lng']);
-  final accuracy = n(user['coordsAccuracy']);
-  final stamp = DateTime.tryParse(user['coordsUpdatedAt']?.toString() ?? '');
-  if (lat == null ||
-      lng == null ||
-      a == null ||
-      b == null ||
-      accuracy == null ||
-      accuracy <= 0 ||
-      accuracy > 100 ||
-      stamp == null ||
-      DateTime.now().difference(stamp).inSeconds > 30) return false;
-  if (const geo.Distance()(geo.LatLng(lat, lng), geo.LatLng(a, b)) + accuracy >
-      1000) return false;
-  _shownNearby.add(path);
-  if (_shownNearby.length > 250) _shownNearby.remove(_shownNearby.first);
-
   final data = <String, dynamic>{
     ...payload,
     'driverUserId': user['id'],
     'orderPrice': order['price'],
     'pickupAddress': order['ot'],
     'destinationAddress': order['kuda'],
+    'orderType': order['type'],
+    'orderComment': order['comment'],
+    'deliveryItem': order['deliveryItem'],
     'popupExpiresAt':
         DateTime.now().add(const Duration(seconds: 30)).toIso8601String()
   };
+  final coords = user['coords'], pickup = order['fromPoint'];
+  double? n(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble();
+  bool near = false;
+  if (coords is Map && pickup is Map) {
+    final lat = n(coords['latitude'] ?? coords['lat']),
+        lng = n(coords['longitude'] ?? coords['lng']),
+        a = n(pickup['latitude'] ?? pickup['lat']),
+        b = n(pickup['longitude'] ?? pickup['lng']);
+    final accuracy = n(user['coordsAccuracy']);
+    final stamp = DateTime.tryParse(user['coordsUpdatedAt']?.toString() ?? '');
+    if (lat != null &&
+        lng != null &&
+        a != null &&
+        b != null &&
+        accuracy != null &&
+        accuracy > 0 &&
+        accuracy <= 100 &&
+        stamp != null &&
+        DateTime.now().difference(stamp).inSeconds <= 30) {
+      final distance =
+          const geo.Distance()(geo.LatLng(lat, lng), geo.LatLng(a, b));
+      near = distance + accuracy <= 1000;
+      data['distanceMeters'] = distance.round();
+    }
+  }
+  if (!near) {
+    if (_android) await _ordinaryOrderNotice(data, quiet: true);
+    return false;
+  }
+  _shownNearby.add(path);
+  if (_shownNearby.length > 250) _shownNearby.remove(_shownNearby.first);
+
   if (_android) {
     await _initNotifications();
-    // Keep an ordinary notification as a fallback if the OS disallows overlay startup.
-    await _notifications.show(
-        (payload['orderDocPath'].toString().hashCode & 0x7fffffff),
-        'Заказ рядом · ${data['orderPrice']} ₸',
-        '${data['pickupAddress']} → ${data['destinationAddress']}',
-        const NotificationDetails(
-            android: AndroidNotificationDetails(
-                'mtaxi_orders_nearby', 'Заказы рядом',
-                importance: Importance.high, priority: Priority.high)),
-        payload: jsonEncode(data));
     if (!await FlutterOverlayWindow.isPermissionGranted() ||
-        await FlutterOverlayWindow.isActive()) return false;
+        await FlutterOverlayWindow.isActive()) {
+      await _ordinaryOrderNotice(data,
+          quiet: await FlutterOverlayWindow.isActive());
+      return false;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_popupKey, jsonEncode(data));
     try {
@@ -214,6 +220,7 @@ Future<bool> _showNearbyDriverOrder(
         await FlutterOverlayWindow.shareData(data);
       return true;
     } catch (_) {
+      await _ordinaryOrderNotice(data);
       return false;
     }
   }
@@ -224,6 +231,23 @@ Future<bool> _showNearbyDriverOrder(
       builder: (_) =>
           Dialog.fullscreen(child: DriverOrderPopup(initialData: data)));
   return true;
+}
+
+Future<void> _ordinaryOrderNotice(Map<String, dynamic> data,
+    {bool quiet = false}) async {
+  await _initNotifications();
+  await _notifications.show(
+      data['orderDocPath'].toString().hashCode & 0x7fffffff,
+      '${quiet ? 'Новый заказ' : 'Заказ рядом'} · ${data['orderPrice']} ₸',
+      '${data['pickupAddress']} → ${data['destinationAddress']}',
+      NotificationDetails(
+          android: AndroidNotificationDetails(
+              quiet ? 'mtaxi_orders_quiet' : 'mtaxi_orders_nearby',
+              quiet ? 'Остальные заказы' : 'Заказы рядом',
+              importance: quiet ? Importance.low : Importance.high,
+              priority: quiet ? Priority.low : Priority.high,
+              playSound: !quiet)),
+      payload: jsonEncode(data));
 }
 
 class DriverOrderOverlayApp extends StatelessWidget {

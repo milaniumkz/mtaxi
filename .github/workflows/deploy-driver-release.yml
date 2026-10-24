@@ -1,0 +1,57 @@
+name: Deploy driver improvements without APK
+on:
+  push:
+    branches: [codex/full-audit-20261023]
+    paths: [.github/workflows/deploy-driver-release.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mtaxi-vps
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      APP_URL: https://mtaxi.89.126.192.185.sslip.io
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install pinned Flutter
+        run: |
+          git clone --depth 1 --branch 3.41.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = 90673a4eef275d1a6692c26ac80d6d746d41a73a
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Validate backend and frontend
+        run: |
+          npm ci --prefix server
+          MTAXI_FCM_ENABLED=false npm test --prefix server
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Build web with public Firebase configuration
+        env:
+          FIREBASE_WEB_VAPID_KEY: ${{ secrets.FIREBASE_WEB_VAPID_KEY }}
+        run: |
+          node scripts/configure_firebase_web.js config/firebase_web_public.json "$APP_URL" "$RUNNER_TEMP/web-defines.json" web/firebase-config.js
+          flutter build web --no-pub --no-web-resources-cdn --dart-define=MTAXI_REQUIRE_REMOTE_BACKEND=true --dart-define-from-file="$RUNNER_TEMP/web-defines.json"
+          tar -czf "$RUNNER_TEMP/web.tar.gz" -C build/web .
+      - name: Back up and deploy backend and web only
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'install -d -m 700 /opt/mtaxi-incoming'
+          sshpass -e scp -o StrictHostKeyChecking=yes "$RUNNER_TEMP/web.tar.gz" deploy/deploy_audited.sh root@89.126.192.185:/opt/mtaxi-incoming/
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 "bash /opt/mtaxi-incoming/deploy_audited.sh '$GITHUB_SHA' --skip-apk"
+      - name: Verify both public sites
+        run: |
+          curl --fail --silent --show-error "$APP_URL/readyz"
+          curl --fail --silent --show-error "$APP_URL/version.json"
+          curl --fail --silent --show-error https://mtaxi-controls.89.126.192.185.sslip.io/readyz
+          curl --fail --silent --show-error "$APP_URL/downloads/test-build.json"

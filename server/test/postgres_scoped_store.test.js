@@ -14,6 +14,7 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
     for(const [name,phone]of [['d','+70000000801'],['p','+70000000802'],['x','+70000000803'],['e','+70000000804'],['f','+70000000805']]) {
       await db.query('INSERT INTO users(id,phone,balance,is_driver,status_driver) VALUES($1,$2,1000,$3,$4)',[prefix+name,phone,['d','e','f'].includes(name),['d','e','f'].includes(name)?'approved':'']);
     }
+    await db.query("UPDATE users SET driver_online=true,role_state='DRIVER_ONLINE' WHERE id=ANY($1::text[])",[[prefix+'d',prefix+'e',prefix+'f']]);
     await db.query("INSERT INTO orders(id,user_id,driver_id,status,price,ot_lat,ot_lng) VALUES($1,$2,$3,2,500,53.53,76.68)",[prefix+'trip',prefix+'p',prefix+'d']);
     await db.query("INSERT INTO orders(id,user_id,driver_id,status,price) VALUES($1,$2,$3,5,500)",[prefix+'old',prefix+'p',prefix+'d']);
     await db.query('UPDATE users SET active_driver_order_id=$1,has_active_driver_order=true WHERE id=$2',[prefix+'trip',prefix+'d']);

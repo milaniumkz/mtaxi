@@ -186,7 +186,7 @@ class PassengerOffers extends StatefulWidget {
 }
 
 class _PassengerOffersState extends State<PassengerOffers> {
-  Timer? _timer;
+  Timer? _timer, _offerExpiryTimer;
   final Set<String> _seen = {};
   List<Map<String, dynamic>> _offers = [];
   bool _busy = false, _dialog = false;
@@ -201,6 +201,7 @@ class _PassengerOffersState extends State<PassengerOffers> {
   @override
   void dispose() {
     _timer?.cancel();
+    _offerExpiryTimer?.cancel();
     super.dispose();
   }
 
@@ -240,27 +241,42 @@ class _PassengerOffersState extends State<PassengerOffers> {
 
   Future<void> _show(Map<String, dynamic> offer) async {
     if (_dialog || _responding) return;
+    final expires = DateTime.tryParse(offer['expiresAt']?.toString() ?? '');
+    if (expires != null && !expires.isAfter(DateTime.now())) return;
     _dialog = true;
     var decided = false;
     final accept = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (dialog) => SingleChildScrollView(
-          padding: const EdgeInsets.all(22),
-          child: DriverOfferCard(
-              offer: offer,
-              onAccept: () {
-                if (decided) return;
-                decided = true;
-                Navigator.pop(dialog, true);
-              },
-              onDecline: () {
-                if (decided) return;
-                decided = true;
-                Navigator.pop(dialog, false);
-              })),
+      builder: (dialog) {
+        if (expires != null)
+          _offerExpiryTimer ??= Timer(expires.difference(DateTime.now()), () {
+            if (!mounted ||
+                decided ||
+                !dialog.mounted ||
+                !(ModalRoute.of(dialog)?.isCurrent ?? false)) return;
+            decided = true;
+            Navigator.pop(dialog);
+          });
+        return SingleChildScrollView(
+            padding: const EdgeInsets.all(22),
+            child: DriverOfferCard(
+                offer: offer,
+                onAccept: () {
+                  if (decided) return;
+                  decided = true;
+                  Navigator.pop(dialog, true);
+                },
+                onDecline: () {
+                  if (decided) return;
+                  decided = true;
+                  Navigator.pop(dialog, false);
+                }));
+      },
     );
+    _offerExpiryTimer?.cancel();
+    _offerExpiryTimer = null;
     _dialog = false;
     if (accept == null || !mounted) return;
     setState(() => _responding = true);
