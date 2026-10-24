@@ -1,4 +1,5 @@
 import '/design/map_attribution.dart';
+import '/design/service_type_cards.dart';
 import '/design/mtaxi_theme.dart';
 // ignore_for_file: unused_import, unused_element, unnecessary_import, deprecated_member_use
 
@@ -1635,6 +1636,25 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                               icon: const Icon(Icons.check))
                       ]),
                       const SizedBox(height: 12),
+                      ServiceTypeCards(
+                        value: _serviceType,
+                        onChanged: _changeServiceType,
+                        taxiLabel: _tr('Такси', 'Такси'),
+                        deliveryLabel: _tr('Доставка', 'Жеткізу'),
+                        taxiDescription:
+                            _tr('Поездки по посёлку', 'Ауыл ішіндегі сапарлар'),
+                        deliveryDescription: _tr('Посылки и покупки',
+                            'Сәлемдемелер мен сатып алулар'),
+                      ),
+                      if (widget.intercityEnabled)
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => _changeServiceType('intercity'),
+                              icon: const Icon(Icons.alt_route),
+                              label: Text(_tr('Межгород', 'Қалааралық')),
+                            )),
+                      const SizedBox(height: 16),
                       Container(
                         key: const ValueKey('passenger_route_fields'),
                         clipBehavior: Clip.antiAlias,
@@ -1762,24 +1782,6 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                                 },
                                 child: Text(_tr('Забрать отсюда',
                                     'Осы жерден алып кету')))),
-                      Wrap(spacing: 8, children: [
-                        ChoiceChip(
-                            label: Text(_tr('Такси', 'Такси')),
-                            selected: _serviceType == 'taxi',
-                            selectedColor: MTaxiDesign.gold,
-                            onSelected: (_) => _changeServiceType('taxi')),
-                        ChoiceChip(
-                            label: Text(_tr('Доставка', 'Жеткізу')),
-                            selected: _serviceType == 'delivery',
-                            selectedColor: MTaxiDesign.gold,
-                            onSelected: (_) => _changeServiceType('delivery')),
-                        if (widget.intercityEnabled)
-                          ChoiceChip(
-                              label: Text(_tr('Межгород', 'Қалааралық')),
-                              selected: false,
-                              onSelected: (_) =>
-                                  _changeServiceType('intercity')),
-                      ]),
                     ]),
               ))),
     ]);

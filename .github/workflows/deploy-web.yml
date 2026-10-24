@@ -1,5 +1,5 @@
 name: Publish MTaxi web only
-# Publish explicit registration roles and dedicated admin login copy; web only.
+# Publish taxi and delivery cards above route addresses; web only.
 on:
   push:
     branches: [codex/full-audit-20261023]
