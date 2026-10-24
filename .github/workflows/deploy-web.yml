@@ -1,5 +1,5 @@
 name: Publish MTaxi web only
-# Publish taxi and delivery cards above route addresses; web only.
+# Publish font-independent SVG icons in taxi and delivery cards; web only.
 on:
   push:
     branches: [codex/full-audit-20261023]

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'mtaxi_theme.dart';
+import 'mtaxi_icon.dart';
 
 class ServiceTypeCards extends StatelessWidget {
   const ServiceTypeCards(
@@ -23,8 +24,7 @@ class ServiceTypeCards extends StatelessWidget {
           MediaQuery.textScalerOf(context).scale(16) > 24;
       final width =
           stacked ? constraints.maxWidth : (constraints.maxWidth - 12) / 2;
-      Widget card(
-          String type, String title, String description, IconData icon) {
+      Widget card(String type, String title, String description, String icon) {
         final selected = value == type;
         return SizedBox(
             width: width,
@@ -67,18 +67,29 @@ class ServiceTypeCards extends StatelessWidget {
                                                   : Colors.white),
                                           borderRadius:
                                               BorderRadius.circular(12)),
-                                      child: Icon(icon,
+                                      child: MTaxiIcon(icon,
                                           color: selected
                                               ? MTaxiDesign.ink
                                               : scheme.onSurface,
-                                          size: 26)),
+                                          size: 28)),
                                   const Spacer(),
                                   if (selected)
-                                    Icon(Icons.check_circle_rounded,
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
                                         color: dark
                                             ? MTaxiDesign.gold
                                             : MTaxiDesign.ink,
-                                        size: 20),
+                                      ),
+                                      child: MTaxiIcon('check',
+                                          size: 12,
+                                          color: dark
+                                              ? MTaxiDesign.ink
+                                              : Colors.white),
+                                    ),
                                 ]),
                                 const SizedBox(height: 10),
                                 Text(title,
@@ -97,9 +108,8 @@ class ServiceTypeCards extends StatelessWidget {
       }
 
       return Wrap(spacing: 12, runSpacing: 12, children: [
-        card('taxi', taxiLabel, taxiDescription, Icons.local_taxi_rounded),
-        card('delivery', deliveryLabel, deliveryDescription,
-            Icons.inventory_2_outlined),
+        card('taxi', taxiLabel, taxiDescription, 'car'),
+        card('delivery', deliveryLabel, deliveryDescription, 'parcel'),
       ]);
     });
   }
