@@ -129,14 +129,15 @@ Stream<List<OrderRecord>> availableDriverOrdersStreamFromBackend({
   LatLng? Function()? driverLocation,
   double radiusKm = 10,
 }) async* {
-  Future<List<OrderRecord>> load() => loadAvailableDriverOrdersFromBackend(
-      driverLocation: driverLocation?.call(), radiusKm: radiusKm);
-  try {
-    yield await load();
-  } catch (error, stack) {
-    yield* Stream<List<OrderRecord>>.error(error, stack);
+  while (true) {
+    try {
+      yield await loadAvailableDriverOrdersFromBackend(
+        driverLocation: driverLocation?.call(),
+        radiusKm: radiusKm,
+      );
+    } catch (error, stack) {
+      yield* Stream<List<OrderRecord>>.error(error, stack);
+    }
+    await Future<void>.delayed(const Duration(seconds: 2));
   }
-  // Periodic streams cancel their timer immediately; asyncMap serializes polls.
-  yield* Stream<void>.periodic(const Duration(seconds: 2))
-      .asyncMap((_) => load());
 }

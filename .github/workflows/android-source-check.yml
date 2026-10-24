@@ -1,4 +1,5 @@
 name: Check Android sources without APK
+# Restore the wrapper from the pinned Flutter SDK cache before compile-only tasks.
 on:
   push:
     branches: [codex/full-audit-20261023]
@@ -25,6 +26,9 @@ jobs:
         run: |
           flutter pub get --enforce-lockfile
           flutter analyze --no-pub
+          flutter precache --android
+          cp -rn "$RUNNER_TEMP/flutter/bin/cache/artifacts/gradle_wrapper/." android/
+          chmod +x android/gradlew
           printf 'sdk.dir=%s\nflutter.sdk=%s\n' "$ANDROID_HOME" "$RUNNER_TEMP/flutter" > android/local.properties
           cd android
           ./gradlew --no-daemon --max-workers=2 :app:processDebugMainManifest :app:compileDebugKotlin -Ptarget-platform=android-arm64 -Ptarget=lib/main.dart

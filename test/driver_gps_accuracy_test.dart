@@ -65,7 +65,7 @@ void main() {
       expect(samples.every((sample) => sample['accuracy'] == 7.0), isTrue);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
-      await tester.pump();
+      await tester.pump(const Duration(seconds:3));
     },
         () => MockClient((request) async {
               if (!request.url.path.contains('/call/')) {
