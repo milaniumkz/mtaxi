@@ -1,5 +1,5 @@
 name: Publish MTaxi web only
-# Route-form visual baselines reviewed for normal and unavailable-GPS states.
+# Publish explicit registration roles and dedicated admin login copy; web only.
 on:
   push:
     branches: [codex/full-audit-20261023]
