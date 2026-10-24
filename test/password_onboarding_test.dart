@@ -3,6 +3,18 @@ import 'package:mtaxi/auth/backend_auth/auth_util.dart';
 import 'package:mtaxi/backend/backend_user_adapter.dart';
 
 void main() {
+  test('driver availability survives backend profile conversion', () {
+    for (final online in [true, false]) {
+      final user = usersRecordFromBackendUser({
+        'id': 'review-driver',
+        'isDriver': true,
+        'statusDriver': 'approved',
+        'driverOnLine': online,
+        'roleState': online ? 'DRIVER_ONLINE' : 'DRIVER_OFFLINE',
+      });
+      expect(user!.snapshotData['driverOnLine'], online);
+    }
+  });
   test(
       'setting a password at signup does not skip passenger profile completion',
       () {

@@ -59,6 +59,7 @@ UsersRecord? usersRecordFromBackendUser(Map<String, dynamic>? user) {
     'balance': user['balance'],
     'bonusBalance': user['bonusBalance'],
     'isDriver': user['isDriver'],
+    'driverOnLine': user['driverOnLine'],
     'city': user['city'],
     'coords': _backendLatLng(user['coords']),
     'gosNomer': user['gosNomer'],
