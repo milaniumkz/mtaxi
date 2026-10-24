@@ -7,7 +7,8 @@ cd /opt/mtaxi
 test -f .git-deploy-managed
 test -f /var/www/mtaxi/main.dart.js
 backup="/var/backups/mtaxi/admin-domain-$(date -u +%Y%m%dT%H%M%SZ)"
-install -d -m 700 "$backup" /var/www/mtaxi-acme
+install -d -m 700 "$backup"
+install -d -m 755 /var/www/mtaxi-acme /var/www/mtaxi-acme/.well-known /var/www/mtaxi-acme/.well-known/acme-challenge
 install -m 600 server/.env "$backup/server.env"
 site=/etc/nginx/sites-available/mtaxi-controls
 if test -f "$site"; then install -m 600 "$site" "$backup/nginx.conf"; fi
@@ -22,6 +23,10 @@ NGINX
 ln -sfn "$site" /etc/nginx/sites-enabled/mtaxi-controls
 nginx -t
 systemctl reload nginx
+printf 'mtaxi-admin-acme-ready' > /var/www/mtaxi-acme/.well-known/acme-challenge/mtaxi-permission-check
+chmod 644 /var/www/mtaxi-acme/.well-known/acme-challenge/mtaxi-permission-check
+curl --fail --silent --show-error -H "Host: $host" http://127.0.0.1/.well-known/acme-challenge/mtaxi-permission-check
+rm /var/www/mtaxi-acme/.well-known/acme-challenge/mtaxi-permission-check
 certbot certonly --webroot -w /var/www/mtaxi-acme --non-interactive --agree-tos --register-unsafely-without-email --cert-name "$host" -d "$host" --keep-until-expiring
 cat >> "$site" <<NGINX
 server {

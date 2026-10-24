@@ -1,4 +1,5 @@
 name: Configure separate MTaxi admin domain
+# Verify ACME file access before requesting the certificate.
 on:
   push:
     branches: [codex/full-audit-20261023]
