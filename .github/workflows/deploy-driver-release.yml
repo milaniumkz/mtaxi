@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Allow any authorized Kaspi Pay merchant; preserve invoice verification; no APK.
+# Automatically issue and reconcile user-requested Kaspi invoices; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]

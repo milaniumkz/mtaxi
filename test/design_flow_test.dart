@@ -488,7 +488,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).at(0), '+77019990011');
       await tester.enterText(find.byType(TextField).at(1), '1000');
-      await tester.tap(find.text('Запросить счёт Kaspi'));
+      await tester.tap(find.text('Выставить счёт Kaspi'));
       await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(

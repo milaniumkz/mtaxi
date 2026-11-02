@@ -23,6 +23,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
   String? _paymentId;
   String? _error;
   String _status = 'pending';
+  bool _automatic = false;
+  String? _bankState, _invoiceStatus, _createState, _automationError;
   bool _busy = false;
   bool _restoring = true;
   bool _uncertain = false;
@@ -38,7 +40,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
           'phone': _phone.text,
           'fingerprint': _fingerprint,
           'paymentId': _paymentId,
-          'status': _status
+          'status': _status,
+          'automatic': _automatic
         }));
   }
 
@@ -55,6 +58,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
         _fingerprint = saved['fingerprint'] as String?;
         _paymentId = saved['paymentId'] as String?;
         _status = saved['status'] as String? ?? 'pending';
+        _automatic = saved['automatic'] == true;
         _uncertain = _paymentId == null;
         if (_paymentId != null) {
           _timer =
@@ -115,7 +119,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
             'kaspiPhone': _phone.text.trim(),
             'method': 'kaspi_manual',
             'idempotencyKey': _requestKey,
-          });
+          },
+          timeout: const Duration(seconds: 45));
       if (response['success'] != true) {
         final code = (response['code'] ?? '').toString();
         if (code == 'PAYMENT_AMOUNT_INVALID' ||
@@ -132,6 +137,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
       setState(() {
         _paymentId = response['paymentId']?.toString();
         _status = response['paymentStatus']?.toString() ?? 'pending';
+        _readInvoiceStatus(response);
         _uncertain = false;
       });
       await _persist();
@@ -155,6 +161,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
       if (mounted)
         setState(() {
           _status = response['paymentStatus'].toString();
+          _readInvoiceStatus(response);
           _error = null;
         });
       if (_status == 'success' || _status == 'failed') {
@@ -169,6 +176,34 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _readInvoiceStatus(Map<String, dynamic> response) {
+    _automatic = response['automatic'] == true;
+    _bankState = response['bankState']?.toString();
+    _invoiceStatus = response['invoiceStatus']?.toString();
+    _createState = response['invoiceCreateState']?.toString();
+    _automationError = response['automationError']?.toString();
+  }
+
+  String _paymentMessage() {
+    if (_status == 'success')
+      return 'Счёт оплачен. Деньги зачислены на баланс.';
+    if (_bankState == 'cancelled')
+      return 'Счёт отменён. Деньги не зачислялись.';
+    if (_bankState == 'expired')
+      return 'Срок оплаты счёта истёк. Деньги не зачислялись.';
+    if (_status == 'failed')
+      return 'Счёт отклонён или отменён. Деньги не зачислялись.';
+    if (_createState == 'unknown' || _createState == 'creating')
+      return 'Результат выставления уточняется. Не создавайте повторный счёт. При необходимости обратитесь в поддержку.';
+    if (!_automatic)
+      return 'Заявка отправлена. Ожидайте счёт в Kaspi. После оплаты администратор подтвердит пополнение.';
+    if (_automationError != null)
+      return 'Проверка временно недоступна. Сервер повторит её автоматически. Если счёт уже пришёл, не создавайте новый.';
+    if (_invoiceStatus == 'sent')
+      return 'Счёт выставлен на ${_phone.text}. Оплатите его в Kaspi.kz. Оплату проверим и зачислим деньги автоматически.';
+    return 'Выставляем счёт на ${_phone.text}. Статус обновится автоматически.';
   }
 
   @override
@@ -211,15 +246,15 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                   const SizedBox(width: 12),
                   Expanded(
                       child: Text(
-                          tr('Kaspi · счёт от администратора',
-                              'Kaspi · әкімші жіберетін шот'),
+                          tr('Kaspi · пополнение баланса',
+                              'Kaspi · теңгерімді толықтыру'),
                           style: const TextStyle(fontWeight: FontWeight.w700))),
                 ])),
                 const SizedBox(height: 16),
                 if (_paymentId == null) ...[
                   Text(tr(
-                      '1. Укажите сумму и номер Kaspi.\n2. Администратор выставит счёт.\n3. После оплаты и проверки деньги поступят на баланс.',
-                      '1. Сома мен Kaspi нөмірін көрсетіңіз.\n2. Әкімші шот жібереді.\n3. Төлем тексерілгеннен кейін ақша теңгерімге түседі.')),
+                      '1. Укажите сумму и номер Kaspi.\n2. Нажмите «Выставить счёт».\n3. Оплатите счёт в Kaspi.kz. Статус и зачисление обновятся автоматически.',
+                      '1. Сома мен Kaspi нөмірін көрсетіңіз.\n2. «Шот жіберу» түймесін басыңыз.\n3. Kaspi.kz шотын төлеңіз. Төлем автоматты тексеріліп, ақша теңгерімге түседі.')),
                   const SizedBox(height: 16),
                   TextField(
                       controller: _phone,
@@ -245,7 +280,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                           : _uncertain
                               ? tr('Повторить проверку заявки',
                                   'Өтінімді қайта тексеру')
-                              : tr('Запросить счёт Kaspi',
+                              : tr('Выставить счёт Kaspi',
                                   'Kaspi шотын сұрау'))),
                 ] else ...[
                   Text(
@@ -253,19 +288,27 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
-                  Text(_status == 'success'
-                      ? tr('Оплата подтверждена. Деньги зачислены на баланс.',
-                          'Төлем расталды. Ақша теңгерімге түсті.')
-                      : _status == 'failed'
-                          ? tr('Заявка отклонена администратором.',
-                              'Әкімші өтінімді қабылдамады.')
-                          : tr(
-                              'Заявка отправлена. Ожидайте счёт в Kaspi на номер ${_phone.text}. После оплаты администратор подтвердит пополнение.',
-                              'Өтінім жіберілді. ${_phone.text} нөміріне Kaspi шотын күтіңіз. Төлемнен кейін әкімші толықтыруды растайды.')),
+                  Text(_paymentMessage()),
                   if (_status == 'pending')
                     TextButton(
                         onPressed: _busy ? null : _refresh,
                         child: Text(tr('Проверить оплату', 'Төлемді тексеру'))),
+                  if (_status == 'success' || _status == 'failed')
+                    TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _paymentId = null;
+                            _requestKey = const Uuid().v4();
+                            _fingerprint = null;
+                            _status = 'pending';
+                            _automatic = false;
+                            _bankState = null;
+                            _invoiceStatus = null;
+                            _createState = null;
+                            _automationError = null;
+                          });
+                        },
+                        child: Text(tr('Новое пополнение', 'Жаңа толықтыру'))),
                 ],
                 if (_uncertain)
                   Padding(

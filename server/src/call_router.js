@@ -1,3 +1,4 @@
+const { kaspiAutomation } = require('./kaspi_pos/automation');
 const { kaspiService } = require('./kaspi_pos');
 const { submitOrderOfferAsync, listOrderOffersAsync, respondOrderOfferAsync, getTripTrackingAsync, rateTripDriverAsync } = require('./order_offers');
 const { createPassengerTopUpPaymentAsync } = require('./payments');
@@ -121,6 +122,8 @@ const blockedUserAllowedCalls = new Set([
 ]);
 
 const handlers = {
+  adminKaspiPosTestLink: async ({data,auth}) => kaspiService().testLink(data,auth),
+  adminKaspiPosCheckTestLink: async ({data,auth}) => kaspiService().checkTestLink(data,auth),
   adminKaspiPosStatus: async ({data,auth}) => kaspiService().getStatus(data,auth),
   adminKaspiPosStartLogin: async ({data,auth}) => kaspiService().startLogin(data,auth),
   adminKaspiPosVerifyLogin: async ({data,auth}) => kaspiService().verifyLogin(data,auth),
@@ -134,7 +137,7 @@ const handlers = {
   respondOrderOffer: async ({data,auth}) => respondOrderOfferAsync(data,auth),
   getTripTracking: async ({data,auth}) => getTripTrackingAsync(data,auth),
   rateTripDriver: async ({data,auth}) => rateTripDriverAsync(data,auth),
-  createPassengerTopUpPayment: async ({data,auth,req}) => createPassengerTopUpPaymentAsync(data,auth,req),
+  createPassengerTopUpPayment: async ({data,auth,req}) => kaspiAutomation().afterCreated(await createPassengerTopUpPaymentAsync(data,auth,req), auth),
   registerWithPassword: async ({ data }) => registerWithPassword(data),
   passwordLogin: async ({ data }) => passwordLogin(data),
   lookupUserByPhone: async ({ data }) => lookupUserByPhone(data),
@@ -208,7 +211,7 @@ const handlers = {
   adminListGenericCollection: async ({ data, auth }) => adminListGenericCollectionAsync(data, auth),
   adminUpsertGenericDocument: async ({ data, auth }) => adminUpsertGenericDocumentAsync(data, auth),
   adminDeleteGenericDocument: async ({ data, auth }) => adminDeleteGenericDocumentAsync(data, auth),
-  createDriverTopUpPayment: async ({ data, auth, req }) => createDriverTopUpPaymentAsync(data, auth, req),
+  createDriverTopUpPayment: async ({ data, auth, req }) => kaspiAutomation().afterCreated(await createDriverTopUpPaymentAsync(data, auth, req), auth),
   getDriverTopUpPaymentStatus: async ({ data, auth }) => getDriverTopUpPaymentStatusAsync(data, auth),
   confirmDriverTopUpPayment: async ({ data, auth }) => confirmDriverTopUpPaymentAsync(data, auth),
   adminMarkKaspiInvoiceSent: async ({ data, auth }) => adminMarkKaspiInvoiceSentAsync(data, auth),

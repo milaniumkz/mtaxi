@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mtaxi/admin/admin_home/kaspi_pos_connection_card.dart';
 import 'package:mtaxi/admin/admin_collection/kaspi_payment_actions.dart';
+import 'package:mtaxi/component/select_balance/select_balance_widget.dart';
 import 'design_flow_test.dart' show wrap;
 
 void main() {
@@ -18,6 +19,53 @@ void main() {
         version: '1',
         buildNumber: '1',
         buildSignature: '');
+  });
+  testWidgets(
+      'customer invoice shows automatic payment and cancellation without admin confirmation',
+      (tester) async {
+    for (final terminal in ['success', 'failed']) {
+      SharedPreferences.setMockInitialValues({});
+      await http.runWithClient(() async {
+        await tester.pumpWidget(
+            wrap(const Scaffold(body: SelectBalanceWidget(passenger: true))));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).at(0), '+77019990001');
+        await tester.enterText(find.byType(TextField).at(1), '500');
+        await tester.ensureVisible(find.text('Выставить счёт Kaspi'));
+        await tester.tap(find.text('Выставить счёт Kaspi'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Счёт выставлен'), findsOneWidget);
+        await tester.tap(find.text('Проверить оплату'));
+        await tester.pumpAndSettle();
+        expect(
+            find.textContaining(
+                terminal == 'success' ? 'Деньги зачислены' : 'Счёт отменён'),
+            findsOneWidget);
+        expect(find.text('Новое пополнение'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox());
+      },
+          () => MockClient((request) async {
+                final create =
+                    request.url.path.endsWith('createPassengerTopUpPayment');
+                return http.Response(
+                    jsonEncode({
+                      'success': true,
+                      'paymentId': 'auto',
+                      'automatic': true,
+                      'invoiceStatus': 'sent',
+                      'paymentStatus': create ? 'pending' : terminal,
+                      'bankState': create
+                          ? 'pending'
+                          : terminal == 'success'
+                              ? 'paid'
+                              : 'cancelled'
+                    }),
+                    200,
+                    headers: {
+                      'content-type': 'application/json; charset=utf-8'
+                    });
+              }));
+    }
   });
   testWidgets(
       'admin SMS flow keeps OTP ephemeral and never creates an invoice on login/check',

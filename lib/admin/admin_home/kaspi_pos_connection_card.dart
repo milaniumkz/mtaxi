@@ -1,3 +1,8 @@
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import '/backend/backend_calls/backend_calls.dart';
 
@@ -13,6 +18,7 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
   Map<String, dynamic> _status = {};
   bool _busy = false, _expanded = false;
   String? _error;
+  String? _testUrl, _testPaymentId, _testState;
 
   @override
   void initState() {
@@ -68,6 +74,94 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
             'Ответ не получен. Обновите состояние подключения перед повтором.');
     } finally {
       if (method == 'adminKaspiPosVerifyLogin') _otp.clear();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _testLink() async {
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+                title: const Text('Тестовая ссылка на 100 ₸'),
+                content: const Text(
+                    'Создать настоящую платёжную ссылку Kaspi на 100 ₸ от подключённой кассы? Деньги спишутся только после оплаты в Kaspi. Это тест кассы, кошелёк MTaxi не пополняется.'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Отмена')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Создать ссылку'))
+                ]));
+    if (confirmed != true || !mounted || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final org = _status['organization'] as Map? ?? {};
+      final requestKey = 'mtaxi_kaspi_test_link_${org['id']}_${org['iin']}';
+      var requestId = prefs.getString(requestKey);
+      requestId ??= const Uuid().v4();
+      await prefs.setString(requestKey, requestId);
+      final data = <String, dynamic>{'confirm': true, 'requestId': requestId};
+      try {
+        final position = await Geolocator.getCurrentPosition()
+            .timeout(const Duration(seconds: 5));
+        data.addAll(
+            {'latitude': position.latitude, 'longitude': position.longitude});
+      } catch (_) {/* No fabricated bank location. */}
+      final response = await makeCloudCall('adminKaspiPosTestLink', data,
+          timeout: const Duration(seconds: 45));
+      if (!mounted) return;
+      setState(() {
+        if (response['success'] == true) {
+          _testUrl = response['paymentUrl']?.toString();
+          _testPaymentId = response['paymentId']?.toString();
+          _testState = 'Ссылка создана · 100 ₸';
+        } else
+          _error =
+              '${response['error'] ?? 'Ссылка не создана.'}${response['bankCode'] == null ? '' : ' Код Kaspi: ${response['bankCode']}'}';
+      });
+    } catch (_) {
+      if (mounted)
+        setState(() => _error =
+            'Ответ не получен. Повторное нажатие проверит ту же попытку.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _checkTestLink() async {
+    if (_testPaymentId == null || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await makeCloudCall(
+          'adminKaspiPosCheckTestLink', {'paymentId': _testPaymentId},
+          timeout: const Duration(seconds: 45));
+      if (!mounted) return;
+      setState(() {
+        if (result['success'] != true)
+          _error =
+              result['error']?.toString() ?? 'Не удалось проверить ссылку.';
+        else
+          _testState = {
+                'paid': 'Оплачено 100 ₸',
+                'pending': 'Ожидается оплата',
+                'expired': 'Срок ссылки истёк',
+                'cancelled': 'Оплата отменена'
+              }[result['bankState']] ??
+              'Статус пока не подтверждён';
+      });
+    } catch (_) {
+      if (mounted)
+        setState(
+            () => _error = 'Не удалось проверить статус. Повторите проверку.');
+    } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -165,6 +259,30 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
                               'Организация: ${organization['name'] ?? '—'}\nИИН/БИН: ${organization['iin'] ?? '—'}'),
                           const Text(
                               'Получатель счетов — выбранная организация этой кассы.'),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                              onPressed: _busy ? null : _testLink,
+                              icon: const Icon(Icons.link),
+                              label: const Text('Тестовая ссылка на 100 ₸')),
+                          if (_testUrl != null) ...[
+                            SelectableText(_testUrl!),
+                            Text(_testState ?? ''),
+                            Wrap(spacing: 8, children: [
+                              TextButton(
+                                  onPressed: () => launchUrl(
+                                      Uri.parse(_testUrl!),
+                                      mode: LaunchMode.externalApplication),
+                                  child: const Text('Открыть оплату 100 ₸')),
+                              TextButton(
+                                  onPressed: () => Clipboard.setData(
+                                      ClipboardData(text: _testUrl!)),
+                                  child: const Text('Копировать ссылку')),
+                              TextButton(
+                                  onPressed: _busy ? null : _checkTestLink,
+                                  child:
+                                      const Text('Проверить тестовую оплату')),
+                            ]),
+                          ],
                           if (organizations.length > 1)
                             DropdownButtonFormField<String>(
                               initialValue: organizations
@@ -204,7 +322,7 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
                                   : () => _run('adminKaspiPosDisconnect'),
                               child: const Text('Отключить кассу здесь')),
                           const Text(
-                              'Отключение удаляет сессию на сервере MTaxi. Отзыв устройства выполняется в Kaspi Pay. Счета создаются отдельно в заявках на пополнение; проверка соединения не выставляет счёт и не зачисляет деньги.'),
+                              'Отключение удаляет сессию на сервере MTaxi. Отзыв устройства выполняется в Kaspi Pay. Счета создаются отдельно в заявках на пополнение; проверка соединения не выставляет счёт и не зачисляет деньги. Сессия сохраняется между перезапусками без месячного ограничения; банк может потребовать повторный вход.'),
                         ],
                         TextButton(
                             onPressed: _busy

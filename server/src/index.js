@@ -233,7 +233,8 @@ function startServer(options = {}) {
     const actualPort = address && typeof address === "object" ? address.port : listenPort;
     console.log(`MTaxi backend listening on http://127.0.0.1:${actualPort}`);
   });
-  return { server, scheduler, shutdownStarted: false };
+  const kaspiWorker = options.kaspiWorker === undefined ? require('./kaspi_pos/automation').startKaspiAutomation() : options.kaspiWorker;
+  return { server, scheduler, kaspiWorker, shutdownStarted: false };
 }
 
 function stopServer(runtime, signal = "shutdown") {
@@ -242,6 +243,7 @@ function stopServer(runtime, signal = "shutdown") {
   }
   runtime.shutdownStarted = true;
   runtime?.scheduler?.stop?.();
+  runtime?.kaspiWorker?.stop?.();
   runtime?.server?.close?.(() => {
     console.log(`MTaxi backend stopped after ${signal}`);
   });

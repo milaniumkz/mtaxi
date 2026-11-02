@@ -106,6 +106,41 @@ function createKaspiService(options = {}) {
       await store.withStoreAsync(s => audit(s, auth, 'kaspiPosDisconnect', null));
       return { success: true, status: status(state, auth) };
     })),
+    testLink: guarded((data, auth) => exclusive(async () => {
+      const state = load(), session = sessionOf(state);
+      if (data.confirm !== true || !/^[a-zA-Z0-9-]{16,80}$/.test(data.requestId || '')) throw new KaspiError('KASPI_INVOICE_CONFIRM_REQUIRED');
+      const id = 'kaspi-test-' + data.requestId;
+      const reserved = await store.withStoreAsync(s => {
+        s.payments ||= [];
+        const existing = s.payments.find(p => p.paymentId === id);
+        if (existing) {
+          if (existing.kaspiPosOrganizationId !== session.organizationId || existing.kaspiPosOrganizationIin !== session.organizationIin) throw new KaspiError('KASPI_INVOICE_UNLINKED');
+          if (existing.paymentUrl) return existing;
+          throw new KaspiError('KASPI_INVOICE_UNCERTAIN');
+        }
+        if (s.payments.some(p => p.provider === 'kaspi_qr_test' && now() - Date.parse(p.createdAt) < 30000)) throw new KaspiError('KASPI_AUTH_COOLDOWN');
+        const p = { id, paymentId: id, purpose: 'kaspi_link_test', provider: 'kaspi_qr_test', amount: 100, status: 'pending',
+          userId: auth.user.id, kaspiPosOrganizationId: session.organizationId, kaspiPosOrganizationIin: session.organizationIin,
+          kaspiPosCreateState: 'creating', createdAt: new Date(now()).toISOString() };
+        s.payments.push(p); audit(s, auth, 'kaspiTestLinkRequested', p, { amount: 100 }); return p;
+      });
+      if (reserved.paymentUrl) return { success: true, paymentId: id, paymentUrl: reserved.paymentUrl, amount: 100, expiresAt: reserved.expiresAt };
+      let result;
+      try { result = await protocol(state.identity).createTestLink(session, data); }
+      catch (error) { await store.withStoreAsync(s => { s.payments.find(p => p.paymentId === id).kaspiPosCreateState = 'unknown'; }); return fail('KASPI_INVOICE_UNCERTAIN', error.bankCode || ''); }
+      await store.withStoreAsync(s => { const p = s.payments.find(p => p.paymentId === id); Object.assign(p, result, { kaspiPosOperationId: result.operationId, kaspiPosCreateState: 'sent' }); });
+      return { success: true, paymentId: id, ...result, amount: 100 };
+    })),
+    checkTestLink: guarded((data, auth) => exclusive(async () => {
+      const state = load(), session = sessionOf(state), snapshot = await store.readStoreAsync();
+      const p = snapshot.payments.find(p => p.paymentId === data.paymentId && p.provider === 'kaspi_qr_test');
+      if (!p?.kaspiPosOperationId || p.kaspiPosOrganizationId !== session.organizationId || p.kaspiPosOrganizationIin !== session.organizationIin) throw new KaspiError('KASPI_INVOICE_UNLINKED');
+      const result = await protocol(state.identity).testLinkStatus(session, p.kaspiPosOperationId);
+      if (result.QrOperationId != null && String(result.QrOperationId) !== p.kaspiPosOperationId || result.Amount != null && Number(result.Amount) !== 100) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
+      const bankState = ({ Processed: 'paid', QrTokenCreated: 'pending', Wait: 'pending', QrTokenDiscarded: 'expired', Expired: 'expired', Cancelled: 'cancelled' })[result.Status] || 'unknown';
+      await store.withStoreAsync(s => { const current = s.payments.find(x => x.paymentId === p.paymentId); current.kaspiPosBankState = bankState; current.kaspiPosCheckedAt = new Date(now()).toISOString(); });
+      return { success: true, bankState, amount: 100 };
+    })),
     sendInvoice: guarded((data, auth) => exclusive(async () => {
       if (data.confirm !== true) throw new KaspiError('KASPI_INVOICE_CONFIRM_REQUIRED');
       const state = load(), session = sessionOf(state);

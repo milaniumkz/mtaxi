@@ -149,6 +149,22 @@ class KaspiProtocol {
       throw new KaspiError('KASPI_INVOICE_RESPONSE_UNCERTAIN', true);
     return { operationId: String(id) };
   }
+  async createTestLink(session, { latitude, longitude } = {}) {
+    const path = '/v01/qr-token/create';
+    const body = JSON.stringify({ PaymentAmount: 100, DeviceInterface: 'Pos',
+      ...(Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { Latitude: latitude, Longitude: longitude } : {}) });
+    const data = bankData((await this.request(QRPAY, path, this.headers(QRPAY, path, session, body), body)).body);
+    const id = data.QrOperationId;
+    let url; try { url = new URL(data.QrToken); } catch { throw new KaspiError('KASPI_INVOICE_RESPONSE_UNCERTAIN', true); }
+    if ((typeof id === 'number' && !Number.isSafeInteger(id)) || !/^[1-9]\d{0,29}$/.test(String(id)) || Number(data.Amount) !== 100 || url.protocol !== 'https:' || url.username || url.password || url.port || !['qr.kaspi.kz', 'pay.kaspi.kz'].includes(url.hostname))
+      throw new KaspiError('KASPI_INVOICE_RESPONSE_UNCERTAIN', true);
+    if (url.hostname === 'qr.kaspi.kz') { url.hostname = 'pay.kaspi.kz'; url.pathname = '/pay' + url.pathname; }
+    return { operationId: String(id), paymentUrl: url.href, expiresAt: data.ExpireDate || null };
+  }
+  async testLinkStatus(session, id) {
+    const path = '/v02/kaspi-qr/status?qrOperationId=' + encodeURIComponent(id);
+    return bankData((await this.request(QRPAY, path, this.headers(QRPAY, path, session))).body);
+  }
   async invoiceDetails(session, id) {
     const path = '/v02/remote/details?operationId=' + encodeURIComponent(id);
     return bankData((await this.request(QRPAY, path, this.headers(QRPAY, path, session))).body);

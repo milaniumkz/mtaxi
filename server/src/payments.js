@@ -292,6 +292,13 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
       };
     }
   }
+  if (manualKaspi && process.env.MTAXI_KASPI_POS_AUTO_INVOICES === 'true') {
+    if (amount < 1 || amount > 1000000 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001)
+      return { success: false, code: 'PAYMENT_AMOUNT_INVALID', error: 'Введите сумму от 1 до 1 000 000 ₸, не более двух знаков после запятой' };
+    const own = store.payments.filter(p => p.userId === user.id && p.provider === 'kaspi_manual');
+    if (own.filter(p => p.status === 'pending').length >= 3 || own.filter(p => Date.now() - Date.parse(p.createdAt) < 3600000).length >= 10)
+      return { success: false, code: 'KASPI_RATE_LIMIT', error: 'Слишком много счетов. Оплатите текущий счёт или попробуйте позже.' };
+  }
   store.paymentSequence = (asNumber(store.paymentSequence) || 0) + 1;
   const payment = {
     id: newId("payment"),
@@ -303,7 +310,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
     amount,
     status: "pending",
     provider: manualKaspi ? 'kaspi_manual' : paymentProviderName(),
-    ...(manualKaspi ? { kaspiPhone, invoiceStatus: 'requested' } : {}),
+    ...(manualKaspi ? { kaspiPhone, invoiceStatus: 'requested', kaspiAuto: process.env.MTAXI_KASPI_POS_ENABLED === 'true' && process.env.MTAXI_KASPI_POS_AUTO_INVOICES === 'true' } : {}),
     idempotencyKey,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -336,7 +343,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
       type: 'KASPI_TOPUP_REQUEST', targetRole: 'admin',
       targetUserIds: store.users.filter(item => item.role === 'admin' || item.roleState === 'ADMIN').map(item => item.id),
       title: 'Новая заявка на пополнение Kaspi',
-      body: `${kaspiPhone}: ${amount} ₸. Выставьте счёт и подтвердите после оплаты.`,
+      body: payment.kaspiAuto ? `${kaspiPhone}: ${amount} ₸. Автоматическое выставление и проверка оплаты.` : `${kaspiPhone}: ${amount} ₸. Выставьте счёт и подтвердите после оплаты.`,
       dedupeKey: `kaspi-request:${payment.paymentId}`,
       dataPayload: { type: 'KASPI_TOPUP_REQUEST', targetRole: 'admin',
         initialPageName: 'adminHome', paymentId: payment.paymentId },
@@ -411,6 +418,11 @@ function getDriverTopUpPaymentStatusInStore(store, data, auth) {
     paymentStatus: payment.status,
     amount: payment.amount,
     paidAt: payment.paidAt || null,
+    automatic: payment.kaspiAuto === true,
+    invoiceStatus: payment.invoiceStatus || null,
+    bankState: payment.kaspiPosBankState || null,
+    invoiceCreateState: payment.kaspiPosCreateState || null,
+    automationError: payment.kaspiAutoError || null,
     user: publicUser(user),
     balance: user ? asNumber(user.balance) || 0 : 0,
   };
@@ -441,6 +453,7 @@ async function adminMarkKaspiInvoiceSentAsync(data = {}, auth) {
 function confirmDriverTopUpPaymentInStore(store, data, auth) {
   const payment = findPayment(store, data.paymentId);
   if (!payment) return { success: false, code: "PAYMENT_NOT_FOUND", error: "Платеж не найден" };
+  if (payment.provider === 'kaspi_qr_test') return { success: false, code: 'TEST_PAYMENT_NO_WALLET', error: 'Тестовая ссылка не пополняет кошелёк.' };
   if (payment.status === 'failed') return { success: false, code: 'PAYMENT_FAILED', error: 'Заявка отклонена' };
   if (!payment.applied && payment.kaspiPosAttemptId &&
       (payment.kaspiPosBankState !== 'paid' || !payment.kaspiPosCheckedAt ||
@@ -456,7 +469,7 @@ function confirmDriverTopUpPaymentInStore(store, data, auth) {
       other.kaspiPosOrganizationId === payment.kaspiPosOrganizationId)) {
     return { success: false, code: 'KASPI_OPERATION_ALREADY_CREDITED', error: 'Эта банковская операция уже зачислена по другой заявке.' };
   }
-  const applied = applySuccessfulPayment(store, payment, { source: "admin_confirm" });
+  const applied = applySuccessfulPayment(store, payment, { source: auth?.user?.id === 'system:kaspi-pay' ? "kaspi_auto" : "admin_confirm" });
   if (!applied.success) return applied;
   if (!applied.alreadyApplied) {
     payment.confirmedBy = auth?.user?.id || null;
