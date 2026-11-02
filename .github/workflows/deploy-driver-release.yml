@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Validate QR response variants and expose safe bank diagnostic codes; no APK.
+# Accept unpaid QR Amount=0; validate fixed amount on paid status; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]

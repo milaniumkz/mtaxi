@@ -1,8 +1,5 @@
 name: Diagnose requested 100 KZT Kaspi test link
 on:
-  push:
-    branches: [codex/full-audit-20261023]
-    paths: [.github/workflows/kaspi-qr-probe.yml]
   workflow_dispatch:
 permissions:
   contents: read

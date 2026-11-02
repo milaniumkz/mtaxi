@@ -157,8 +157,8 @@ class KaspiProtocol {
     const id = data.QrOperationId;
     let url; try { url = new URL(data.QrToken); } catch { throw new KaspiError('KASPI_QR_URL_MISSING', true); }
     if ((typeof id === 'number' && !Number.isSafeInteger(id)) || !/^[1-9]\d{0,29}$/.test(String(id))) throw new KaspiError('KASPI_QR_OPERATION_INVALID', true);
-    // The request fixes the amount at 100; some QR responses omit Amount.
-    if (data.Amount != null && Number(data.Amount) !== 100) throw new KaspiError('KASPI_QR_AMOUNT_MISMATCH', true);
+    // The request fixes 100. An unpaid QR can report Amount=0; only a paid status verifies settlement.
+    if (data.Amount != null && ![0, 100].includes(Number(data.Amount))) throw new KaspiError('KASPI_QR_AMOUNT_MISMATCH', true);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || !['qr.kaspi.kz', 'pay.kaspi.kz'].includes(url.hostname)) throw new KaspiError('KASPI_QR_URL_INVALID', true);
     if (url.hostname === 'qr.kaspi.kz') { url.hostname = 'pay.kaspi.kz'; url.pathname = '/pay' + url.pathname; }
     return { operationId: String(id), paymentUrl: url.href, expiresAt: data.ExpireDate || null };

@@ -136,7 +136,7 @@ function createKaspiService(options = {}) {
       const p = snapshot.payments.find(p => p.paymentId === data.paymentId && p.provider === 'kaspi_qr_test');
       if (!p?.kaspiPosOperationId || p.kaspiPosOrganizationId !== session.organizationId || p.kaspiPosOrganizationIin !== session.organizationIin) throw new KaspiError('KASPI_INVOICE_UNLINKED');
       const result = await protocol(state.identity).testLinkStatus(session, p.kaspiPosOperationId);
-      if (result.QrOperationId != null && String(result.QrOperationId) !== p.kaspiPosOperationId || result.Amount != null && Number(result.Amount) !== 100) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
+      if (result.QrOperationId != null && String(result.QrOperationId) !== p.kaspiPosOperationId || result.Status === 'Processed' && Number(result.Amount) !== 100) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
       const bankState = ({ Processed: 'paid', QrTokenCreated: 'pending', Wait: 'pending', QrTokenDiscarded: 'expired', Expired: 'expired', Cancelled: 'cancelled' })[result.Status] || 'unknown';
       await store.withStoreAsync(s => { const current = s.payments.find(x => x.paymentId === p.paymentId); current.kaspiPosBankState = bankState; current.kaspiPosCheckedAt = new Date(now()).toISOString(); });
       return { success: true, bankState, amount: 100 };
