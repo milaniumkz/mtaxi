@@ -18,6 +18,9 @@
 | Beta | Owner reports 60 days with five people, web and Android | No external iOS/TestFlight beta established |
 | Build 66 | Preserved signed `.xcarchive` and `.ipa`; main 1.3.1/66, extension 1.1.1/57 | Exact source commit is not embedded in the archive; do not equate every current feature with 66 |
 | New native version configuration | Shared Flutter-generated version settings replace fixed extension metadata | Must also pass actual archive verification, not just source inspection |
+| Denied GPS | Native simulator 67 reproduced a fallback/cached centre wrongly selected as pickup. Regression fails on old source; source fix and 104 functional tests pass. Native simulator 68 confirms blank unselected pickup with location denied | Quality/safety correction, not a claim of unique taxi functionality or physical-device testing |
+
+Signed archives 67 and 68 passed actual metadata/Firebase/signature checks and were uploaded through Xcode. Both finished processing and became Ready to Submit; the current build 68 contains the native-test-discovered GPS correction, confirmed on the actual native simulator. Production URLs and both protected reviewer logins were verified. The exact status and remaining native walkthrough gaps are recorded in `MAC_EXECUTION_RESULT.md`; an upload does not constitute App Review submission. The full nine answers and a technical addendum with the actual native screenshot were sent in the original App Review thread.
 
 ## New changes relative to the prior submitted work
 
