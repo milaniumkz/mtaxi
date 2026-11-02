@@ -251,6 +251,11 @@ test('admin test link is fixed at 100, idempotent, isolated from wallet credit a
   const first = await f.service.testLink(data, admin);
   assert.equal(first.success, true); assert.equal(first.amount, 100);
   assert.equal((await f.service.testLink(data, admin)).paymentUrl, first.paymentUrl); assert.equal(creates, 1);
+  f.bank.testLinkStatus = async () => ({ Status: 'QrTokenCreated', QrOperationId: 987, Amount: 0 });
+  assert.equal((await f.service.checkTestLink({ paymentId: first.paymentId }, admin)).bankState, 'pending');
+  f.bank.testLinkStatus = async () => ({ Status: 'Processed', QrOperationId: 987, Amount: 0 });
+  assert.equal((await f.service.checkTestLink({ paymentId: first.paymentId }, admin)).code, 'KASPI_PAYMENT_BINDING_MISMATCH');
+  f.bank.testLinkStatus = async () => ({ Status: 'Processed', QrOperationId: 987, Amount: 100 });
   const checked = await f.service.checkTestLink({ paymentId: first.paymentId }, admin); assert.equal(checked.bankState, 'paid');
   assert.equal((await confirmDriverTopUpPaymentAsync({ paymentId: first.paymentId }, admin)).code, 'TEST_PAYMENT_NO_WALLET');
   assert.equal((await store.readStoreAsync()).users[0].balance, 100);
