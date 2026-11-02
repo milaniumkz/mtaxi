@@ -11,7 +11,6 @@ const messages = {
   KASPI_AUTH_COOLDOWN: 'Подождите минуту перед новым запросом SMS.', KASPI_AUTH_EXPIRED: 'Попытка входа истекла. Начните заново.',
   KASPI_OTP_INVALID: 'Введите SMS-код из 4–8 цифр.', KASPI_OTP_REJECTED: 'Kaspi не подтвердил код или требует дополнительное действие в своём приложении.',
   KASPI_NOT_CONNECTED: 'Сначала подключите Kaspi Pay на главной странице админки.',
-  KASPI_MERCHANT_MISMATCH: 'Организация Kaspi не совпадает с ИИН оператора MTaxi. Выставление счетов заблокировано.',
   KASPI_ORGANIZATION_INVALID: 'Выберите организацию из подтверждённого списка Kaspi.',
   KASPI_NETWORK_UNCERTAIN: 'Ответ Kaspi не получен. Не повторяйте финансовую операцию до проверки её результата.',
   KASPI_SMS_NOT_SENT: 'Kaspi не подтвердил отправку SMS. Проверьте номер кассира и код ошибки.',
@@ -42,13 +41,11 @@ function createKaspiService(options = {}) {
   const exclusive = fn => { const p = queue.then(fn); queue = p.catch(() => {}); return p; };
   const load = () => { if (!enabled()) throw new KaspiError('KASPI_DISABLED'); try { return vault.load(); } catch { throw new KaspiError('KASPI_STORAGE_UNAVAILABLE'); } };
   const save = state => { try { vault.save(state); } catch { throw new KaspiError('KASPI_STORAGE_UNAVAILABLE'); } };
-  const merchantOk = session => !!session && /^\d{12}$/.test(env.MTAXI_KASPI_POS_EXPECTED_IIN || '') && session.organizationIin === env.MTAXI_KASPI_POS_EXPECTED_IIN;
   const sessionOf = state => { if (!state.session?.tokenSN || !state.session.secretB64) throw new KaspiError('KASPI_NOT_CONNECTED'); return state.session; };
-  const merchantOf = state => { const s = sessionOf(state); if (!merchantOk(s)) throw new KaspiError('KASPI_MERCHANT_MISMATCH'); return s; };
   function status(state, auth) {
     if (attempt && (attempt.expiresAt <= now() || attempt.tries >= 5)) clearAttempt();
     const session = state?.session;
-    return { enabled: enabled(), configured: !!state, connected: !!session?.tokenSN, merchantVerified: merchantOk(session),
+    return { enabled: enabled(), configured: !!state, connected: !!session?.tokenSN,
       organization: session ? { id: session.organizationId, name: session.orgName, iin: session.organizationIin } : null,
       organizations: session?.organizations || [], connectedAt: session?.connectedAt || null,
       lastCheckedAt: session?.lastCheckedAt || null, connectionActive: session?.connectionActive ?? null,
@@ -111,7 +108,7 @@ function createKaspiService(options = {}) {
     })),
     sendInvoice: guarded((data, auth) => exclusive(async () => {
       if (data.confirm !== true) throw new KaspiError('KASPI_INVOICE_CONFIRM_REQUIRED');
-      const state = load(), session = merchantOf(state);
+      const state = load(), session = sessionOf(state);
       // Verify session before reserving an invoice attempt: failed auth must not
       // turn a still-unsent top-up into an ambiguous financial operation.
       const bank = protocol(state.identity);
@@ -158,7 +155,7 @@ function createKaspiService(options = {}) {
       return { success: true, operationId: result.operationId };
     })),
     checkInvoice: guarded((data, auth) => exclusive(async () => {
-      const state = load(), session = merchantOf(state);
+      const state = load(), session = sessionOf(state);
       const snapshot = await store.readStoreAsync();
       const p = (snapshot.payments || []).find(x => x.paymentId === data.paymentId);
       if (!p?.kaspiPosOperationId || p.kaspiPosOrganizationId !== session.organizationId || p.kaspiPosOrganizationIin !== session.organizationIin)

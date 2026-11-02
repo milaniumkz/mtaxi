@@ -24,7 +24,4 @@ cp -p server/.env "/var/backups/mtaxi/config/env-before-kaspi-$(date -u +%Y%m%dT
 if ! grep -q '^MTAXI_KASPI_POS_ENABLED=' server/.env; then
   printf '\nMTAXI_KASPI_POS_ENABLED=true\n' >> server/.env
 fi
-if ! grep -q '^MTAXI_KASPI_POS_EXPECTED_IIN=' server/.env; then
-  printf 'MTAXI_KASPI_POS_EXPECTED_IIN=970905350621\n' >> server/.env
-fi
 printf 'Kaspi server-only encrypted storage prepared; no bank login or invoice requested.\n'

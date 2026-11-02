@@ -163,12 +163,8 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
                         if (connected) ...[
                           Text(
                               'Организация: ${organization['name'] ?? '—'}\nИИН/БИН: ${organization['iin'] ?? '—'}'),
-                          if (_status['merchantVerified'] != true)
-                            Text(
-                                'Организация не совпадает с ИП оператора MTaxi. Счета заблокированы.',
-                                style: TextStyle(
-                                    color:
-                                        Theme.of(context).colorScheme.error)),
+                          const Text(
+                              'Получатель счетов — выбранная организация этой кассы.'),
                           if (organizations.length > 1)
                             DropdownButtonFormField<String>(
                               initialValue: organizations

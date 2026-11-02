@@ -59,7 +59,7 @@ test('SMS challenge is owner bound and bank secrets never enter public status or
   assert.equal((await f.service.getStatus({}, { user: { id: 'other', role: 'admin' } })).status.pendingAuth, false);
   const connected = await f.service.verifyLogin({ challengeId: started.status.challengeId, otp: '1234' }, admin);
   assert.equal(connected.status.connected, true);
-  assert.equal(connected.status.merchantVerified, true);
+  assert.equal(connected.status.organization.iin, '970905350621');
   const publicData = JSON.stringify([started, connected, await store.readStoreAsync()]);
   for (const secret of ['SECRET_BANK_TOKEN', 'SECRET_BANK_KEY', 'PRIVATE_BANK_PROCESS', 'PRIVATE_COOKIE']) assert.ok(!publicData.includes(secret));
   assert.ok(!/"(?:otp|userOtp|userToken|processId|secretB64|tokenSN)"/.test(publicData));
@@ -89,10 +89,24 @@ test('unknown create result persists across service restart and blocks duplicate
   assert.equal((await confirmDriverTopUpPaymentAsync({ paymentId: 'topup' }, admin)).success, false);
   assert.equal((await store.readStoreAsync()).users[0].balance, 100);
 });
-test('wrong merchant blocks invoices before reserving an attempt', async () => {
-  const f = fixture({ iin: '111111111111' });
-  assert.equal((await f.service.sendInvoice({ paymentId: 'topup', confirm: true }, admin)).code, 'KASPI_MERCHANT_MISMATCH');
-  assert.equal(f.calls(), 0); assert.equal((await store.readStoreAsync()).payments[0].kaspiPosAttemptId, undefined);
+test('authorized merchant can issue and verify invoices despite a legacy operator IIN setting', async () => {
+  const f = fixture({ iin: '981008450268' });
+  assert.equal((await f.service.sendInvoice({ paymentId: 'topup', confirm: true }, admin)).success, true);
+  assert.equal(f.calls(), 1);
+  let db = await store.readStoreAsync();
+  assert.equal(db.payments[0].kaspiPosOrganizationIin, '981008450268');
+  assert.equal(db.users[0].balance, 100);
+  f.setDetails({ Id: 123, Amount: 500, ClientMobile: '77019990001', Status: 'Processed' });
+  assert.equal((await f.service.checkInvoice({ paymentId: 'topup' }, admin)).success, true);
+  assert.equal((await confirmDriverTopUpPaymentAsync({ paymentId: 'topup' }, admin)).success, true);
+  db = await store.readStoreAsync(); assert.equal(db.users[0].balance, 600);
+});
+test('switching cashier organization cannot verify an earlier organization invoice', async () => {
+  const f = fixture();
+  await f.service.sendInvoice({ paymentId: 'topup', confirm: true }, admin);
+  const state = f.vault.load(); state.session.organizationId = '26'; state.session.organizationIin = '981008450268'; f.vault.save(state);
+  assert.equal((await f.service.checkInvoice({ paymentId: 'topup' }, admin)).code, 'KASPI_INVOICE_UNLINKED');
+  assert.equal((await confirmDriverTopUpPaymentAsync({ paymentId: 'topup' }, admin)).success, false);
 });
 test('wrong operation, amount or phone cannot verify payment and invalidates earlier paid state', async () => {
   const f = fixture(); await f.service.sendInvoice({ paymentId: 'topup', confirm: true }, admin);
