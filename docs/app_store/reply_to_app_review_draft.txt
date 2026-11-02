@@ -1,13 +1,7 @@
-Draft — for the current discussion, not a claim that a new build was submitted.
+SUPERSEDED — DO NOT SEND THIS SHORT LETTER.
 
-Hello App Review team,
+The original rejection supplied by the owner explicitly cites both 4.3 and 4.2.6 and asks nine questions in full before any resubmission. A short request to clarify 4.3(a)/(b) is no longer sufficient.
 
-Thank you for explaining the concerns under Guideline 4.3 for MTaxi.kz (Apple ID 6826563434), version 1.3.1, build 66.
+Use response_to_nine_questions_DRAFT.md as the working document. It is not ready to send: facts about the content provider/account holder, real beta testing, source provenance, market gap, and why consolidation is unsuitable require owner confirmation. Do not invent those facts or represent repository tests as an iOS/TestFlight beta.
 
-We acknowledge that MTaxi was initially developed from the same codebase as our Taxi 24 app (Apple ID 6761094545). MTaxi is intended to operate as a separate service. We understand that a different name, service area or backend alone is not sufficient to establish a distinct app experience.
-
-We are treating this as a concern about the current app experience, not assuming that an outdated build was reviewed. We are comparing the complete user journeys, not only the branding. Before another submission, we will validate the actual iOS build, provide current screenshots and reviewer access, and document the substantive differences with a demonstration video. We will not describe unverified or Android-only features as iOS functionality.
-
-Could you please clarify whether the remaining concern is primarily duplication under 4.3(a), insufficient differentiation under 4.3(b), or both, and identify the principal overlapping workflows if possible? This would help us address the issue in the next submission rather than resubmit the same experience.
-
-Thank you for your guidance.
+Known submission: MTaxi.kz, Apple ID 6826563434, version 1.3.1, build 66. Taxi 24 Apple ID: 6761094545. No reply or new build has been sent to Apple by this workspace.
