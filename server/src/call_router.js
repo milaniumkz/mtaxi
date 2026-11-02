@@ -1,3 +1,4 @@
+const { kaspiService } = require('./kaspi_pos');
 const { submitOrderOfferAsync, listOrderOffersAsync, respondOrderOfferAsync, getTripTrackingAsync, rateTripDriverAsync } = require('./order_offers');
 const { createPassengerTopUpPaymentAsync } = require('./payments');
 const {
@@ -120,6 +121,14 @@ const blockedUserAllowedCalls = new Set([
 ]);
 
 const handlers = {
+  adminKaspiPosStatus: async ({data,auth}) => kaspiService().getStatus(data,auth),
+  adminKaspiPosStartLogin: async ({data,auth}) => kaspiService().startLogin(data,auth),
+  adminKaspiPosVerifyLogin: async ({data,auth}) => kaspiService().verifyLogin(data,auth),
+  adminKaspiPosSelectOrganization: async ({data,auth}) => kaspiService().selectOrganization(data,auth),
+  adminKaspiPosCheckConnection: async ({data,auth}) => kaspiService().checkConnection(data,auth),
+  adminKaspiPosDisconnect: async ({data,auth}) => kaspiService().disconnect(data,auth),
+  adminKaspiPosSendInvoice: async ({data,auth}) => kaspiService().sendInvoice(data,auth),
+  adminKaspiPosCheckInvoice: async ({data,auth}) => kaspiService().checkInvoice(data,auth),
   submitOrderOffer: async ({data,auth}) => submitOrderOfferAsync(data,auth),
   listOrderOffers: async ({data,auth}) => listOrderOffersAsync(data,auth),
   respondOrderOffer: async ({data,auth}) => respondOrderOfferAsync(data,auth),

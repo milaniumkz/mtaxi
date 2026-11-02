@@ -383,7 +383,10 @@ test("Firebase Admin is used only as FCM push transport", () => {
         "admin.storage",
         "getStorage",
       ]) {
-        if (source.includes(forbidden)) {
+        // Match an identifier, not a prefix: crypto.getAuthTag is AES-GCM,
+        // whereas getAuth is the forbidden Firebase Auth entrypoint.
+        const marker = new RegExp("\\b" + forbidden.replace(/\./g, "\\.") + "\\b");
+        if (marker.test(source)) {
           offenders.push(`${relative}: ${forbidden}`);
         }
       }

@@ -442,6 +442,20 @@ function confirmDriverTopUpPaymentInStore(store, data, auth) {
   const payment = findPayment(store, data.paymentId);
   if (!payment) return { success: false, code: "PAYMENT_NOT_FOUND", error: "Платеж не найден" };
   if (payment.status === 'failed') return { success: false, code: 'PAYMENT_FAILED', error: 'Заявка отклонена' };
+  if (!payment.applied && payment.kaspiPosAttemptId &&
+      (payment.kaspiPosBankState !== 'paid' || !payment.kaspiPosCheckedAt ||
+       Date.now() - Date.parse(payment.kaspiPosCheckedAt) > 120000 ||
+       Date.parse(payment.kaspiPosCheckedAt) - Date.now() > 5000 ||
+       !Number.isFinite(Date.parse(payment.kaspiPosCheckedAt)))) {
+    return { success: false, code: 'KASPI_PAYMENT_VERIFICATION_REQUIRED',
+      error: 'Сначала проверьте оплату этого счёта через Kaspi. Нужен свежий подтверждённый статус оплаты.' };
+  }
+  if (!payment.applied && payment.kaspiPosOperationId && store.payments.some(other =>
+      other.paymentId !== payment.paymentId && other.applied === true &&
+      other.kaspiPosOperationId === payment.kaspiPosOperationId &&
+      other.kaspiPosOrganizationId === payment.kaspiPosOrganizationId)) {
+    return { success: false, code: 'KASPI_OPERATION_ALREADY_CREDITED', error: 'Эта банковская операция уже зачислена по другой заявке.' };
+  }
   const applied = applySuccessfulPayment(store, payment, { source: "admin_confirm" });
   if (!applied.success) return applied;
   if (!applied.alreadyApplied) {
@@ -472,6 +486,10 @@ function failDriverTopUpPaymentInStore(store, data) {
   if (!payment) return { success: false, code: "PAYMENT_NOT_FOUND", error: "Платеж не найден" };
   if (payment.applied === true) {
     return { success: false, code: "PAYMENT_ALREADY_APPLIED", error: "Платеж уже зачислен" };
+  }
+  if (payment.kaspiPosAttemptId && !['cancelled','failed','expired'].includes(payment.kaspiPosBankState)) {
+    return { success: false, code: 'KASPI_CANCEL_BEFORE_REJECT',
+      error: 'Сначала отмените счёт в Kaspi Pay и проверьте его статус. Результат выставления может быть ещё не подтверждён.' };
   }
   payment.status = "failed";
   payment.failedAt = new Date().toISOString();

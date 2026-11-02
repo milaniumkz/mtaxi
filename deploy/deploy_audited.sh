@@ -34,6 +34,7 @@ rollback() {
   tar -xzf "$backup/web.tar.gz" -C /var/www/mtaxi
 }
 trap rollback ERR
+bash deploy/setup_kaspi_pos.sh
 "${compose[@]}" build backend
 # Stop old workers before the final snapshot and schema/ownership migration.
 "${compose[@]}" stop backend
