@@ -12,15 +12,26 @@ const store = require(process.cwd() + '/src/store');
   const selfTest = (snapshot.notifications || []).find(n => n.dedupeKey === 'paid-qr-delivery-test-0d719302');
   if (selfTest) {
     const deliveries = (snapshot.notificationDeliveries || []).filter(d => d.notificationId === selfTest.id);
+    const permanent = d => d.status === 'failed' && /registration-token-not-registered|not a valid FCM registration token|^NotRegistered$/i.test(String(d.error || ''));
+    if (process.env.MTAXI_DISABLE_INVALID_TOKENS === 'true') {
+      let disabledCount = 0;
+      await store.withStoreAsync(db => {
+        for (const delivery of (db.notificationDeliveries || []).filter(d => d.notificationId === selfTest.id && permanent(d))) {
+          const token = (db.fcmTokens || []).find(t => t.id === delivery.tokenId);
+          if (token && !token.disabled && token.userId === delivery.userId) { token.disabled = true; token.disabledAt = new Date().toISOString(); token.disabledReason = 'permanent-fcm-registration-error'; disabledCount++; }
+        }
+      });
+      console.log(JSON.stringify({diagnostic:'PERMANENT_INVALID_PUSH_REGISTRATIONS_DISABLED',disabledCount}));
+    }
     const acks = (snapshot.pushDeliveryAcks || []).filter(a => a.notificationId === selfTest.id);
     console.log(JSON.stringify({ diagnostic: 'PAYMENT_SELF_PUSH_TEST', targetDevices: deliveries.length,
       states: deliveries.reduce((counts,d) => { const key = ['sent','queued','failed','cancelled'].includes(d.status) ? d.status : 'other'; counts[key]=(counts[key]||0)+1; return counts; }, {}),
       providerMessageIds: deliveries.filter(d => !!d.messageId).length,
-      errorKinds: deliveries.filter(d=>d.status === 'failed').map(d=> { const message=String(d.error||''); return /not a valid FCM registration token|invalid registration token/i.test(message) ? 'invalid_registration' : /registration-token-not-registered|Requested entity was not found|not registered/i.test(message) ? 'expired_registration' : /credential|authentication|unauthenticated|permission/i.test(message) ? 'credentials' : 'other'; }),
+      errorKinds: deliveries.filter(d=>d.status === 'failed').map(d=> { const message=String(d.error||''); return /not a valid FCM registration token|invalid registration token/i.test(message) ? 'invalid_registration' : /registration-token-not-registered|Requested entity was not found|not registered|notregistered/i.test(message) ? 'expired_registration' : /credential|authentication|unauthenticated|permission/i.test(message) ? 'credentials' : 'other'; }),
       failedMetadata: deliveries.filter(d => d.status === 'failed').map(d => {
         const token = (snapshot.fcmTokens || []).find(t => t.id === d.tokenId), message = String(d.error || '');
         return { hasToken: !!token, disabled: token?.disabled === true, ownerMatches: token?.userId === d.userId, platform: token?.deviceType,
-          errorLength: message.length, errorFlags: ['registration','token','permission','entity','project','timeout','credential','unavailable','invalid','payload','auth','vapid','third-party','network'].filter(word => message.toLowerCase().includes(word)) };
+          errorLength: message.length, knownError: ['NotRegistered','UNREGISTERED','InvalidToken','SENDER_ID_MISMATCH'].find(value => value === message) || null, errorFlags: ['registration','token','permission','entity','project','timeout','credential','unavailable','invalid','payload','auth','vapid','third-party','network'].filter(word => message.toLowerCase().includes(word)) };
       }),
       errorCodes: [...new Set(deliveries.map(d => d.errorCode).filter(v => typeof v === 'string' && /^[a-zA-Z0-9_/-]{1,100}$/.test(v)))],
       received: acks.filter(a => a.eventType === 'received').length, opened: acks.filter(a => a.eventType === 'opened').length }));

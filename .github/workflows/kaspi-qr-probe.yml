@@ -6,6 +6,10 @@ on:
         description: Close only a fully verified rejected legacy invoice without wallet credit
         type: boolean
         default: false
+      disable_invalid_tokens:
+        description: Disable only permanently invalid registrations from the admin self-test
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -21,6 +25,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
           RESOLVE_DECLINED: ${{ inputs.resolve_declined && 'true' || 'false' }}
+          DISABLE_INVALID_TOKENS: ${{ inputs.disable_invalid_tokens && 'true' || 'false' }}
         run: |
           test -n "$SSHPASS"
           sudo apt-get update -qq
@@ -28,4 +33,4 @@ jobs:
           umask 077
           mkdir -p ~/.ssh
           printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
-          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 "cd /opt/mtaxi && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T -e MTAXI_QR_PROBE_READ_ONLY=true -e MTAXI_RESOLVE_DECLINED=$RESOLVE_DECLINED backend node -" < server/scripts/probe_kaspi_test_link.js
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 "cd /opt/mtaxi && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T -e MTAXI_QR_PROBE_READ_ONLY=true -e MTAXI_RESOLVE_DECLINED=$RESOLVE_DECLINED -e MTAXI_DISABLE_INVALID_TOKENS=$DISABLE_INVALID_TOKENS backend node -" < server/scripts/probe_kaspi_test_link.js
