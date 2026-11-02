@@ -21,6 +21,65 @@ void main() {
         buildSignature: '');
   });
   testWidgets(
+      'test link restores after reload and automatically changes pending to paid',
+      (tester) async {
+    var paid = false;
+    var checks = 0;
+    var creates = 0;
+    await http.runWithClient(() async {
+      for (var opening = 0; opening < 2; opening++) {
+        await tester.pumpWidget(wrap(const Scaffold(
+            body: SingleChildScrollView(child: KaspiPosConnectionCard()))));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Касса Kaspi Pay'));
+        await tester.pumpAndSettle();
+        if (opening == 0) {
+          expect(find.text('Ожидается оплата · 100 ₸'), findsOneWidget);
+          await tester.pump(const Duration(seconds: 10));
+          await tester.pumpAndSettle();
+        }
+        expect(find.text('Оплачено 100 ₸'), findsOneWidget);
+        expect(find.text('https://pay.kaspi.kz/pay/fixture'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox());
+      }
+      expect(checks, 1);
+      expect(creates, 0);
+    },
+        () => MockClient((request) async {
+              final name = request.url.pathSegments.last;
+              if (name == 'adminKaspiPosCheckTestLink') {
+                checks++;
+                paid = true;
+                return http.Response(
+                    jsonEncode(
+                        {'success': true, 'bankState': 'paid', 'amount': 100}),
+                    200);
+              }
+              if (name == 'adminKaspiPosTestLink') creates++;
+              return http.Response(
+                  jsonEncode({
+                    'success': true,
+                    'status': {
+                      'enabled': true,
+                      'configured': true,
+                      'connected': true,
+                      'organization': {
+                        'id': '25',
+                        'iin': '970905350621',
+                        'name': 'Fixture'
+                      },
+                      'latestTestLink': {
+                        'paymentId': 'test',
+                        'paymentUrl': 'https://pay.kaspi.kz/pay/fixture',
+                        'bankState': paid ? 'paid' : 'pending',
+                        'amount': 100
+                      }
+                    }
+                  }),
+                  200);
+            }));
+  });
+  testWidgets(
       'customer invoice shows automatic payment and cancellation without admin confirmation',
       (tester) async {
     for (final terminal in ['success', 'failed']) {

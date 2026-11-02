@@ -12,10 +12,16 @@ function createKaspiAutomation({ env = process.env, store = storeDefault, servic
     const work = (async () => {
       const snapshot = await store.readStoreAsync();
       let p = (snapshot.payments || []).find(p => p.paymentId === paymentId);
-      if (!p || p.provider !== 'kaspi_manual' || p.status !== 'pending' || p.applied || (!p.kaspiAuto && !p.kaspiPosOperationId)) return;
+      if (!p || !['kaspi_manual','kaspi_qr_test'].includes(p.provider) || p.status !== 'pending' || p.applied || (!p.kaspiAuto && !p.kaspiPosOperationId)) return;
       if (Date.parse(p.kaspiAutoNextCheckAt || '') > now()) return;
       // Reserve the polling window before network I/O; survives restarts.
       await store.withStoreAsync(s => { const item = s.payments.find(x => x.paymentId === paymentId); if (item) item.kaspiAutoNextCheckAt = new Date(now() + 30000).toISOString(); });
+      if (p.provider === 'kaspi_qr_test') {
+        if (!p.kaspiPosOperationId) return;
+        const checked = await service.checkTestLink({ paymentId }, system);
+        await store.withStoreAsync(s => { const item = s.payments.find(x => x.paymentId === paymentId); if (item) { item.kaspiAutoError = checked.success ? null : checked.code; if (!checked.success) item.kaspiAutoNextCheckAt = new Date(now() + 60000).toISOString(); } });
+        return; // Test payments never enter wallet confirmation.
+      }
       let result;
       if (!p.kaspiPosOperationId) {
         if (p.kaspiPosAttemptId || p.invoiceStatus === 'sent') return; // Never retry uncertain or manually sent invoices.
@@ -53,7 +59,7 @@ function createKaspiAutomation({ env = process.env, store = storeDefault, servic
     if (!enabled() || ticking) return; ticking = true;
     try {
       const snapshot = await store.readStoreAsync();
-      const pending = (snapshot.payments || []).filter(p => p.provider === 'kaspi_manual' && p.status === 'pending' && !p.applied &&
+      const pending = (snapshot.payments || []).filter(p => ['kaspi_manual','kaspi_qr_test'].includes(p.provider) && p.status === 'pending' && !p.applied &&
         (p.kaspiAuto || p.kaspiPosOperationId) && (!p.kaspiPosAttemptId || p.kaspiPosOperationId) &&
         !(Date.parse(p.kaspiAutoNextCheckAt || '') > now())).sort((a,b) => (Date.parse(a.kaspiAutoNextCheckAt || '') || 0) - (Date.parse(b.kaspiAutoNextCheckAt || '') || 0));
       for (const p of pending.slice(0, 10)) { try { await processPayment(p.paymentId); } catch { /* No secrets in worker logs. */ } }

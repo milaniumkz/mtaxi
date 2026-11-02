@@ -34,7 +34,7 @@ function fixture({ authenticated = true, iin = env.MTAXI_KASPI_POS_EXPECTED_IIN,
 test.beforeEach(() => store.withStoreAsync(s => {
   s.users = [{ id: 'p', balance: 100, role: 'passenger' }, admin.user];
   s.payments = [{ id: 'payment', paymentId: 'topup', userId: 'p', provider: 'kaspi_manual', status: 'pending', invoiceStatus: 'requested', amount: 500, kaspiPhone: '+77019990001' }];
-  s.ledger = []; s.auditLogs = [];
+  s.ledger = []; s.auditLogs = []; s.notifications = []; s.notificationDeliveries = [];
 }));
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -270,4 +270,33 @@ test('test link transport uses fixed amount and only returns a bank HTTPS paymen
   assert.equal((await client.createTestLink(session)).paymentUrl, 'https://pay.kaspi.kz/pay/fixture');
   client.fetchImpl = async () => new Response(JSON.stringify({ Data: { QrOperationId: 987, Amount: 100, QrToken: 'https://untrusted.example/pay' } }), { status: 200 });
   await assert.rejects(() => client.createTestLink(session), /KASPI_QR_URL_INVALID/);
+});
+test('paid QR status without amount verifies formatted bank details, restores status and never credits a wallet', async () => {
+  const f = fixture(); const { bankAmount } = require('../src/kaspi_pos/protocol');
+  assert.equal(bankAmount('+100 ₸'), 100); assert.equal(bankAmount('1\u00a0000,50 ₸'), 1000.5); assert.ok(Number.isNaN(bankAmount('-100 ₸'))); assert.ok(Number.isNaN(bankAmount('100anything')));
+  f.bank.createTestLink = async () => ({ operationId: '987', paymentUrl: 'https://pay.kaspi.kz/pay/fixture' });
+  f.bank.testLinkStatus = async () => ({ Id: 987, Status: 'Processed' });
+  let details = { Id: 987, Amount: '+100 ₸', OrganizationIdn: '970905350621' };
+  f.bank.qrOperationDetails = async () => details;
+  const created = await f.service.testLink({ confirm: true, requestId: 'paid-qr-formatted-amount' }, admin);
+  assert.equal((await f.service.checkTestLink({ paymentId: created.paymentId }, admin)).bankState, 'paid');
+  let db = await store.readStoreAsync(); assert.equal(db.payments.find(p=>p.paymentId===created.paymentId).status, 'success'); assert.equal(db.users[0].balance, 100);
+  assert.equal((await f.service.getStatus({},admin)).status.latestTestLink.bankState, 'paid');
+  for (const wrong of [{...details, Amount:'+10 ₸'}, {...details, Id:999}, {...details,OrganizationIdn:'981008450268'}]) {
+    details=wrong; assert.equal((await f.service.checkTestLink({paymentId:created.paymentId},admin)).code, 'KASPI_PAYMENT_BINDING_MISMATCH');
+  }
+});
+test('background test link check settles only test status and ordinary top-up emits one credit notification', async () => {
+  const f = fixture(); const { createKaspiAutomation } = require('../src/kaspi_pos/automation');
+  f.bank.createTestLink = async () => ({operationId:'987',paymentUrl:'https://pay.kaspi.kz/pay/fixture'});
+  f.bank.testLinkStatus = async () => ({Id:987,Status:'Processed'});
+  f.bank.qrOperationDetails = async () => ({Id:987,Amount:'+100 ₸',OrganizationIdn:'970905350621'});
+  const created = await f.service.testLink({confirm:true,requestId:'background-qr-test-link'},admin);
+  const worker = createKaspiAutomation({env:{...env,MTAXI_KASPI_POS_AUTO_INVOICES:'true'},store,service:f.service});
+  await worker.tick(); let db=await store.readStoreAsync();assert.equal(db.payments.find(p=>p.paymentId===created.paymentId).status,'success');assert.equal(db.users[0].balance,100);
+  await f.service.sendInvoice({paymentId:'topup',confirm:true},admin);
+  f.setDetails({Id:123,Amount:'500 ₸',ClientMobile:'77019990001',Status:'Processed'});
+  await f.service.checkInvoice({paymentId:'topup'},admin);
+  await confirmDriverTopUpPaymentAsync({paymentId:'topup'},admin);await confirmDriverTopUpPaymentAsync({paymentId:'topup'},admin);
+  db=await store.readStoreAsync();assert.equal(db.users[0].balance,600);assert.equal(db.notifications.filter(n=>n.type==='WALLET_TOPUP_PAID').length,1);
 });

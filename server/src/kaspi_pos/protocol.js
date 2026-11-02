@@ -9,6 +9,13 @@ const QRPAY = 'https://qrpay.kaspi.kz';
 const HOSTS = new Set([ENTRANCE, MTOKEN, QRPAY]);
 const digits = value => String(value ?? '').replace(/\D/g, '');
 const phone10 = value => { const d = digits(value); return d.length === 11 && /^[78]/.test(d) ? d.slice(1) : d; };
+function bankAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+  if (typeof value !== 'string') return NaN;
+  const text = value.trim().replace(/^\+\s*/, '');
+  if (!/^\d+(?:[ \u00a0\u202f]\d{3})*(?:[.,]\d{1,2})?\s*(?:₸|KZT|тг\.?|тенге)?$/iu.test(text)) return NaN;
+  return Number(text.replace(/(?:₸|KZT|тг\.?|тенге)$/iu, '').replace(/[ \u00a0\u202f]/g, '').replace(',', '.'));
+}
 class KaspiError extends Error {
   constructor(code, uncertain = false, bankCode = '') { super(code); this.code = code; this.uncertain = uncertain; this.bankCode = /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(bankCode) ? bankCode : ''; }
 }
@@ -145,7 +152,7 @@ class KaspiProtocol {
     const body = JSON.stringify({ PhoneNumber: phone10(payment.kaspiPhone), Amount: payment.amount, Comment: `MTaxi ${payment.paymentId}` });
     const data = bankData((await this.request(QRPAY, path, this.headers(QRPAY, path, session, body), body)).body);
     const id = data.QrOperationId ?? data.Id;
-    if ((typeof id === 'number' && !Number.isSafeInteger(id)) || !/^[1-9]\d{0,29}$/.test(String(id)) || Number(data.Amount) !== Number(payment.amount) || phone10(data.ClientMobile) !== phone10(payment.kaspiPhone))
+    if ((typeof id === 'number' && !Number.isSafeInteger(id)) || !/^[1-9]\d{0,29}$/.test(String(id)) || bankAmount(data.Amount) !== Number(payment.amount) || phone10(data.ClientMobile) !== phone10(payment.kaspiPhone))
       throw new KaspiError('KASPI_INVOICE_RESPONSE_UNCERTAIN', true);
     return { operationId: String(id) };
   }
@@ -158,10 +165,15 @@ class KaspiProtocol {
     let url; try { url = new URL(data.QrToken); } catch { throw new KaspiError('KASPI_QR_URL_MISSING', true); }
     if ((typeof id === 'number' && !Number.isSafeInteger(id)) || !/^[1-9]\d{0,29}$/.test(String(id))) throw new KaspiError('KASPI_QR_OPERATION_INVALID', true);
     // The request fixes 100. An unpaid QR can report Amount=0; only a paid status verifies settlement.
-    if (data.Amount != null && ![0, 100].includes(Number(data.Amount))) throw new KaspiError('KASPI_QR_AMOUNT_MISMATCH', true);
+    if (data.Amount != null && ![0, 100].includes(bankAmount(data.Amount))) throw new KaspiError('KASPI_QR_AMOUNT_MISMATCH', true);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || !['qr.kaspi.kz', 'pay.kaspi.kz'].includes(url.hostname)) throw new KaspiError('KASPI_QR_URL_INVALID', true);
     if (url.hostname === 'qr.kaspi.kz') { url.hostname = 'pay.kaspi.kz'; url.pathname = '/pay' + url.pathname; }
     return { operationId: String(id), paymentUrl: url.href, expiresAt: data.ExpireDate || null };
+  }
+  async qrOperationDetails(session, id) {
+    if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
+    const path = '/v01/kaspi-qr/operations/details', body = JSON.stringify({ Id: Number(id), OperationMethod: 0 });
+    return bankData((await this.request(QRPAY, path, this.headers(QRPAY, path, session, body), body)).body);
   }
   async testLinkStatus(session, id) {
     const path = '/v02/kaspi-qr/status?qrOperationId=' + encodeURIComponent(id);
@@ -172,4 +184,4 @@ class KaspiProtocol {
     return bankData((await this.request(QRPAY, path, this.headers(QRPAY, path, session))).body);
   }
 }
-module.exports = { KaspiProtocol, KaspiError, phone10 };
+module.exports = { KaspiProtocol, KaspiError, phone10, bankAmount };

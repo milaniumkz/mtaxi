@@ -472,6 +472,14 @@ function confirmDriverTopUpPaymentInStore(store, data, auth) {
   const applied = applySuccessfulPayment(store, payment, { source: auth?.user?.id === 'system:kaspi-pay' ? "kaspi_auto" : "admin_confirm" });
   if (!applied.success) return applied;
   if (!applied.alreadyApplied) {
+    const { createPushNotificationInStore } = require('./push');
+    const queued = createPushNotificationInStore(store, {
+      type: 'WALLET_TOPUP_PAID', targetUserIds: [payment.userId],
+      title: 'Баланс пополнен', body: `Зачислено ${payment.amount} ₸ на денежный баланс MTaxi.`,
+      dedupeKey: `wallet-topup-paid:${payment.paymentId}`,
+      dataPayload: { type: 'WALLET_TOPUP_PAID', paymentId: payment.paymentId, amount: String(payment.amount) },
+    });
+    if (queued.notification) queued.notification.dataPayload.notificationId = queued.notificationId;
     payment.confirmedBy = auth?.user?.id || null;
     store.auditLogs ||= [];
     store.auditLogs.push({ id: newId('audit'), action: 'confirmDriverTopUpPayment',

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -18,16 +19,28 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
   Map<String, dynamic> _status = {};
   bool _busy = false, _expanded = false;
   String? _error;
-  String? _testUrl, _testPaymentId, _testState;
+  String? _testUrl, _testPaymentId, _testState, _testBankState;
+  Timer? _testTimer;
+  bool _checkingTest = false;
+  bool get _testTerminal =>
+      ['paid', 'expired', 'failed', 'cancelled'].contains(_testBankState);
 
   @override
   void initState() {
     super.initState();
     _loadStatus();
+    _testTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_expanded &&
+          _testPaymentId != null &&
+          !_testTerminal &&
+          !_busy &&
+          !_checkingTest) _checkTestLink(silent: true);
+    });
   }
 
   @override
   void dispose() {
+    _testTimer?.cancel();
     _phone.dispose();
     _otp.dispose();
     super.dispose();
@@ -39,6 +52,12 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
     setState(() {
       if (response['status'] is Map) {
         _status = Map<String, dynamic>.from(response['status'] as Map);
+        final link = _status['latestTestLink'];
+        if (link is Map) {
+          _testUrl = link['paymentUrl']?.toString();
+          _testPaymentId = link['paymentId']?.toString();
+          _showTestState(link['bankState']?.toString() ?? 'pending');
+        }
       }
       if (response['success'] != true) {
         _error = response['error']?.toString() ??
@@ -102,7 +121,7 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
       final prefs = await SharedPreferences.getInstance();
       final org = _status['organization'] as Map? ?? {};
       final requestKey = 'mtaxi_kaspi_test_link_${org['id']}_${org['iin']}';
-      var requestId = prefs.getString(requestKey);
+      var requestId = _testTerminal ? null : prefs.getString(requestKey);
       requestId ??= const Uuid().v4();
       await prefs.setString(requestKey, requestId);
       final data = <String, dynamic>{'confirm': true, 'requestId': requestId};
@@ -119,7 +138,7 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
         if (response['success'] == true) {
           _testUrl = response['paymentUrl']?.toString();
           _testPaymentId = response['paymentId']?.toString();
-          _testState = 'Ссылка создана · 100 ₸';
+          _showTestState('pending');
         } else
           _error =
               '${response['error'] ?? 'Ссылка не создана.'}${response['bankCode'] == null ? '' : ' Код Kaspi: ${response['bankCode']}'}';
@@ -133,12 +152,26 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
     }
   }
 
-  Future<void> _checkTestLink() async {
-    if (_testPaymentId == null || _busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+  void _showTestState(String state) {
+    _testBankState = state;
+    _testState = {
+          'paid': 'Оплачено 100 ₸',
+          'pending': 'Ожидается оплата · 100 ₸',
+          'expired': 'Срок ссылки истёк',
+          'cancelled': 'Оплата отменена',
+          'failed': 'Оплата отклонена'
+        }[state] ??
+        'Статус пока не подтверждён';
+  }
+
+  Future<void> _checkTestLink({bool silent = false}) async {
+    if (_testPaymentId == null || _busy || _checkingTest) return;
+    _checkingTest = true;
+    if (!silent)
+      setState(() {
+        _busy = true;
+        _error = null;
+      });
     try {
       final result = await makeCloudCall(
           'adminKaspiPosCheckTestLink', {'paymentId': _testPaymentId},
@@ -148,21 +181,18 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
         if (result['success'] != true)
           _error =
               result['error']?.toString() ?? 'Не удалось проверить ссылку.';
-        else
-          _testState = {
-                'paid': 'Оплачено 100 ₸',
-                'pending': 'Ожидается оплата',
-                'expired': 'Срок ссылки истёк',
-                'cancelled': 'Оплата отменена'
-              }[result['bankState']] ??
-              'Статус пока не подтверждён';
+        else {
+          _showTestState(result['bankState']?.toString() ?? 'unknown');
+          _error = null;
+        }
       });
     } catch (_) {
       if (mounted)
         setState(
             () => _error = 'Не удалось проверить статус. Повторите проверку.');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _checkingTest = false;
+      if (mounted && !silent) setState(() => _busy = false);
     }
   }
 
@@ -278,7 +308,9 @@ class _KaspiPosConnectionCardState extends State<KaspiPosConnectionCard> {
                                       ClipboardData(text: _testUrl!)),
                                   child: const Text('Копировать ссылку')),
                               TextButton(
-                                  onPressed: _busy ? null : _checkTestLink,
+                                  onPressed: _busy || _checkingTest
+                                      ? null
+                                      : () => _checkTestLink(),
                                   child:
                                       const Text('Проверить тестовую оплату')),
                             ]),
