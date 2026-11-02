@@ -1,4 +1,4 @@
-name: Diagnose requested 100 KZT Kaspi test link
+name: Read-only Kaspi QR status diagnostic
 on:
   workflow_dispatch:
 permissions:
@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Inspect only QR response amount and field names, without paying
+      - name: Read existing QR status fields without creating or paying
         env:
           SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
         run: |
@@ -22,4 +22,4 @@ jobs:
           umask 077
           mkdir -p ~/.ssh
           printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
-          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 "cd /opt/mtaxi && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T -e MTAXI_QR_PROBE_CONFIRM=100 -e MTAXI_QR_PROBE_ID=probe-${GITHUB_SHA} backend node -" < server/scripts/probe_kaspi_test_link.js
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 "cd /opt/mtaxi && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T -e MTAXI_QR_PROBE_READ_ONLY=true backend node -" < server/scripts/probe_kaspi_test_link.js
