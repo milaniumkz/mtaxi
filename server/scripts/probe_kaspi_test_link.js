@@ -18,7 +18,27 @@ const store = require(process.cwd() + '/src/store');
           amountType: typeof d.Amount, amountKeys: d.Amount && typeof d.Amount === 'object' ? Object.keys(d.Amount) : [] }));
       }
       return response;
-    }; return bank;
+    };
+    const status = bank.testLinkStatus.bind(bank);
+    bank.testLinkStatus = async (session, id) => {
+      const result = await status(session, id);
+      if (result.Status === 'Processed') {
+        const host = 'https://qrpay.kaspi.kz', path = '/v01/kaspi-qr/operations/details', body = JSON.stringify({ Id: Number(id), OperationMethod: 0 });
+        const reply = await bank.request(host, path, bank.headers(host, path, session, body), body);
+        const shape = (data, depth = 0) => {
+          if (!data || typeof data !== 'object' || depth > 3) return null;
+          const fields = {}, children = {};
+          for (const [key,value] of Object.entries(data)) {
+            if (/amount|sum|^Id$|^Status$|^OperationMethod$/i.test(key) && (typeof value === 'number' || typeof value === 'string' && /^[a-zA-Z0-9_. ,:-]{0,80}$/.test(value))) fields[key] = value;
+            if (value && typeof value === 'object' && !Array.isArray(value)) children[key] = shape(value, depth + 1);
+          }
+          return { keys: Object.keys(data), fields, children };
+        };
+        console.log(JSON.stringify({ diagnostic: 'QR_OPERATION_DETAILS_SHAPE', shape: shape(reply.body?.Data), statusCode: reply.body?.StatusCode }));
+      }
+      return result;
+    };
+    return bank;
   }});
   const selected = snapshot.payments.filter(p => p.provider === 'kaspi_qr_test' && p.kaspiPosOperationId).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)).slice(0,3);
   for (const p of selected) { const r = await service.checkTestLink({paymentId:p.paymentId}, {user}); console.log(JSON.stringify({ paymentId:p.paymentId, expectedOperationId:p.kaspiPosOperationId, success:r.success, code:r.code, bankState:r.bankState })); }
