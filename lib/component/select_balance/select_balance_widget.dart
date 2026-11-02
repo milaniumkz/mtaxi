@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/design/mtaxi_theme.dart';
@@ -15,12 +18,15 @@ class SelectBalanceWidget extends StatefulWidget {
   State<SelectBalanceWidget> createState() => _SelectBalanceWidgetState();
 }
 
-class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
+class _SelectBalanceWidgetState extends State<SelectBalanceWidget>
+    with WidgetsBindingObserver {
   final _amount = TextEditingController();
   final _phone = TextEditingController();
   String _requestKey = const Uuid().v4();
   String? _fingerprint;
   String? _paymentId;
+  String? _paymentUrl;
+  String? _paymentProvider;
   String? _error;
   String _status = 'pending';
   bool _automatic = false;
@@ -40,6 +46,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
           'phone': _phone.text,
           'fingerprint': _fingerprint,
           'paymentId': _paymentId,
+          'paymentUrl': _paymentUrl,
+          'paymentProvider': _paymentProvider,
           'status': _status,
           'automatic': _automatic
         }));
@@ -57,6 +65,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
         _phone.text = saved['phone'] as String;
         _fingerprint = saved['fingerprint'] as String?;
         _paymentId = saved['paymentId'] as String?;
+        _paymentUrl = saved['paymentUrl'] as String?;
+        _paymentProvider = saved['paymentProvider'] as String?;
         _status = saved['status'] as String? ?? 'pending';
         _automatic = saved['automatic'] == true;
         _uncertain = _paymentId == null;
@@ -69,7 +79,10 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKey);
     } finally {
-      if (mounted) setState(() => _restoring = false);
+      if (mounted) {
+        setState(() => _restoring = false);
+        if (_paymentId != null) unawaited(_refresh());
+      }
     }
   }
 
@@ -78,6 +91,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _storageKey =
         'mtaxi_topup_${currentUserUid}_${widget.passenger ? 'passenger' : 'driver'}';
     _phone.text = currentUserDocument?.phoneNumber ?? '';
@@ -117,7 +131,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
           {
             'amount': amount,
             'kaspiPhone': _phone.text.trim(),
-            'method': 'kaspi_manual',
+            'method': 'kaspi_qr',
             'idempotencyKey': _requestKey,
           },
           timeout: const Duration(seconds: 45));
@@ -143,6 +157,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
       await _persist();
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
+      if (_status == 'pending' && _paymentUrl?.isNotEmpty == true)
+        await _openKaspi();
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -180,10 +196,41 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
 
   void _readInvoiceStatus(Map<String, dynamic> response) {
     _automatic = response['automatic'] == true;
+    _paymentUrl = response['paymentUrl']?.toString() ?? _paymentUrl;
+    _paymentProvider =
+        response['paymentProvider']?.toString() ?? _paymentProvider;
     _bankState = response['bankState']?.toString();
     _invoiceStatus = response['invoiceStatus']?.toString();
     _createState = response['invoiceCreateState']?.toString();
     _automationError = response['automationError']?.toString();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _paymentId != null)
+      unawaited(_refresh());
+  }
+
+  Future<void> _openKaspi() async {
+    final url = Uri.tryParse(_paymentUrl ?? '');
+    if (url == null ||
+        url.scheme != 'https' ||
+        url.host != 'pay.kaspi.kz' ||
+        url.userInfo.isNotEmpty) return;
+    try {
+      final opened = await launchUrl(url,
+          mode: kIsWeb
+              ? LaunchMode.platformDefault
+              : LaunchMode.externalApplication,
+          webOnlyWindowName: '_self');
+      if (!opened && mounted)
+        setState(() => _error =
+            'Не удалось открыть Kaspi. Скопируйте ссылку или попробуйте ещё раз.');
+    } catch (_) {
+      if (mounted)
+        setState(() => _error =
+            'Не удалось открыть Kaspi. Скопируйте ссылку или попробуйте ещё раз.');
+    }
   }
 
   String _paymentMessage() {
@@ -195,12 +242,20 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
       return 'Срок оплаты счёта истёк. Деньги не зачислялись.';
     if (_status == 'failed')
       return 'Счёт отклонён или отменён. Деньги не зачислялись.';
+    if (_automationError == 'KASPI_PAYMENT_BINDING_MISMATCH')
+      return 'Сумма или данные оплаты не совпали. Обратитесь в поддержку; повторно оплачивать не нужно.';
+    if (_automationError == 'KASPI_INVOICE_UNLINKED')
+      return 'Платёж связан с другой кассой. Обратитесь в поддержку, не создавая повторную оплату.';
     if (_createState == 'unknown' || _createState == 'creating')
-      return 'Результат выставления уточняется. Не создавайте повторный счёт. При необходимости обратитесь в поддержку.';
+      return 'Результат создания платежа уточняется. Не повторяйте оплату. При необходимости обратитесь в поддержку.';
     if (!_automatic)
       return 'Заявка отправлена. Ожидайте счёт в Kaspi. После оплаты администратор подтвердит пополнение.';
     if (_automationError != null)
       return 'Проверка временно недоступна. Сервер повторит её автоматически. Если счёт уже пришёл, не создавайте новый.';
+    if (_paymentProvider == 'kaspi_qr')
+      return _paymentUrl?.isNotEmpty == true
+          ? 'Ссылка готова. Оплатите в Kaspi. После подтверждения банка деньги автоматически поступят на ваш баланс MTaxi.'
+          : 'Готовим ссылку для оплаты. Статус обновится автоматически.';
     if (_invoiceStatus == 'sent')
       return 'Счёт выставлен на ${_phone.text}. Оплатите его в Kaspi.kz. Оплату проверим и зачислим деньги автоматически.';
     return 'Выставляем счёт на ${_phone.text}. Статус обновится автоматически.';
@@ -208,6 +263,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _amount.dispose();
     _phone.dispose();
@@ -253,8 +309,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                 const SizedBox(height: 16),
                 if (_paymentId == null) ...[
                   Text(tr(
-                      '1. Укажите сумму и номер Kaspi.\n2. Нажмите «Выставить счёт».\n3. Оплатите счёт в Kaspi.kz. Статус и зачисление обновятся автоматически.',
-                      '1. Сома мен Kaspi нөмірін көрсетіңіз.\n2. «Шот жіберу» түймесін басыңыз.\n3. Kaspi.kz шотын төлеңіз. Төлем автоматты тексеріліп, ақша теңгерімге түседі.')),
+                      '1. Укажите номер телефона и сумму.\n2. Нажмите «Пополнить баланс» — откроется оплата Kaspi.\n3. После оплаты деньги поступят на ваш баланс MTaxi автоматически.',
+                      '1. Телефон нөмірі мен соманы енгізіңіз.\n2. «Теңгерімді толықтыру» түймесін басыңыз — Kaspi төлемі ашылады.\n3. Төлемнен кейін ақша MTaxi теңгеріміне автоматты түседі.')),
                   const SizedBox(height: 16),
                   TextField(
                       controller: _phone,
@@ -280,8 +336,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                           : _uncertain
                               ? tr('Повторить проверку заявки',
                                   'Өтінімді қайта тексеру')
-                              : tr('Выставить счёт Kaspi',
-                                  'Kaspi шотын сұрау'))),
+                              : tr(
+                                  'Пополнить баланс', 'Теңгерімді толықтыру'))),
                 ] else ...[
                   Text(
                     '${tr('Сумма заявки', 'Өтінім сомасы')}: ${_amount.text} ₸',
@@ -289,6 +345,18 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                   ),
                   const SizedBox(height: 12),
                   Text(_paymentMessage()),
+                  if (_status == 'pending' &&
+                      _paymentUrl?.isNotEmpty == true) ...[
+                    FilledButton(
+                        onPressed: _busy ? null : _openKaspi,
+                        child: Text(tr('Открыть Kaspi для оплаты',
+                            'Төлеу үшін Kaspi ашу'))),
+                    TextButton(
+                        onPressed: () => Clipboard.setData(
+                            ClipboardData(text: _paymentUrl!)),
+                        child:
+                            Text(tr('Копировать ссылку', 'Сілтемені көшіру'))),
+                  ],
                   if (_status == 'pending')
                     TextButton(
                         onPressed: _busy ? null : _refresh,
@@ -298,6 +366,8 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget> {
                         onPressed: () {
                           setState(() {
                             _paymentId = null;
+                            _paymentUrl = null;
+                            _paymentProvider = null;
                             _requestKey = const Uuid().v4();
                             _fingerprint = null;
                             _status = 'pending';

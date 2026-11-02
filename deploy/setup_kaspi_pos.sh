@@ -27,4 +27,10 @@ fi
 if ! grep -q '^MTAXI_KASPI_POS_AUTO_INVOICES=' server/.env; then
   printf 'MTAXI_KASPI_POS_AUTO_INVOICES=true\n' >> server/.env
 fi
+if ! grep -q '^MTAXI_KASPI_POS_AUTO_LINKS=' server/.env; then
+  printf 'MTAXI_KASPI_POS_AUTO_LINKS=true\n' >> server/.env
+fi
+if grep -q '^MTAXI_KASPI_POS_AUTO_LINKS=true$' server/.env; then
+  sed -i 's/^MTAXI_KASPI_POS_AUTO_INVOICES=.*/MTAXI_KASPI_POS_AUTO_INVOICES=false/' server/.env
+fi
 printf 'Kaspi server-only encrypted storage prepared; no bank login or invoice requested.\n'

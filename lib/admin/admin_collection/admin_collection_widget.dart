@@ -1061,7 +1061,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           children: [
             _buildSingletonSettingsCard(
               context,
-              title: _collectionLabels[widget.collectionName] ?? 'Параметры сервиса',
+              title: _collectionLabels[widget.collectionName] ??
+                  'Параметры сервиса',
               data: data,
               onEdit: () => _openBackendContentEditor(
                 context,
@@ -1520,7 +1521,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           children: [
             _buildSingletonSettingsCard(
               context,
-              title: _collectionLabels[widget.collectionName] ?? 'Параметры сервиса',
+              title: _collectionLabels[widget.collectionName] ??
+                  'Параметры сервиса',
               data: data,
               onEdit: () => _openBackendAppSettingsEditor(
                 context,
@@ -2483,7 +2485,12 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                     ),
                     _buildStatusChip(
                       context,
-                      label: status.isEmpty ? 'status' : status,
+                      label: {
+                            'success': 'Оплачено',
+                            'pending': 'Ожидается оплата',
+                            'failed': 'Отклонено / отменено'
+                          }[status] ??
+                          (status.isEmpty ? 'Ожидание' : status),
                       color: statusColor,
                     ),
                   ],
@@ -2508,6 +2515,19 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                       ),
                   ],
                 ),
+                if (payment['provider'] == 'kaspi_qr') ...[
+                  const SizedBox(height: 8),
+                  Text(status == 'pending'
+                      ? 'Kaspi · ссылка. Оплата и зачисление проверяются автоматически.'
+                      : 'Kaspi · оплата по ссылке'),
+                  if ((payment['paymentUrl'] ?? '').toString().isNotEmpty &&
+                      status == 'pending')
+                    TextButton.icon(
+                        onPressed: () => Clipboard.setData(ClipboardData(
+                            text: payment['paymentUrl'].toString())),
+                        icon: const Icon(Icons.copy),
+                        label: const Text('Копировать ссылку оплаты')),
+                ],
                 if (payment['provider'] == 'kaspi_manual' &&
                     status == 'pending')
                   KaspiPaymentActions(

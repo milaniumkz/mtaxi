@@ -156,16 +156,19 @@ class KaspiProtocol {
       throw new KaspiError('KASPI_INVOICE_RESPONSE_UNCERTAIN', true);
     return { operationId: String(id) };
   }
-  async createTestLink(session, { latitude, longitude } = {}) {
+  async createTestLink(session, data = {}) { return this.createPaymentLink(session, { amount: 100 }, data); }
+  async createPaymentLink(session, payment, { latitude, longitude } = {}) {
+    const amount = Number(payment.amount);
+    if (!Number.isFinite(amount) || amount < 1 || amount > 1000000 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001) throw new KaspiError('KASPI_AMOUNT_INVALID');
     const path = '/v01/qr-token/create';
-    const body = JSON.stringify({ PaymentAmount: 100, DeviceInterface: 'Pos',
+    const body = JSON.stringify({ PaymentAmount: amount, DeviceInterface: 'Pos',
       ...(Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { Latitude: latitude, Longitude: longitude } : {}) });
     const data = bankData((await this.request(QRPAY, path, this.headers(QRPAY, path, session, body), body)).body);
     const id = data.QrOperationId;
     let url; try { url = new URL(data.QrToken); } catch { throw new KaspiError('KASPI_QR_URL_MISSING', true); }
     if ((typeof id === 'number' && !Number.isSafeInteger(id)) || !/^[1-9]\d{0,29}$/.test(String(id))) throw new KaspiError('KASPI_QR_OPERATION_INVALID', true);
-    // The request fixes 100. An unpaid QR can report Amount=0; only a paid status verifies settlement.
-    if (data.Amount != null && ![0, 100].includes(bankAmount(data.Amount))) throw new KaspiError('KASPI_QR_AMOUNT_MISMATCH', true);
+    // Creation can report zero before payment; settlement must match the persisted requested amount.
+    if (data.Amount != null && ![0, amount].includes(bankAmount(data.Amount))) throw new KaspiError('KASPI_QR_AMOUNT_MISMATCH', true);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || !['qr.kaspi.kz', 'pay.kaspi.kz'].includes(url.hostname)) throw new KaspiError('KASPI_QR_URL_INVALID', true);
     if (url.hostname === 'qr.kaspi.kz') { url.hostname = 'pay.kaspi.kz'; url.pathname = '/pay' + url.pathname; }
     return { operationId: String(id), paymentUrl: url.href, expiresAt: data.ExpireDate || null };

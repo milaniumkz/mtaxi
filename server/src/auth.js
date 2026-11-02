@@ -135,7 +135,7 @@ async function registerWithPassword(data = {}) {
     store.users.push(user);
     // Only record an explicit acknowledgement; old installed clients do not
     // acquire a fabricated acceptance when they register without these fields.
-    if (data.legalAccepted === true && data.legalVersion === "2026-10-24") {
+    if (data.legalAccepted === true && data.legalVersion === "2026-11-02") {
       store.auditLogs ||= [];
       store.auditLogs.push({
         id: newId("audit"), action: "userLegalAcceptance",

@@ -300,3 +300,50 @@ test('background test link check settles only test status and ordinary top-up em
   await confirmDriverTopUpPaymentAsync({paymentId:'topup'},admin);await confirmDriverTopUpPaymentAsync({paymentId:'topup'},admin);
   db=await store.readStoreAsync();assert.equal(db.users[0].balance,600);assert.equal(db.notifications.filter(n=>n.type==='WALLET_TOPUP_PAID').length,1);
 });
+test('wallet payment link accepts arbitrary persisted amount, opens no invoice, credits exactly once and isolates owners', async () => {
+  const f = fixture({ iin: '981008450268' }); const { createKaspiAutomation } = require('../src/kaspi_pos/automation');
+  await store.withStoreAsync(s => { Object.assign(s.payments[0],{provider:'kaspi_qr',kaspiAuto:true,amount:725}); });
+  let created = 0, paid = false;
+  f.bank.createPaymentLink = async (_, p) => { created++; assert.equal(p.amount,725); return {operationId:'4567',paymentUrl:'https://pay.kaspi.kz/pay/wallet',expiresAt:'2030-01-01T00:00:00Z'}; };
+  f.bank.testLinkStatus = async () => ({Id: paid ? 4567 : 0,Status:paid?'Processed':'QrTokenCreated'});
+  f.bank.qrOperationDetails = async () => ({Id:4567,Amount:'+725 ₸',OrganizationIdn:'981008450268'});
+  const worker = createKaspiAutomation({env:{...env,MTAXI_KASPI_POS_AUTO_LINKS:'true',MTAXI_KASPI_POS_AUTO_INVOICES:'false'},store,service:f.service});
+  const owner = {user:{id:'p',role:'passenger'}};
+  const first = await worker.afterCreated({success:true,paymentId:'topup'},owner);
+  assert.equal(first.paymentUrl,'https://pay.kaspi.kz/pay/wallet');assert.equal(first.paymentProvider,'kaspi_qr');assert.equal(first.paymentStatus,'pending');assert.equal(f.calls(),0);assert.equal(created,1);
+  await worker.afterCreated({success:true,paymentId:'topup'},owner);assert.equal(created,1);
+  const payments = require('../src/payments');assert.equal((await payments.getDriverTopUpPaymentStatusAsync({paymentId:'topup'},{user:{id:'other'}})).code,'PAYMENT_FORBIDDEN');
+  paid=true;await store.withStoreAsync(s=>{s.payments[0].kaspiAutoNextCheckAt=null;});
+  await Promise.all([worker.tick(),worker.processPayment('topup')]);let db=await store.readStoreAsync();assert.equal(db.users[0].balance,825);assert.equal(db.payments[0].applied,true);assert.equal(db.ledger.filter(x=>x.type==='driver_top_up').length,1);assert.equal(db.notifications.filter(n=>n.type==='WALLET_TOPUP_PAID').length,1);
+  await worker.tick();assert.equal((await store.readStoreAsync()).users[0].balance,825);
+});
+test('wallet QR wrong amount and lost create response never credit or automatically create a duplicate', async () => {
+  const f=fixture();const {createKaspiAutomation}=require('../src/kaspi_pos/automation');
+  await store.withStoreAsync(s=>{Object.assign(s.payments[0],{provider:'kaspi_qr',kaspiAuto:true,amount:1200});});
+  let creates=0;f.bank.createPaymentLink=async()=>{creates++;return {operationId:'7654',paymentUrl:'https://pay.kaspi.kz/pay/wallet'};};
+  f.bank.testLinkStatus=async()=>({Id:7654,Status:'Processed'});f.bank.qrOperationDetails=async()=>({Id:7654,Amount:'+100 ₸',OrganizationIdn:'970905350621'});
+  let worker=createKaspiAutomation({env:{...env,MTAXI_KASPI_POS_AUTO_LINKS:'true'},store,service:f.service});
+  await worker.processPayment('topup');let db=await store.readStoreAsync();assert.equal(db.users[0].balance,100);assert.equal(db.payments[0].kaspiPosBankState,'unverified');
+  await store.withStoreAsync(s=>{s.payments=[{id:'lost',paymentId:'lost',provider:'kaspi_qr',kaspiAuto:true,status:'pending',userId:'p',amount:1200}];});
+  f.bank.createPaymentLink=async()=>{creates++;throw new KaspiError('KASPI_NETWORK_UNCERTAIN',true);};
+  await worker.processPayment('lost');await store.withStoreAsync(s=>{s.payments[0].kaspiAutoNextCheckAt=null;});
+  worker=createKaspiAutomation({env:{...env,MTAXI_KASPI_POS_AUTO_LINKS:'true'},store,service:f.service});await worker.tick();assert.equal(creates,2);db=await store.readStoreAsync();assert.equal(db.payments[0].kaspiPosCreateState,'unknown');assert.equal(db.users[0].balance,100);
+});
+test('new passenger requests use link provider when enabled and retain idempotency across the mode switch', async () => {
+  const saved = {enabled:process.env.MTAXI_KASPI_POS_ENABLED,links:process.env.MTAXI_KASPI_POS_AUTO_LINKS};
+  process.env.MTAXI_KASPI_POS_ENABLED='true';process.env.MTAXI_KASPI_POS_AUTO_LINKS='true';
+  try {
+    const {createPassengerTopUpPaymentAsync}=require('../src/payments');const owner={user:{id:'p',role:'passenger'}};
+    const data={amount:700,kaspiPhone:'+77019990001',method:'kaspi_qr',idempotencyKey:'link-switch'};
+    const first=await createPassengerTopUpPaymentAsync(data,owner);const again=await createPassengerTopUpPaymentAsync(data,owner);
+    assert.equal(first.success,true);assert.equal(first.manual,false);assert.equal(first.paymentId,again.paymentId);const db=await store.readStoreAsync();const p=db.payments.find(p=>p.paymentId===first.paymentId);assert.equal(p.provider,'kaspi_qr');assert.equal(p.kaspiAuto,true);assert.equal(p.amount,700);
+  } finally { if(saved.enabled===undefined)delete process.env.MTAXI_KASPI_POS_ENABLED;else process.env.MTAXI_KASPI_POS_ENABLED=saved.enabled;if(saved.links===undefined)delete process.env.MTAXI_KASPI_POS_AUTO_LINKS;else process.env.MTAXI_KASPI_POS_AUTO_LINKS=saved.links; }
+});
+test('wallet link cannot be credited by generic callback or by admin before bank verification', async () => {
+  await store.withStoreAsync(s=>{Object.assign(s.payments[0],{provider:'kaspi_qr',kaspiAuto:true});});
+  assert.equal((await confirmDriverTopUpPaymentAsync({paymentId:'topup'},admin)).code,'KASPI_PAYMENT_VERIFICATION_REQUIRED');
+  const {handleDriverTopUpPaymentCallbackAsync}=require('../src/payments');const previous=process.env.MTAXI_PAYMENT_CALLBACK_SECRET;
+  process.env.MTAXI_PAYMENT_CALLBACK_SECRET='fixture-callback-secret';
+  try { const result=await handleDriverTopUpPaymentCallbackAsync({paymentId:'topup',status:'paid',amount:500},{get:name=>name==='x-mtaxi-payment-secret'?'fixture-callback-secret':undefined});assert.equal(result.code,'MANUAL_PAYMENT_CONFIRMATION_REQUIRED');assert.equal((await store.readStoreAsync()).users[0].balance,100); }
+  finally {if(previous===undefined)delete process.env.MTAXI_PAYMENT_CALLBACK_SECRET;else process.env.MTAXI_PAYMENT_CALLBACK_SECRET=previous;}
+});

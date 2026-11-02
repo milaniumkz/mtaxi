@@ -257,7 +257,8 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
   if (purpose === "driver" && user.isDriver !== true) {
     return { success: false, code: "DRIVER_PROFILE_REQUIRED", error: "Пополнение доступно только водителю" };
   }
-  const manualKaspi = data.method === 'kaspi_manual' || paymentProviderName() === 'kaspi_manual';
+  const links = process.env.MTAXI_KASPI_POS_ENABLED === 'true' && process.env.MTAXI_KASPI_POS_AUTO_LINKS === 'true';
+  const manualKaspi = links || ['kaspi_manual','kaspi_qr'].includes(data.method) || paymentProviderName() === 'kaspi_manual';
   const kaspiPhone = manualKaspi ? normalizePhone(data.kaspiPhone) : '';
   if (manualKaspi && !/^\+7\d{10}$/.test(kaspiPhone)) {
     return { success: false, code: 'KASPI_PHONE_INVALID', error: 'Укажите номер Kaspi в формате +7XXXXXXXXXX' };
@@ -269,7 +270,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
       payment.userId === user.id && normalizeString(payment.idempotencyKey) === idempotencyKey);
     if (existing) {
       if ((asNumber(existing.amount) || 0) !== amount ||
-          (manualKaspi && (existing.provider !== 'kaspi_manual' || existing.kaspiPhone !== kaspiPhone))) {
+          (manualKaspi && (!['kaspi_manual','kaspi_qr'].includes(existing.provider) || existing.kaspiPhone !== kaspiPhone))) {
         return {
           success: false,
           code: "PAYMENT_IDEMPOTENCY_CONFLICT",
@@ -292,10 +293,10 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
       };
     }
   }
-  if (manualKaspi && process.env.MTAXI_KASPI_POS_AUTO_INVOICES === 'true') {
+  if (manualKaspi && (links || process.env.MTAXI_KASPI_POS_AUTO_INVOICES === 'true')) {
     if (amount < 1 || amount > 1000000 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001)
       return { success: false, code: 'PAYMENT_AMOUNT_INVALID', error: 'Введите сумму от 1 до 1 000 000 ₸, не более двух знаков после запятой' };
-    const own = store.payments.filter(p => p.userId === user.id && p.provider === 'kaspi_manual');
+    const own = store.payments.filter(p => p.userId === user.id && ['kaspi_manual','kaspi_qr'].includes(p.provider));
     if (own.filter(p => p.status === 'pending').length >= 3 || own.filter(p => Date.now() - Date.parse(p.createdAt) < 3600000).length >= 10)
       return { success: false, code: 'KASPI_RATE_LIMIT', error: 'Слишком много счетов. Оплатите текущий счёт или попробуйте позже.' };
   }
@@ -309,8 +310,8 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
     userPhone: user.phone,
     amount,
     status: "pending",
-    provider: manualKaspi ? 'kaspi_manual' : paymentProviderName(),
-    ...(manualKaspi ? { kaspiPhone, invoiceStatus: 'requested', kaspiAuto: process.env.MTAXI_KASPI_POS_ENABLED === 'true' && process.env.MTAXI_KASPI_POS_AUTO_INVOICES === 'true' } : {}),
+    provider: links ? 'kaspi_qr' : manualKaspi ? 'kaspi_manual' : paymentProviderName(),
+    ...(manualKaspi ? { kaspiPhone, invoiceStatus: 'requested', kaspiAuto: links || process.env.MTAXI_KASPI_POS_ENABLED === 'true' && process.env.MTAXI_KASPI_POS_AUTO_INVOICES === 'true' } : {}),
     idempotencyKey,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -337,7 +338,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
     };
   }
   store.payments.push(payment);
-  if (manualKaspi) {
+  if (manualKaspi && !links) {
     const { createPushNotificationInStore } = require('./push');
     const queued = createPushNotificationInStore(store, {
       type: 'KASPI_TOPUP_REQUEST', targetRole: 'admin',
@@ -366,7 +367,7 @@ async function createDriverTopUpPaymentInStore(store, data, auth, amount, req, p
     paymentUrl: payment.paymentUrl,
     paymentStatus: payment.status,
     amount,
-    manual: manualKaspi,
+    manual: manualKaspi && !links,
   };
 }
 
@@ -419,6 +420,9 @@ function getDriverTopUpPaymentStatusInStore(store, data, auth) {
     amount: payment.amount,
     paidAt: payment.paidAt || null,
     automatic: payment.kaspiAuto === true,
+    paymentUrl: payment.kaspiAutoError === 'KASPI_INVOICE_UNLINKED' ? '' : payment.paymentUrl || '',
+    paymentProvider: payment.provider,
+    expiresAt: payment.expiresAt || null,
     invoiceStatus: payment.invoiceStatus || null,
     bankState: payment.kaspiPosBankState || null,
     invoiceCreateState: payment.kaspiPosCreateState || null,
@@ -455,7 +459,7 @@ function confirmDriverTopUpPaymentInStore(store, data, auth) {
   if (!payment) return { success: false, code: "PAYMENT_NOT_FOUND", error: "Платеж не найден" };
   if (payment.provider === 'kaspi_qr_test') return { success: false, code: 'TEST_PAYMENT_NO_WALLET', error: 'Тестовая ссылка не пополняет кошелёк.' };
   if (payment.status === 'failed') return { success: false, code: 'PAYMENT_FAILED', error: 'Заявка отклонена' };
-  if (!payment.applied && payment.kaspiPosAttemptId &&
+  if (!payment.applied && (payment.provider === 'kaspi_qr' || payment.kaspiPosAttemptId) &&
       (payment.kaspiPosBankState !== 'paid' || !payment.kaspiPosCheckedAt ||
        Date.now() - Date.parse(payment.kaspiPosCheckedAt) > 120000 ||
        Date.parse(payment.kaspiPosCheckedAt) - Date.now() > 5000 ||
@@ -581,8 +585,8 @@ async function handleDriverTopUpPaymentCallbackAsync(data = {}, req) {
   return withStoreAsync(async (store) => {
     const payment = findPayment(store, paymentId);
     if (!payment) return { success: false, code: "PAYMENT_NOT_FOUND", error: "Платеж не найден" };
-    if (payment.provider === 'kaspi_manual') {
-      return { success: false, code: 'MANUAL_PAYMENT_CONFIRMATION_REQUIRED', error: 'Ручную оплату Kaspi подтверждает администратор' };
+    if (['kaspi_manual','kaspi_qr','kaspi_qr_test'].includes(payment.provider)) {
+      return { success: false, code: 'MANUAL_PAYMENT_CONFIRMATION_REQUIRED', error: 'Оплата Kaspi проверяется по банковской операции; этот callback для неё не используется' };
     }
     if (data.amount != null && asNumber(data.amount) !== asNumber(payment.amount)) {
       return { success: false, code: 'PAYMENT_AMOUNT_MISMATCH', error: 'Сумма оплаты не совпадает со счётом' };

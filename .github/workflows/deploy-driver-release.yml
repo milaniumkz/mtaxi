@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Report queued versus actually sent push notifications accurately; no APK.
+# Use Kaspi payment links for wallet top-ups instead of invoices; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]

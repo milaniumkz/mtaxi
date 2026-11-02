@@ -1,3 +1,5 @@
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart'
+    as launcher;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,24 @@ import 'package:mtaxi/admin/admin_collection/kaspi_payment_actions.dart';
 import 'package:mtaxi/component/select_balance/select_balance_widget.dart';
 import 'design_flow_test.dart' show wrap;
 
+class _TestKaspiLauncher extends launcher.UrlLauncherPlatform {
+  @override
+  final linkDelegate = null;
+  final urls = <String>[];
+  final modes = <launcher.PreferredLaunchMode>[];
+  @override
+  Future<bool> launchUrl(String url, launcher.LaunchOptions options) async {
+    urls.add(url);
+    modes.add(options.mode);
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.getKeys().any((k) =>
+        k.startsWith('mtaxi_topup_') &&
+        (prefs.getString(k) ?? '').contains('wallet-link')))
+      throw StateError('Payment must persist before leaving MTaxi');
+    return true;
+  }
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -19,6 +39,55 @@ void main() {
         version: '1',
         buildNumber: '1',
         buildSignature: '');
+  });
+  testWidgets(
+      'top up opens Kaspi link once and checks balance on return without reopening payment',
+      (tester) async {
+    final previous = launcher.UrlLauncherPlatform.instance;
+    final fake = _TestKaspiLauncher();
+    launcher.UrlLauncherPlatform.instance = fake;
+    var paid = false;
+    try {
+      await http.runWithClient(() async {
+        await tester.pumpWidget(
+            wrap(const Scaffold(body: SelectBalanceWidget(passenger: true))));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).at(0), '+77019990001');
+        await tester.enterText(find.byType(TextField).at(1), '700');
+        await tester.ensureVisible(find.text('Пополнить баланс'));
+        await tester.tap(find.text('Пополнить баланс'));
+        await tester.pumpAndSettle();
+        expect(fake.urls, ['https://pay.kaspi.kz/pay/wallet-link']);
+        expect(fake.modes.single,
+            launcher.PreferredLaunchMode.externalApplication);
+        paid = true;
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Деньги зачислены'), findsOneWidget);
+        expect(fake.urls.length, 1);
+        await tester.pumpWidget(const SizedBox());
+      },
+          () => MockClient((request) async {
+                if (request.url.path.endsWith('createPassengerTopUpPayment'))
+                  expect(
+                      (jsonDecode(request.body) as Map)['method'], 'kaspi_qr');
+                return http.Response(
+                    jsonEncode({
+                      'success': true,
+                      'paymentId': 'wallet-link',
+                      'paymentProvider': 'kaspi_qr',
+                      'paymentUrl': 'https://pay.kaspi.kz/pay/wallet-link',
+                      'automatic': true,
+                      'paymentStatus': paid ? 'success' : 'pending',
+                      'bankState': paid ? 'paid' : 'pending',
+                      'invoiceStatus': 'sent'
+                    }),
+                    200);
+              }));
+    } finally {
+      launcher.UrlLauncherPlatform.instance = previous;
+    }
   });
   testWidgets(
       'test link restores after reload and automatically changes pending to paid',
@@ -90,8 +159,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).at(0), '+77019990001');
         await tester.enterText(find.byType(TextField).at(1), '500');
-        await tester.ensureVisible(find.text('Выставить счёт Kaspi'));
-        await tester.tap(find.text('Выставить счёт Kaspi'));
+        await tester.ensureVisible(find.text('Пополнить баланс'));
+        await tester.tap(find.text('Пополнить баланс'));
         await tester.pumpAndSettle();
         expect(find.textContaining('Счёт выставлен'), findsOneWidget);
         await tester.tap(find.text('Проверить оплату'));

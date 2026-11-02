@@ -56,6 +56,38 @@ function createKaspiService(options = {}) {
     try { admin(auth); return await fn(data, auth); }
     catch (error) { return fail(error instanceof KaspiError ? error.code : 'KASPI_OPERATION_FAILED', error instanceof KaspiError ? error.bankCode : ''); }
   };
+  async function checkQr(state, p) {
+    const session = sessionOf(state);
+      const bank = protocol(state.identity);
+      let bankState;
+      try {
+        const result = await bank.testLinkStatus(session, p.kaspiPosOperationId);
+        const reportedId = result.QrOperationId ?? result.Id;
+        if (reportedId != null && String(reportedId) !== '0' && String(reportedId) !== p.kaspiPosOperationId) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
+        if (result.Status === 'Processed') {
+          if (String(reportedId) !== p.kaspiPosOperationId) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
+          let amount = bankAmount(result.Amount);
+          if (result.Amount == null) {
+            const details = await bank.qrOperationDetails(session, p.kaspiPosOperationId);
+            if (String(details.QrOperationId ?? details.Id) !== p.kaspiPosOperationId || String(details.OrganizationIdn) !== session.organizationIin) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
+            amount = bankAmount(details.Amount);
+          }
+          if (amount !== Number(p.amount)) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
+        }
+        bankState = ({ Processed: 'paid', QrTokenCreated: 'pending', Wait: 'pending', QrTokenDiscarded: 'expired', Expired: 'expired', Cancelled: 'cancelled',
+          CancelledByUser: 'cancelled', NotConfirmedByUser: 'cancelled', CancelledByExternalSource: 'cancelled', ProcessingFailed: 'failed', Rejected: 'failed', InsufficientFunds: 'failed', InsufficientFundsError: 'failed', Error: 'failed' })[result.Status] || 'unknown';
+      } catch (error) {
+        await store.withStoreAsync(s => { const current = s.payments.find(x => x.paymentId === p.paymentId); current.kaspiPosBankState = 'unverified'; current.kaspiPosCheckedAt = new Date(now()).toISOString(); });
+        throw error;
+      }
+      await store.withStoreAsync(s => {
+        const current = s.payments.find(x => x.paymentId === p.paymentId);
+        current.kaspiPosBankState = bankState; current.kaspiPosCheckedAt = new Date(now()).toISOString();
+        if (p.provider === 'kaspi_qr_test' && bankState === 'paid') { current.status = 'success'; current.paidAt ||= current.kaspiPosCheckedAt; }
+        if (p.provider === 'kaspi_qr_test' && ['cancelled','failed','expired'].includes(bankState) && current.status !== 'success') current.status = 'failed';
+      });
+      return { success: true, bankState, amount: p.amount };
+  }
   return {
     getStatus: guarded(async (_, auth) => {
       if (!enabled()) return { success: true, status: status(null, auth) };
@@ -114,6 +146,41 @@ function createKaspiService(options = {}) {
       await store.withStoreAsync(s => audit(s, auth, 'kaspiPosDisconnect', null));
       return { success: true, status: status(state, auth) };
     })),
+    createPaymentLink: guarded((data, auth) => exclusive(async () => {
+      const state = load(), session = sessionOf(state);
+      const reserved = await store.withStoreAsync(s => {
+        const p = s.payments.find(p => p.paymentId === data.paymentId);
+        if (!p || p.provider !== 'kaspi_qr' || p.status !== 'pending' || p.applied) throw new KaspiError('PAYMENT_NOT_PENDING');
+        if (p.kaspiPosOperationId && (p.kaspiPosOrganizationId !== session.organizationId || p.kaspiPosOrganizationIin !== session.organizationIin)) throw new KaspiError('KASPI_INVOICE_UNLINKED');
+        if (p.kaspiPosOperationId && p.paymentUrl) return { existing: true, ...p };
+        if (p.kaspiPosAttemptId) throw new KaspiError('KASPI_INVOICE_UNCERTAIN');
+        if (!Number.isFinite(p.amount) || p.amount < 1 || p.amount > 1000000 || Math.abs(p.amount * 100 - Math.round(p.amount * 100)) > 0.00001) throw new KaspiError('KASPI_AMOUNT_INVALID');
+        p.kaspiPosAttemptId = crypto.randomUUID(); p.kaspiPosCreateState = 'creating';
+        p.kaspiPosOrganizationId = session.organizationId; p.kaspiPosOrganizationIin = session.organizationIin;
+        audit(s, auth, 'kaspiWalletLinkRequested', p, { amount: p.amount }); return { ...p };
+      });
+      if (reserved.existing) return { success: true, paymentUrl: reserved.paymentUrl, paymentId: reserved.paymentId };
+      let result;
+      try { result = await protocol(state.identity).createPaymentLink(session, reserved, data); }
+      catch (error) {
+        await store.withStoreAsync(s => { const p = s.payments.find(p => p.paymentId === reserved.paymentId); p.kaspiPosCreateState = 'unknown'; });
+        return fail('KASPI_INVOICE_UNCERTAIN', error instanceof KaspiError ? error.bankCode || error.code : '');
+      }
+      let duplicate = false;
+      await store.withStoreAsync(s => {
+        const p = s.payments.find(p => p.paymentId === reserved.paymentId);
+        if (s.payments.some(other => other.paymentId !== p.paymentId && other.kaspiPosOperationId === result.operationId && other.kaspiPosOrganizationId === session.organizationId)) { p.kaspiPosCreateState = 'unknown'; duplicate = true; return; }
+        Object.assign(p, { paymentUrl: result.paymentUrl, expiresAt: result.expiresAt, kaspiPosOperationId: result.operationId, kaspiPosCreateState: 'sent', kaspiPosBankState: 'pending', invoiceStatus: 'sent' });
+        audit(s, auth, 'kaspiWalletLinkCreated', p, { amount: p.amount, operationId: result.operationId });
+      });
+      return duplicate ? fail('KASPI_PAYMENT_BINDING_MISMATCH') : { success: true, paymentId: reserved.paymentId, paymentUrl: result.paymentUrl };
+    })),
+    checkPaymentLink: guarded((data, auth) => exclusive(async () => {
+      const state = load(), session = sessionOf(state), snapshot = await store.readStoreAsync();
+      const p = snapshot.payments.find(p => p.paymentId === data.paymentId && p.provider === 'kaspi_qr');
+      if (!p?.kaspiPosOperationId || p.kaspiPosOrganizationId !== session.organizationId || p.kaspiPosOrganizationIin !== session.organizationIin) throw new KaspiError('KASPI_INVOICE_UNLINKED');
+      return checkQr(state, p);
+    })),
     testLink: guarded((data, auth) => exclusive(async () => {
       const state = load(), session = sessionOf(state);
       if (data.confirm !== true || !/^[a-zA-Z0-9-]{16,80}$/.test(data.requestId || '')) throw new KaspiError('KASPI_INVOICE_CONFIRM_REQUIRED');
@@ -143,35 +210,7 @@ function createKaspiService(options = {}) {
       const state = load(), session = sessionOf(state), snapshot = await store.readStoreAsync();
       const p = snapshot.payments.find(p => p.paymentId === data.paymentId && p.provider === 'kaspi_qr_test');
       if (!p?.kaspiPosOperationId || p.kaspiPosOrganizationId !== session.organizationId || p.kaspiPosOrganizationIin !== session.organizationIin) throw new KaspiError('KASPI_INVOICE_UNLINKED');
-      const bank = protocol(state.identity);
-      let bankState;
-      try {
-        const result = await bank.testLinkStatus(session, p.kaspiPosOperationId);
-        const reportedId = result.QrOperationId ?? result.Id;
-        if (reportedId != null && String(reportedId) !== '0' && String(reportedId) !== p.kaspiPosOperationId) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
-        if (result.Status === 'Processed') {
-          if (String(reportedId) !== p.kaspiPosOperationId) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
-          let amount = bankAmount(result.Amount);
-          if (result.Amount == null) {
-            const details = await bank.qrOperationDetails(session, p.kaspiPosOperationId);
-            if (String(details.QrOperationId ?? details.Id) !== p.kaspiPosOperationId || String(details.OrganizationIdn) !== session.organizationIin) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
-            amount = bankAmount(details.Amount);
-          }
-          if (amount !== 100) throw new KaspiError('KASPI_PAYMENT_BINDING_MISMATCH');
-        }
-        bankState = ({ Processed: 'paid', QrTokenCreated: 'pending', Wait: 'pending', QrTokenDiscarded: 'expired', Expired: 'expired', Cancelled: 'cancelled',
-          CancelledByUser: 'cancelled', NotConfirmedByUser: 'cancelled', CancelledByExternalSource: 'cancelled', ProcessingFailed: 'failed', Rejected: 'failed', InsufficientFunds: 'failed', InsufficientFundsError: 'failed', Error: 'failed' })[result.Status] || 'unknown';
-      } catch (error) {
-        await store.withStoreAsync(s => { const current = s.payments.find(x => x.paymentId === p.paymentId); current.kaspiPosBankState = 'unverified'; current.kaspiPosCheckedAt = new Date(now()).toISOString(); });
-        throw error;
-      }
-      await store.withStoreAsync(s => {
-        const current = s.payments.find(x => x.paymentId === p.paymentId);
-        current.kaspiPosBankState = bankState; current.kaspiPosCheckedAt = new Date(now()).toISOString();
-        if (bankState === 'paid') { current.status = 'success'; current.paidAt ||= current.kaspiPosCheckedAt; }
-        if (['cancelled','failed','expired'].includes(bankState) && current.status !== 'success') current.status = 'failed';
-      });
-      return { success: true, bankState, amount: 100 };
+      return checkQr(state, p);
     })),
     sendInvoice: guarded((data, auth) => exclusive(async () => {
       if (data.confirm !== true) throw new KaspiError('KASPI_INVOICE_CONFIRM_REQUIRED');
