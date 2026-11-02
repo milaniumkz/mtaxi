@@ -267,7 +267,10 @@ function publicNotification(store, notification) {
   const deliveries = (store.notificationDeliveries || [])
     .filter((item) => item.notificationId === notification.id);
   const failed = deliveries.filter((item) => item.status === "failed").length;
-  const sent = deliveries.filter((item) => item.status !== "failed").length;
+  const sent = deliveries.filter((item) => item.status === 'sent').length;
+  const queued = deliveries.filter((item) => item.status === 'queued').length;
+  const cancelled = deliveries.filter((item) => item.status === 'cancelled').length;
+  const acks = (store.pushDeliveryAcks || []).filter(item => item.notificationId === notification.id);
   return {
     id: notification.id,
     notification_title: notification.title || "",
@@ -276,7 +279,10 @@ function publicNotification(store, notification) {
     parameter_data: notification.parameterData || {},
     target_role: notification.targetRole || "all",
     target_audience: notification.targetDeviceType || "All",
-    status: failed > 0 && sent > 0 ? "partial" : failed > 0 ? "failed" : "succeeded",
+    status: queued > 0 ? 'started' : failed > 0 && sent > 0 ? 'partial' : failed > 0 ? 'failed' : sent > 0 ? 'succeeded' : cancelled > 0 ? 'cancelled' : 'no_devices',
+    num_queued: queued,
+    num_received: new Set(acks.filter(a => ['received','opened'].includes(a.eventType)).map(a => a.userId)).size,
+    num_opened: new Set(acks.filter(a => a.eventType === 'opened').map(a => a.userId)).size,
     created_at: notification.createdAt || null,
     error: notification.error || "",
     num_sent: sent,
@@ -358,7 +364,8 @@ function adminQueueBroadcastInStore(store, data, auth, { title, body }) {
       notificationId: queued.notificationId,
       numTargetUsers: targetUsers.length,
       numTargetTokens: queued.numTargetTokens || 0,
-      numSent: queued.numTargetTokens || 0,
+      numSent: 0,
+      numQueued: queued.numTargetTokens || 0,
       numFailed: 0,
       numChatMessages,
       notification: notification ? publicNotification(store, notification) : null,

@@ -9,6 +9,16 @@ const store = require(process.cwd() + '/src/store');
   console.log(JSON.stringify({ diagnostic: 'PUSH_RUNTIME_COUNTS', fcmEnabled: process.env.MTAXI_FCM_ENABLED === 'true', credentialConfigured: !!(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
     activeDevices: active.reduce((counts,t) => { const kind = ['android','ios','web'].includes(String(t.deviceType).toLowerCase()) ? String(t.deviceType).toLowerCase() : 'other'; counts[kind] = (counts[kind] || 0) + 1; return counts; }, {}),
     deliveries: (snapshot.notificationDeliveries || []).reduce((counts,d) => { const key = ['queued','sent','received','failed','delivered','acknowledged'].includes(d.status) ? d.status : 'other'; counts[key]=(counts[key]||0)+1; return counts; }, {}) }));
+  const selfTest = (snapshot.notifications || []).find(n => n.dedupeKey === 'paid-qr-delivery-test-0d719302');
+  if (selfTest) {
+    const deliveries = (snapshot.notificationDeliveries || []).filter(d => d.notificationId === selfTest.id);
+    const acks = (snapshot.pushDeliveryAcks || []).filter(a => a.notificationId === selfTest.id);
+    console.log(JSON.stringify({ diagnostic: 'PAYMENT_SELF_PUSH_TEST', targetDevices: deliveries.length,
+      states: deliveries.reduce((counts,d) => { const key = ['sent','queued','failed','cancelled'].includes(d.status) ? d.status : 'other'; counts[key]=(counts[key]||0)+1; return counts; }, {}),
+      providerMessageIds: deliveries.filter(d => !!d.messageId).length,
+      errorCodes: [...new Set(deliveries.map(d => d.errorCode).filter(v => typeof v === 'string' && /^[a-zA-Z0-9_/-]{1,100}$/.test(v)))],
+      received: acks.filter(a => a.eventType === 'received').length, opened: acks.filter(a => a.eventType === 'opened').length }));
+  }
   const user = snapshot.users.find(u => u.role === 'admin' && !u.blocked);
   if (!user) throw Error('Active admin required');
   const service = createKaspiService({ protocolFactory: identity => {

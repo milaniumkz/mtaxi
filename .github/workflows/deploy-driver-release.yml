@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Verify paid QR from bank details, restore/poll status and notify wallet credit; no APK.
+# Report queued versus actually sent push notifications accurately; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]

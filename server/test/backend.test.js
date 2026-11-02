@@ -6609,7 +6609,9 @@ test("admin broadcast queues local push notifications and lists history", async 
   assert.equal(history.notifications[0].notification_title, "Проверка");
   assert.equal(history.notifications[0].target_role, "driver");
   assert.equal(history.notifications[0].target_audience, "iOS");
-  assert.equal(history.notifications[0].num_sent, 1);
+  assert.equal(history.notifications[0].num_sent, 0);
+  assert.equal(history.notifications[0].num_queued, 1);
+  assert.equal(history.notifications[0].status, 'started');
   assert.equal(history.notifications[0].num_chat_messages, 1);
   assert.equal(readStore().chatMessages.length, 1);
 });
