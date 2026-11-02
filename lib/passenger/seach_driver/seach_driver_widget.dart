@@ -1242,6 +1242,7 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                     PassengerOffers(
+                                        passengerPrice: visibleOrder.price,
                                         orderDocPath:
                                             visibleOrder.reference.path),
                                     _buildOrderInfoCard(

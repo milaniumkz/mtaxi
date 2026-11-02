@@ -179,8 +179,10 @@ class _OfferPriceDialogState extends State<_OfferPriceDialog> {
 }
 
 class PassengerOffers extends StatefulWidget {
-  const PassengerOffers({super.key, required this.orderDocPath});
+  const PassengerOffers(
+      {super.key, required this.orderDocPath, this.passengerPrice});
   final String orderDocPath;
+  final num? passengerPrice;
   @override
   State<PassengerOffers> createState() => _PassengerOffersState();
 }
@@ -263,6 +265,7 @@ class _PassengerOffersState extends State<PassengerOffers> {
             padding: const EdgeInsets.all(22),
             child: DriverOfferCard(
                 offer: offer,
+                passengerPrice: widget.passengerPrice,
                 onAccept: () {
                   if (decided) return;
                   decided = true;
@@ -345,8 +348,9 @@ class _PassengerOffersState extends State<PassengerOffers> {
                       subtitle: Text(offer['etaMinutes'] == null
                           ? tr('Время подачи уточняется',
                               'Келу уақыты нақтылануда')
-                          : tr('До вас ≈${offer['etaMinutes']} мин',
-                              'Сізге дейін ≈${offer['etaMinutes']} мин')),
+                          : tr(
+                              'Подача примерно через ${offer['etaMinutes']} мин',
+                              'Шамамен ${offer['etaMinutes']} минуттан кейін келеді')),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => _show(offer),
                     )

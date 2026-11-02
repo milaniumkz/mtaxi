@@ -238,7 +238,7 @@ class _TripNavigationState extends State<TripNavigation>
             _step = _steps.length > 1 ? 1 : 0;
             final duration = result['durationSeconds'];
             _message = duration is num && duration.isFinite && duration >= 0
-                ? '${status < 4 ? 'До посадки' : 'До назначения'} ≈ ${(duration / 60).ceil()} мин · без учёта пробок'
+                ? '${status < 4 ? 'До посадки' : 'До назначения'} примерно ${(duration / 60).ceil()} мин · без учёта пробок'
                 : 'Маршрут построен. Время уточняется';
           });
           if (_ready && !widget.isDriver && points.length > 1)

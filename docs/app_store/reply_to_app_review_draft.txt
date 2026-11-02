@@ -2,6 +2,6 @@ SUPERSEDED — DO NOT SEND THIS SHORT LETTER.
 
 The original rejection supplied by the owner explicitly cites both 4.3 and 4.2.6 and asks nine questions in full before any resubmission. A short request to clarify 4.3(a)/(b) is no longer sufficient.
 
-Use response_to_nine_questions_DRAFT.md as the working document. It is not ready to send: facts about the content provider/account holder, real beta testing, source provenance, market gap, and why consolidation is unsuitable require owner confirmation. Do not invent those facts or represent repository tests as an iOS/TestFlight beta.
+Use APPLE_REPLY_EN.md as the complete working response and MAC_EXECUTION_PROMPT_RU.md for execution. Ownership of the account, IP Milanium and service has now been confirmed by the owner. Real beta history, source provenance, market evidence and the substantive consolidation rationale must still be verified before finalizing the response. Do not invent those facts or represent repository tests as an iOS/TestFlight beta.
 
 Known submission: MTaxi.kz, Apple ID 6826563434, version 1.3.1, build 66. Taxi 24 Apple ID: 6761094545. No reply or new build has been sent to Apple by this workspace.

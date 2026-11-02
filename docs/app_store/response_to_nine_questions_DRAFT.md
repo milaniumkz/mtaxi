@@ -1,3 +1,5 @@
+> Superseded working notes. Use APPLE_REPLY_EN.md and MAC_EXECUTION_PROMPT_RU.md for execution. Ownership has now been confirmed by the owner.
+
 # MTaxi.kz 1.3.1 (66): draft response to Apple’s nine questions
 
 **NOT READY TO SEND.** Owner confirmations are marked below. Do not replace missing facts with guesses. Do not resubmit a binary while the review team is requesting these answers. The existing short clarification letter does not answer this questionnaire and should not be sent instead.
@@ -64,7 +66,7 @@ The current repository includes FlutterFlow-generated code/helpers. Using a gene
 
 The service documents identify the operator as IP Milanium, Kazakhstan, IIN 970905350621, with support contact milaniumkz@yandex.kz. Taxi 24's public App Store seller is Dmitriy Shtrakhov.
 
-**OWNER CONFIRMATION REQUIRED:** is the Apple Developer account holder the same person who owns/operates IP Milanium and provides MTaxi's actual service, concept and content? If yes, state that relationship accurately and offer appropriate business documentation through Apple's requested secure channel. Do not claim a company/organization enrollment if this is an individual account.
+Owner confirmed on 2 November 2026 that the Apple Developer account, IP Milanium, service and application are his. MTaxi is not a submission on behalf of another client. Use that confirmed fact in the response; offer supporting documentation through Apple's requested secure channel if requested. Do not claim organization enrollment merely because an individual account holder owns an individual entrepreneurship.
 
 If MTaxi belongs to a different client/provider, identify the provider and the actual account relationship. For a commercial-template/generated app, Apple specifically requires direct submission by the content provider; a commissioned project or separate app branding alone does not answer this. An ownership/account change should reflect the true provider and Apple's transfer/enrollment requirements, not an attempt to avoid review history.
 

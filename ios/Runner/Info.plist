@@ -68,8 +68,6 @@
     <string>MTaxi uses the photo library so you can choose and attach a photo of an address, luggage, a found item, a receipt, or another situation that needs to be sent to the driver or operator.</string>
 	<key>PermissionGroupNotification</key>
     <string>Получение уведомлений</string>
-	<key>NSCalendarsUsageDescription</key>
-    <string>Выбор даты рождения</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>fetch</string>

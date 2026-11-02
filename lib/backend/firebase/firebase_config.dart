@@ -38,7 +38,9 @@ Future<void> initFirebase() async {
       appId: appId,
       messagingSenderId: senderId,
       projectId: firebaseProjectId,
-    ));
+    )).timeout(const Duration(seconds: 6));
+    // Optional web push must not leave the app on its splash screen when
+    // the external SDK cannot load. Callers handle timeout and keep working.
   } else {
     final app = await Firebase.initializeApp();
     if (app.options.projectId != firebaseProjectId) {
