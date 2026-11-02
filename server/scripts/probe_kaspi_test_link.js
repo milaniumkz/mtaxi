@@ -40,6 +40,17 @@ const store = require(process.cwd() + '/src/store');
         for (const child of Object.values(value)) if (child && typeof child === 'object') visit(child, depth + 1);
       };
       visit(reply.body?.Data);
+      for (const candidate of candidates) {
+        const p = unresolved.find(p => p.paymentId === candidate.paymentId);
+        if (!p || !candidate.operationId) continue;
+        const details = await bank.invoiceDetails(session, String(candidate.operationId));
+        const phone10 = value => String(value || '').replace(/\D/g,'').slice(-10);
+        console.log(JSON.stringify({ diagnostic: 'UNRESOLVED_INVOICE_DETAILS', paymentId: p.paymentId, dataKeys: Object.keys(details),
+          operationMatches: String(details.Id ?? details.QrOperationId) === String(candidate.operationId),
+          status: details.Status, amount: typeof details.Amount === 'number' ? details.Amount : String(details.Amount || '').replace(/[^0-9., +-]/g,''),
+          phoneMatches: !!details.ClientMobile && phone10(details.ClientMobile) === phone10(p.kaspiPhone),
+          organizationMatches: p.kaspiPosOrganizationId === session.organizationId && p.kaspiPosOrganizationIin === session.organizationIin }));
+      }
       console.log(JSON.stringify({ diagnostic: 'UNRESOLVED_INVOICE_HISTORY', unresolvedCount: unresolved.length, historyKeys: reply.body?.Data && typeof reply.body.Data === 'object' ? Object.keys(reply.body.Data) : [], candidates }));
     };
     const status = bank.testLinkStatus.bind(bank);
