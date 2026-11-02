@@ -262,5 +262,5 @@ test('test link transport uses fixed amount and only returns a bank HTTPS paymen
   const session = { tokenSN: 'FIXTURE', secretB64: Buffer.alloc(32).toString('base64'), profileId: '12' };
   assert.equal((await client.createTestLink(session, { amount: 9999 })).paymentUrl, 'https://pay.kaspi.kz/pay/fixture'); assert.equal(body.PaymentAmount, 100); assert.equal(body.Latitude, undefined);
   client.fetchImpl = async () => new Response(JSON.stringify({ Data: { QrOperationId: 987, Amount: 100, QrToken: 'https://untrusted.example/pay' } }), { status: 200 });
-  await assert.rejects(() => client.createTestLink(session), /KASPI_INVOICE_RESPONSE_UNCERTAIN/);
+  await assert.rejects(() => client.createTestLink(session), /KASPI_QR_URL_INVALID/);
 });

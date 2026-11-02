@@ -127,7 +127,7 @@ function createKaspiService(options = {}) {
       if (reserved.paymentUrl) return { success: true, paymentId: id, paymentUrl: reserved.paymentUrl, amount: 100, expiresAt: reserved.expiresAt };
       let result;
       try { result = await protocol(state.identity).createTestLink(session, data); }
-      catch (error) { await store.withStoreAsync(s => { s.payments.find(p => p.paymentId === id).kaspiPosCreateState = 'unknown'; }); return fail('KASPI_INVOICE_UNCERTAIN', error.bankCode || ''); }
+      catch (error) { const diagnostic = error instanceof KaspiError ? error.bankCode || error.code : 'KASPI_OPERATION_FAILED'; await store.withStoreAsync(s => { const p = s.payments.find(p => p.paymentId === id); p.kaspiPosCreateState = 'unknown'; p.kaspiTestError = diagnostic; }); return fail('KASPI_INVOICE_UNCERTAIN', diagnostic); }
       await store.withStoreAsync(s => { const p = s.payments.find(p => p.paymentId === id); Object.assign(p, result, { kaspiPosOperationId: result.operationId, kaspiPosCreateState: 'sent' }); });
       return { success: true, paymentId: id, ...result, amount: 100 };
     })),

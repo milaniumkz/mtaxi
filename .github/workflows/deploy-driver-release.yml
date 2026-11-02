@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Automatically issue and reconcile user-requested Kaspi invoices; no APK.
+# Validate QR response variants and expose safe bank diagnostic codes; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]
