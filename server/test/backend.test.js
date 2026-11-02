@@ -9,6 +9,10 @@ const { spawnSync } = require("child_process");
 process.env.MTAXI_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "mtaxi-backend-test-"));
 process.env.MTAXI_UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "mtaxi-upload-test-"));
 process.env.MTAXI_ACCESS_LOGS = "false";
+// index.js loads dotenv: never inherit a developer's real payment provider in
+// these isolated JSON-store tests, even when npm runs from server/.
+process.env.NODE_ENV = "test";
+process.env.MTAXI_PAYMENT_PROVIDER = "local";
 
 const {
   passwordLogin,
