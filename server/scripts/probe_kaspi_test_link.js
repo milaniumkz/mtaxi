@@ -5,6 +5,10 @@ const store = require(process.cwd() + '/src/store');
 (async () => {
   if (process.env.MTAXI_QR_PROBE_READ_ONLY !== 'true') throw Error('Read-only diagnostic required');
   const snapshot = await store.readStoreAsync();
+  const active = (snapshot.fcmTokens || []).filter(t => !t.disabled);
+  console.log(JSON.stringify({ diagnostic: 'PUSH_RUNTIME_COUNTS', fcmEnabled: process.env.MTAXI_FCM_ENABLED === 'true', credentialConfigured: !!(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
+    activeDevices: active.reduce((counts,t) => { const kind = ['android','ios','web'].includes(String(t.deviceType).toLowerCase()) ? String(t.deviceType).toLowerCase() : 'other'; counts[kind] = (counts[kind] || 0) + 1; return counts; }, {}),
+    deliveries: (snapshot.notificationDeliveries || []).reduce((counts,d) => { const key = ['queued','sent','received','failed','delivered','acknowledged'].includes(d.status) ? d.status : 'other'; counts[key]=(counts[key]||0)+1; return counts; }, {}) }));
   const user = snapshot.users.find(u => u.role === 'admin' && !u.blocked);
   if (!user) throw Error('Active admin required');
   const service = createKaspiService({ protocolFactory: identity => {
