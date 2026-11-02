@@ -1,0 +1,13 @@
+Draft — for the current discussion, not a claim that a new build was submitted.
+
+Hello App Review team,
+
+Thank you for explaining the concerns under Guideline 4.3.
+
+We acknowledge that MTaxi was initially developed from the same codebase as our Taxi 24 app (Apple ID 6761094545). MTaxi is intended to operate as a separate service. We understand that a different name, service area or backend alone is not sufficient to establish a distinct app experience.
+
+We are verifying that the submitted iOS binary reflects the current MTaxi implementation and comparing the complete user journeys, not only the branding. Before another submission, we will validate the actual iOS build, provide current screenshots and reviewer access, and document the substantive differences with a demonstration video. We will not describe unverified or Android-only features as iOS functionality.
+
+Could you please clarify whether the remaining concern is primarily duplication under 4.3(a), insufficient differentiation under 4.3(b), or both, and identify the principal overlapping workflows if possible? This would help us address the issue in the next submission rather than resubmit the same experience.
+
+Thank you for your guidance.
