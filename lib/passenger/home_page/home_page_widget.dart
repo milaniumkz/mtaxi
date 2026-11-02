@@ -44,14 +44,9 @@ class HomePageWidget extends StatefulWidget {
 }
 
 class _HomePageWidgetState extends State<HomePageWidget> {
-  static const LatLng _fallbackPassengerLocation = LatLng(
-    52.3231,
-    77.1282,
-  );
   late HomePageModel _model;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
-  LatLng? currentUserLocationValue;
   double? _intercityFixedPrice;
   double? _routeDistanceKm;
   bool _creatingOrder = false;
@@ -337,22 +332,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       });
     });
 
-    getCurrentUserLocation(
-      defaultLocation: _fallbackPassengerLocation,
-      cached: true,
-    )
-        .timeout(
-          const Duration(seconds: 6),
-          onTimeout: () => _fallbackPassengerLocation,
-        )
-        .then(
-          (loc) => safeSetState(
-            () => currentUserLocationValue = loc,
-          ),
-        )
-        .catchError((_) {
-      safeSetState(() => currentUserLocationValue = _fallbackPassengerLocation);
-    });
+    // DeliveryTaxiMap owns permission/GPS handling. A fallback map centre must
+    // never be supplied as an automatically selected passenger pickup.
     _model.commentTextController ??= TextEditingController();
     _model.commentFocusNode ??= FocusNode();
     _model.commentFocusNode!.addListener(() => safeSetState(() {}));
@@ -450,12 +431,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
             priceText: 'от 500 ₸',
             initialServiceType: FFAppState().serviceType,
             cityName: _effectiveCity,
-            initialFromCoords: currentUserLocationValue == null
-                ? null
-                : latlng.LatLng(
-                    currentUserLocationValue!.latitude,
-                    currentUserLocationValue!.longitude,
-                  ),
             initialToCoords: FFAppState().kudaCoords == null
                 ? null
                 : latlng.LatLng(
@@ -544,9 +519,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
             16.0,
             8.0,
             16.0,
-            keyboardInset > 0
-                ? keyboardInset + 8.0
-                : bottomSafeInset + kBottomNavigationBarHeight + 28.0,
+            keyboardInset > 0 ? keyboardInset + 8.0 : bottomSafeInset + 8.0,
           ),
           child: FFButtonWidget(
             onPressed: canSubmitOrder

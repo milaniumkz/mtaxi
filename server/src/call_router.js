@@ -1,3 +1,5 @@
+const { kaspiAutomation } = require('./kaspi_pos/automation');
+const { kaspiService } = require('./kaspi_pos');
 const { submitOrderOfferAsync, listOrderOffersAsync, respondOrderOfferAsync, getTripTrackingAsync, rateTripDriverAsync } = require('./order_offers');
 const { createPassengerTopUpPaymentAsync } = require('./payments');
 const {
@@ -92,7 +94,7 @@ const {
   flushQueuedPushDeliveriesAsync,
   ackPushDeliveryAsync,
 } = require("./push");
-const { uploadFileAsync } = require("./media");
+const { uploadFileAsync, downloadFileAsync } = require("./media");
 const { runMaintenanceTasksAsync } = require("./maintenance");
 const {
   forwardGeocodeLookup,
@@ -120,12 +122,22 @@ const blockedUserAllowedCalls = new Set([
 ]);
 
 const handlers = {
+  adminKaspiPosTestLink: async ({data,auth}) => kaspiService().testLink(data,auth),
+  adminKaspiPosCheckTestLink: async ({data,auth}) => kaspiService().checkTestLink(data,auth),
+  adminKaspiPosStatus: async ({data,auth}) => kaspiService().getStatus(data,auth),
+  adminKaspiPosStartLogin: async ({data,auth}) => kaspiService().startLogin(data,auth),
+  adminKaspiPosVerifyLogin: async ({data,auth}) => kaspiService().verifyLogin(data,auth),
+  adminKaspiPosSelectOrganization: async ({data,auth}) => kaspiService().selectOrganization(data,auth),
+  adminKaspiPosCheckConnection: async ({data,auth}) => kaspiService().checkConnection(data,auth),
+  adminKaspiPosDisconnect: async ({data,auth}) => kaspiService().disconnect(data,auth),
+  adminKaspiPosSendInvoice: async ({data,auth}) => kaspiService().sendInvoice(data,auth),
+  adminKaspiPosCheckInvoice: async ({data,auth}) => kaspiService().checkInvoice(data,auth),
   submitOrderOffer: async ({data,auth}) => submitOrderOfferAsync(data,auth),
   listOrderOffers: async ({data,auth}) => listOrderOffersAsync(data,auth),
   respondOrderOffer: async ({data,auth}) => respondOrderOfferAsync(data,auth),
   getTripTracking: async ({data,auth}) => getTripTrackingAsync(data,auth),
   rateTripDriver: async ({data,auth}) => rateTripDriverAsync(data,auth),
-  createPassengerTopUpPayment: async ({data,auth,req}) => createPassengerTopUpPaymentAsync(data,auth,req),
+  createPassengerTopUpPayment: async ({data,auth,req}) => kaspiAutomation().afterCreated(await createPassengerTopUpPaymentAsync(data,auth,req), auth),
   registerWithPassword: async ({ data }) => registerWithPassword(data),
   passwordLogin: async ({ data }) => passwordLogin(data),
   lookupUserByPhone: async ({ data }) => lookupUserByPhone(data),
@@ -199,7 +211,7 @@ const handlers = {
   adminListGenericCollection: async ({ data, auth }) => adminListGenericCollectionAsync(data, auth),
   adminUpsertGenericDocument: async ({ data, auth }) => adminUpsertGenericDocumentAsync(data, auth),
   adminDeleteGenericDocument: async ({ data, auth }) => adminDeleteGenericDocumentAsync(data, auth),
-  createDriverTopUpPayment: async ({ data, auth, req }) => createDriverTopUpPaymentAsync(data, auth, req),
+  createDriverTopUpPayment: async ({ data, auth, req }) => kaspiAutomation().afterCreated(await createDriverTopUpPaymentAsync(data, auth, req), auth),
   getDriverTopUpPaymentStatus: async ({ data, auth }) => getDriverTopUpPaymentStatusAsync(data, auth),
   confirmDriverTopUpPayment: async ({ data, auth }) => confirmDriverTopUpPaymentAsync(data, auth),
   adminMarkKaspiInvoiceSent: async ({ data, auth }) => adminMarkKaspiInvoiceSentAsync(data, auth),
@@ -226,6 +238,7 @@ const handlers = {
   flushQueuedPushDeliveries: async ({ data, auth }) => flushQueuedPushDeliveriesAsync(data, auth),
   ackPushDelivery: async ({ data, auth }) => ackPushDeliveryAsync(data, auth),
   uploadFile: async ({ data, auth, req }) => uploadFileAsync(data, auth, req),
+  downloadFile: async ({ data, auth }) => downloadFileAsync(data, auth),
   runMaintenanceTasks: async ({ data, auth }) => runMaintenanceTasksAsync(data, auth),
   forwardGeocodeLookup: async ({ data }) => forwardGeocodeLookup(data),
   reverseGeocodeLookup: async ({ data }) => reverseGeocodeLookup(data),

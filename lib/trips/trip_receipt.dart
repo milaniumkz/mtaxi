@@ -1,3 +1,4 @@
+import '/trips/payment_summary.dart';
 import '/driver/home_driver/driver_bonus_card.dart';
 import '/design/mtaxi_icon.dart';
 import 'package:flutter/material.dart';
@@ -132,10 +133,7 @@ class _TripReceiptState extends State<_TripReceipt> {
                             'Комиссия учитывается отдельно. Актуальные денежный и бонусный балансы — во вкладке «Счёт».',
                             'Комиссия бөлек есептеледі. Ақша мен бонус теңгерімі «Шот» бөлімінде.')),
                       ] else
-                        Text(order['paymentMode'] == 'wallet'
-                            ? tr('Оплата со счёта приложения',
-                                'Қосымша шотынан төлеу')
-                            : tr('Оплата наличными', 'Қолма-қол төлеу')),
+                        Text(passengerPaymentSummary(order, tr)),
                     ])),
                 if (widget.driver) ...[
                   const SizedBox(height: 16),

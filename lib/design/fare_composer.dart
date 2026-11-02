@@ -1,6 +1,7 @@
 import '/design/mtaxi_icon.dart';
 import 'package:flutter/material.dart';
 import '/flutter_flow/internationalization.dart';
+import '/flutter_flow/flutter_flow_util.dart' show formatAppCurrency;
 import '/trips/passenger_wallet.dart' show FareChoice;
 import 'mtaxi_theme.dart';
 
@@ -116,7 +117,7 @@ class _FareComposerState extends State<FareComposer> {
                       : null,
                   title: Text(tr('Со счёта приложения', 'Қосымша шотынан')),
                   subtitle: Text(widget.user['balance'] is num
-                      ? '${widget.user['balance']} ₸'
+                      ? formatAppCurrency(widget.user['balance'] as num)
                       : tr('Баланс недоступен', 'Теңгерім қолжетімсіз')),
                   secondary: const Icon(Icons.account_balance_wallet_outlined)),
               const Divider(),
@@ -130,8 +131,8 @@ class _FareComposerState extends State<FareComposer> {
                       Text(tr('Использовать бонусы', 'Бонустарды пайдалану')),
                   subtitle: Text(widget.bonus['balance'] is num
                       ? tr(
-                          'Доступно ${widget.bonus['balance']} ₸ · до ${widget.bonus['maxSpendPercent'] ?? '—'}% поездки',
-                          '${widget.bonus['balance']} ₸ бар · сапардың ${widget.bonus['maxSpendPercent'] ?? '—'}%-на дейін')
+                          'Доступно ${formatAppCurrency(widget.bonus['balance'] as num)} · до ${widget.bonus['maxSpendPercent'] ?? '—'}% поездки',
+                          '${formatAppCurrency(widget.bonus['balance'] as num)} бар · сапардың ${widget.bonus['maxSpendPercent'] ?? '—'}%-на дейін')
                       : tr('Бонусы недоступны', 'Бонустар қолжетімсіз'))),
               const SizedBox(height: 12),
               Text(

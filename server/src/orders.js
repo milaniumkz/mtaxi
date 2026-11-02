@@ -1,5 +1,6 @@
 const { reservePassengerBonus, refundPassengerBonus, settlePassengerBonus } = require('./passenger_bonuses');
 const { readStoreAsync, withStoreAsync, newId } = require("./store");
+const { orderScope, feedScope, historyScope, financialOrderScope } = require("./store/scopes");
 const { asDate, asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { addLedger } = require("./payments");
 const { queueOrderPushEventInStore } = require("./push");
@@ -215,7 +216,7 @@ async function createPassengerOrderAsync(data = {}, auth) {
     return { success: false, code: "ORDER_INVALID_ROUTE", error: "Заполните маршрут заказа" };
   }
 
-  return withStoreAsync(async (store) => createPassengerOrderInStore(store, data, auth, { type, from, to, city }));
+  return withStoreAsync(async (store) => createPassengerOrderInStore(store, data, auth, { type, from, to, city }), financialOrderScope("", auth.user.id));
 }
 
 function createPassengerOrderInStore(store, data, auth, { type, from, to, city }) {
@@ -511,7 +512,7 @@ async function getOrderDetailsAsync(data = {}, auth) {
     return { success: false, code: "UNAUTHENTICATED", error: "Пользователь не авторизован" };
   }
   const orderId = docId(data.orderDocPath || data.orderId);
-  return withStoreAsync(async (store) => {
+  return readStoreAsync(orderScope(orderId)).then(async (store) => {
     const order = store.orders.find((item) => item.id === orderId);
     if (!order) return { success: false, code: "ORDER_NOT_FOUND", error: "Заказ не найден" };
     const isOwner = order.userId === auth.user.id || order.driverId === auth.user.id;
@@ -530,7 +531,7 @@ async function listAvailableDriverOrdersAsync(data = {}, auth) {
   const radiusKm = asNumber(data.radiusKm) ?? 10;
   const driverPoint = geoPointFromData(data, "driver") || geoPointFromData(data);
   const limit = Math.max(1, Math.min(200, Math.trunc(asNumber(data.limit) || 100)));
-  return withStoreAsync(async (store) => {
+  return readStoreAsync(feedScope(auth.user.id)).then(async (store) => {
     const driver = store.users.find((user) => user.id === auth.user.id);
     if (!driver) return { success: false, code: "DRIVER_NOT_FOUND", error: "Водитель не найден" };
     const orders = store.orders
@@ -558,7 +559,7 @@ async function listMyOrdersAsync(data = {}, auth) {
   }
   const includeClosed = data.includeClosed === true;
   const limit = Math.max(1, Math.min(200, Math.trunc(asNumber(data.limit) || 50)));
-  return withStoreAsync(async (store) => {
+  return readStoreAsync(historyScope(auth.user.id)).then(async (store) => {
     const orders = store.orders
       .filter((order) => order.userId === auth.user.id || order.driverId === auth.user.id)
       .filter((order) => includeClosed || isActivePassengerOrder(order))
@@ -577,7 +578,7 @@ async function adminListOrdersAsync(data = {}, auth) {
   const driverId = docId(data.driverDocPath || data.driverId);
   const query = normalizeString(data.query).toLowerCase();
   const limit = Math.max(1, Math.min(500, Math.trunc(asNumber(data.limit) || 200)));
-  return withStoreAsync(async (store) => {
+  return readStoreAsync({tables:{orders:true}}).then(async (store) => {
     const orders = store.orders
       .filter((order) => statusFilter == null || Number(order.status) === statusFilter)
       .filter((order) => !userId || order.userId === userId)
@@ -728,7 +729,7 @@ async function acceptOrderAsync(data = {}, auth) {
     return { success: false, accepted: false, code: "ORDER_NOT_FOUND", error: "Заказ не найден" };
   }
 
-  return withStoreAsync(async (store) => acceptOrderInStore(store, auth, orderId));
+  return withStoreAsync(async (store) => acceptOrderInStore(store, auth, orderId), financialOrderScope(orderId, auth.user.id));
 }
 
 function acceptOrderInStore(store, auth, orderId) {
@@ -843,7 +844,7 @@ async function cancelPassengerOrderAsync(data = {}, auth) {
     return { success: false, code: "UNAUTHENTICATED", error: "Пользователь не авторизован" };
   }
   const orderId = docId(data.orderDocPath || data.orderId);
-  return withStoreAsync(async (store) => cancelPassengerOrderInStore(store, auth, orderId));
+  return withStoreAsync(async (store) => cancelPassengerOrderInStore(store, auth, orderId), financialOrderScope(orderId, auth.user.id));
 }
 
 function cancelPassengerOrderInStore(store, auth, orderId) {
@@ -915,7 +916,7 @@ async function advanceDriverOrderStatusAsync(data = {}, auth) {
     return { success: false, code: "ORDER_INVALID_STATUS", error: "Некорректный статус заказа" };
   }
 
-  return withStoreAsync(async (store) => advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus));
+  return withStoreAsync(async (store) => advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus), financialOrderScope(orderId, auth.user.id));
 }
 
 function advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus) {

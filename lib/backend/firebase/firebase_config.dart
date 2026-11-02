@@ -8,10 +8,11 @@ const firebaseProjectId = String.fromEnvironment(
 const firebaseWebVapidKey = String.fromEnvironment('FIREBASE_WEB_VAPID_KEY');
 const firebaseWebPushEnabled =
     bool.fromEnvironment('FIREBASE_WEB_PUSH_ENABLED') &&
-        firebaseWebVapidKey != '' &&
         String.fromEnvironment('FIREBASE_WEB_API_KEY') != '' &&
         String.fromEnvironment('FIREBASE_WEB_APP_ID') != '' &&
         String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID') != '';
+
+bool get firebasePushInitialized => Firebase.apps.isNotEmpty;
 
 Future<void> initFirebase() async {
   if (Firebase.apps.isNotEmpty) {
@@ -37,7 +38,9 @@ Future<void> initFirebase() async {
       appId: appId,
       messagingSenderId: senderId,
       projectId: firebaseProjectId,
-    ));
+    )).timeout(const Duration(seconds: 6));
+    // Optional web push must not leave the app on its splash screen when
+    // the external SDK cannot load. Callers handle timeout and keep working.
   } else {
     final app = await Firebase.initializeApp();
     if (app.options.projectId != firebaseProjectId) {

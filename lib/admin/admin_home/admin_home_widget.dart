@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import 'package:flutter/material.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
@@ -9,6 +10,7 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
 import '/admin/admin_utils.dart';
 import 'kaspi_requests_banner.dart';
+import 'kaspi_pos_connection_card.dart';
 import '/backend/push_notifications/web_push_button.dart';
 
 const _mtaxiPageBg = Color(0xFF12051B);
@@ -409,7 +411,7 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
                             _driverReviewValue(data, ['password']),
                           ),
                           _buildDriverReviewImageRow(
-                            'Фото профиля/авто',
+                            'Фото автомобиля',
                             _driverReviewImageValue(
                                 data, ['avtoImage', 'photo_url']),
                             candidates: vehicleImageCandidates,
@@ -985,6 +987,7 @@ class _AdminHomeWidgetState extends State<AdminHomeWidget> {
           const SizedBox(height: 18),
           _buildDashboard(context),
           const KaspiRequestsBanner(),
+          const KaspiPosConnectionCard(),
           const WebPushButton(),
           const SizedBox(height: 16),
           _buildDriverReviewSection(context),
@@ -2121,7 +2124,7 @@ class _DriverReviewImagePreviewState extends State<_DriverReviewImagePreview> {
         width: double.infinity,
         height: 240,
         color: const Color(0xFFF2F4F7),
-        child: Image.network(
+        child: MTaxiNetworkImage(
           imageUrl,
           fit: BoxFit.cover,
           loadingBuilder: (context, child, loadingProgress) {

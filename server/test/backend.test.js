@@ -9,6 +9,10 @@ const { spawnSync } = require("child_process");
 process.env.MTAXI_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "mtaxi-backend-test-"));
 process.env.MTAXI_UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "mtaxi-upload-test-"));
 process.env.MTAXI_ACCESS_LOGS = "false";
+// index.js loads dotenv: never inherit a developer's real payment provider in
+// these isolated JSON-store tests, even when npm runs from server/.
+process.env.NODE_ENV = "test";
+process.env.MTAXI_PAYMENT_PROVIDER = "local";
 
 const {
   passwordLogin,
@@ -383,7 +387,10 @@ test("Firebase Admin is used only as FCM push transport", () => {
         "admin.storage",
         "getStorage",
       ]) {
-        if (source.includes(forbidden)) {
+        // Match an identifier, not a prefix: crypto.getAuthTag is AES-GCM,
+        // whereas getAuth is the forbidden Firebase Auth entrypoint.
+        const marker = new RegExp("\\b" + forbidden.replace(/\./g, "\\.") + "\\b");
+        if (marker.test(source)) {
           offenders.push(`${relative}: ${forbidden}`);
         }
       }
@@ -686,7 +693,9 @@ test("postgres store serializes snapshot writes with advisory transaction lock",
   assert.match(pgStore, /await client\.query\("COMMIT"\)/);
   assert.match(pgStore, /await client\.query\("ROLLBACK"\)/);
   assert.match(pgStore, /async function writeStoreAsync\(store\) \{\s+return withPgTransaction/s);
-  assert.match(pgStore, /async function withStoreAsync\(mutator\) \{\s+return withPgTransaction/s);
+  // Financial/full snapshots remain exclusive; shared user scopes are verified
+  // against real concurrent transactions in postgres_scoped_store.test.js.
+  assert.match(pgStore, /scope\?\.userLockId \? withUserTransaction : withPgTransaction/);
 });
 
 test("store health reports selected local JSON store", async () => {
@@ -5001,7 +5010,7 @@ test("adminSavePolitika saves politica content through backend alias", async () 
   assert.equal(readStore().auditLogs.at(-1).action, "adminUpdateContentDocument");
 });
 
-test("uploadFile stores authenticated media and returns public url", async () => {
+test("uploadFile stores media with persistent ownership metadata", async () => {
   const login = await passwordLogin({
     phone: "7052597368",
     password: "123456",
@@ -5045,8 +5054,11 @@ test("uploadFile stores authenticated media and returns public url", async () =>
   assert.equal(result.success, true);
   assert.match(result.url, /^http:\/\/localhost:8080\/uploads\/.+\.jpg$/);
   const files = fs.readdirSync(process.env.MTAXI_UPLOAD_DIR);
-  assert.equal(files.length, 1);
-  assert.deepEqual(fs.readFileSync(path.join(process.env.MTAXI_UPLOAD_DIR, files[0])), jpegBytes);
+  const media = files.filter(name => !name.endsWith('.owner.json'));
+  assert.equal(media.length, 1);
+  assert.deepEqual(fs.readFileSync(path.join(process.env.MTAXI_UPLOAD_DIR, media[0])), jpegBytes);
+  const metadata = JSON.parse(fs.readFileSync(path.join(process.env.MTAXI_UPLOAD_DIR, media[0]+'.owner.json')));
+  assert.equal(metadata.ownerId, login.user.id);
 });
 
 test("publicBaseUrl uses configured URL or first forwarded proxy values", () => {
@@ -6501,7 +6513,7 @@ test("runMaintenanceTasks expires stale orders and flushes push queue", async ()
   }, { user: admin });
   assert.equal(result.success, true);
   assert.equal(result.expiredOrders.expiredCount, 1);
-  assert.equal(result.push.numSent, 1);
+  assert.equal(result.push.numSent, 0); // Expired orders must not produce new-order alerts.
   assert.equal(readStore().orders.find((item) => item.id === orderId).status, 7);
   assert.equal(readStore().users.find((user) => user.id === passenger.id).hasActivePassengerOrder, false);
 });
@@ -6597,7 +6609,9 @@ test("admin broadcast queues local push notifications and lists history", async 
   assert.equal(history.notifications[0].notification_title, "Проверка");
   assert.equal(history.notifications[0].target_role, "driver");
   assert.equal(history.notifications[0].target_audience, "iOS");
-  assert.equal(history.notifications[0].num_sent, 1);
+  assert.equal(history.notifications[0].num_sent, 0);
+  assert.equal(history.notifications[0].num_queued, 1);
+  assert.equal(history.notifications[0].status, 'started');
   assert.equal(history.notifications[0].num_chat_messages, 1);
   assert.equal(readStore().chatMessages.length, 1);
 });

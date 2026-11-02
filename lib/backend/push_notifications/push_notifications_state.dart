@@ -13,8 +13,11 @@ const _apnsTokenRetryAttempts = 20;
 const _apnsTokenRetryDelay = Duration(milliseconds: 500);
 const _fcmStateSyncMinInterval = Duration(hours: 6);
 
-bool get supportsFcmTokenStateSync =>
-    kIsWeb ? firebaseWebPushEnabled : (Platform.isIOS || Platform.isAndroid);
+bool get supportsFcmTokenStateSync => !firebasePushInitialized
+    ? false
+    : kIsWeb
+        ? firebaseWebPushEnabled
+        : (Platform.isIOS || Platform.isAndroid);
 
 String? get currentFcmDeviceType {
   if (!supportsFcmTokenStateSync) return null;
@@ -65,8 +68,10 @@ Future<void> syncFcmTokenStateForUserPath({
         await Future.delayed(_apnsTokenRetryDelay);
       }
     }
-    final token =
-        await messaging.getToken(vapidKey: kIsWeb ? firebaseWebVapidKey : null);
+    final token = await messaging.getToken(
+        vapidKey: kIsWeb && firebaseWebVapidKey.isNotEmpty
+            ? firebaseWebVapidKey
+            : null);
     final deviceType = currentFcmDeviceType;
     if (token == null || token.isEmpty || deviceType == null) {
       return;

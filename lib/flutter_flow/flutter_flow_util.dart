@@ -27,8 +27,7 @@ export 'dart:math' show min, max;
 export 'dart:typed_data' show Uint8List;
 export 'dart:convert' show jsonEncode, jsonDecode;
 export 'package:intl/intl.dart';
-export '/backend/backend_refs_compat.dart'
-    show DocumentReference, BackendRefs;
+export '/backend/backend_refs_compat.dart' show DocumentReference, BackendRefs;
 export 'package:page_transition/page_transition.dart';
 export 'internationalization.dart' show FFLocalizations;
 export 'nav/nav.dart';
@@ -669,9 +668,12 @@ void showSnackbar(
                 ),
               ),
             ),
-          Text(message),
+          Expanded(
+              child:
+                  Text(message, style: const TextStyle(color: Colors.white))),
         ],
       ),
+      backgroundColor: const Color(0xFF1B242B),
       duration: Duration(seconds: duration),
     ),
   );

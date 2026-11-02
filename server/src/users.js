@@ -1,4 +1,5 @@
 const { withStoreAsync, newId } = require("./store");
+const { preferencesScope } = require("./store/scopes");
 const { asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { hasUserPassword, setUserPassword } = require("./passwords");
 
@@ -189,6 +190,7 @@ function updatePreferencesInStore(store, data, auth) {
     if (targetRoleState.startsWith("DRIVER") && user.isDriver !== true) {
       return { success: false, code: "DRIVER_PROFILE_REQUIRED", error: "Профиль водителя не заполнен" };
     }
+    if (targetRoleState === 'DRIVER_ONLINE' && (user.statusDriver !== 'approved' || user.blocked)) return {success:false,code:'DRIVER_APPROVAL_REQUIRED',error:'Для выхода на линию дождитесь подтверждения водителя'};
     user.roleState = targetRoleState;
     if (targetRoleState === "PASSENGER") {
       user.activeMode = "passenger";
@@ -263,7 +265,7 @@ async function submitDriverRegistrationAsync(data = {}, auth) {
 async function updateUserPreferencesAsync(data = {}, auth) {
   const authError = requireAuth(auth);
   if (authError) return authError;
-  return withStoreAsync(async (store) => updatePreferencesInStore(store, data, auth));
+  return withStoreAsync(async (store) => updatePreferencesInStore(store, data, auth), preferencesScope(auth.user.id));
 }
 
 async function setPasswordAsync(data = {}, auth) {

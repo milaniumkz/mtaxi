@@ -414,3 +414,31 @@ test('insufficient driver commission rolls back a repriced reservation',async()=
  assert.equal((await respond({...args(o),offerId:r.offer.id,accept:true},auth(p))).code,'INSUFFICIENT_DRIVER_BALANCE');
  const after=await read();assert.equal(u(after,'p').balance,u(before,'p').balance);assert.equal(after.orders[0].price,500);assert.deepEqual(after.ledger,before.ledger);
 });
+
+test('driver counteroffer lasts 30 seconds and expiry never changes money or assigns the order', async () => {
+  const o = await make();
+  const before = await read();
+  const result = await offer({...args(o),price:700},auth(d));
+  assert.equal(result.success,true);
+  const life=Date.parse(result.offer.expiresAt)-Date.parse(result.offer.createdAt);
+  assert.ok(life>=30000&&life<=30005);
+  const own=await list(args(o),auth(d));
+  assert.equal(own.success,true);assert.equal(own.offers.length,1);assert.equal(own.offers[0].driverId,d.id);
+  assert.equal((await list(args(o),auth(x))).code,'ORDER_FORBIDDEN');
+  await write(s=>{s.orders.find(v=>v.id===o.orderDocPath.split('/').pop()).offers[0].expiresAt=new Date(Date.now()-1).toISOString();});
+  assert.equal((await list(args(o),auth(d))).offers[0].status,'expired');
+  assert.equal((await respond({...args(o),offerId:result.offer.id,accept:true},auth(p))).code,'OFFER_EXPIRED');
+  const after=await read();
+  const order=after.orders.find(v=>v.id===o.orderDocPath.split('/').pop());
+  assert.equal(order.status,0);assert.equal(order.price,500);assert.ok(!order.driverId);
+  assert.equal(u(after,d.id).balance,u(before,d.id).balance);
+  assert.equal(u(after,d.id).bonusBalance,u(before,d.id).bonusBalance);
+});
+
+test('driver waiting can observe acceptance without seeing competing driver offers', async () => {
+  const o=await make();const result=await offer({...args(o),price:700},auth(d));
+  assert.equal((await respond({...args(o),offerId:result.offer.id,accept:true},auth(p))).success,true);
+  const state=await list(args(o),auth(d));
+  assert.equal(state.assignedToCurrentDriver,true);assert.equal(state.orderStatus,2);
+  assert.equal(state.offers.length,1);assert.equal(state.offers[0].id,result.offer.id);
+});

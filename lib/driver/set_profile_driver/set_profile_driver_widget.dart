@@ -1,3 +1,4 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import '/design/driver_approval.dart';
 import '/design/mtaxi_theme.dart';
 import '/auth/backend_auth/auth_util.dart';
@@ -202,8 +203,8 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
     if (_model.uploadedFileUrl_uploadData2xm.isEmpty) {
       return _tr(
         context,
-        ru: 'Добавьте фото профиля водителя',
-        kk: 'Жүргізуші профилінің фотосын жүктеңіз',
+        ru: 'Добавьте фото автомобиля',
+        kk: 'Көліктің фотосын жүктеңіз',
       );
     }
     return null;
@@ -1063,7 +1064,7 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
         height: double.infinity,
       );
     }
-    return Image.network(
+    return MTaxiNetworkImage(
       imageUrl,
       fit: BoxFit.cover,
       width: double.infinity,
@@ -1425,8 +1426,8 @@ class _SetProfileDriverWidgetState extends State<SetProfileDriverWidget>
                           _buildUploadCard(
                               key: _vehiclePhotoBlockKey,
                               context: context,
-                              title: tr('Фото профиля водителя',
-                                  'Жүргізуші профилінің фотосы'),
+                              title: tr('Фото автомобиля',
+                                  'Көліктің фотосы'),
                               imageUrl: _model.uploadedFileUrl_uploadData2xm,
                               localFile: _model.uploadedLocalFile_uploadData2xm,
                               errorText: _uploadErrors['avtoImage'] ??

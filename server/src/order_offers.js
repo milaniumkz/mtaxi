@@ -1,3 +1,4 @@
+const { trackingScope, offerReadScope, financialOrderScope } = require("./store/scopes");
 const { withStoreAsync, readStoreAsync, newId } = require("./store");
 const { acceptOrderInStore } = require("./orders");
 const { routeLookup } = require("./geocoding");
@@ -42,7 +43,7 @@ async function submitOrderOfferAsync(data, auth) {
   const price = Number(data.price);
   if (!Number.isSafeInteger(price) || price < 500 || price > 10000000)
     return fail("PRICE_MINIMUM", "Цена — целое число от 500 ₸");
-  const snapshot = await readStoreAsync();
+  const snapshot = await readStoreAsync(offerReadScope(idOf(data), auth.user.id));
   const order = snapshot.orders.find((o) => o.id === idOf(data));
   const driver = snapshot.users.find((u) => u.id === auth.user.id);
   if (
@@ -90,7 +91,7 @@ async function submitOrderOfferAsync(data, auth) {
       price,
       etaMinutes,
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 120000).toISOString(),
+      expiresAt: new Date(Date.now() + 30000).toISOString(),
       status: "pending",
     };
     o.offers.push(offer);
@@ -106,14 +107,18 @@ async function submitOrderOfferAsync(data, auth) {
       initialPageName: "seachDriver",
     });
     return { success: true, offer };
-  });
+  }, financialOrderScope(order.id, driver.id));
 }
 async function listOrderOffersAsync(data, auth) {
   if (!auth?.user) return fail("UNAUTHENTICATED", "Войдите в приложение");
-  const store = await readStoreAsync();
+  const store = await readStoreAsync(offerReadScope(idOf(data)));
   const o = store.orders.find((x) => x.id === idOf(data));
-  if (!o || o.userId !== auth.user.id)
-    return fail("ORDER_FORBIDDEN", "Нет доступа к предложениям");
+  if (!o) return fail("ORDER_FORBIDDEN", "Нет доступа к предложениям");
+  if (o.userId !== auth.user.id) {
+    const own = (o.offers || []).filter(x => x.driverId === auth.user.id);
+    if (!own.length && o.driverId !== auth.user.id) return fail("ORDER_FORBIDDEN", "Нет доступа к предложениям");
+    return {success:true, orderStatus:Number(o.status), assignedToCurrentDriver:o.driverId === auth.user.id && [2,3,4].includes(Number(o.status)), offers:own.map(x => ({...x,status:x.status === 'pending' && Date.parse(x.expiresAt) <= Date.now() ? 'expired' : x.status}))};
+  }
   return {
     success: true,
     offers:
@@ -203,11 +208,11 @@ async function respondOrderOfferAsync(data, auth) {
       x.status = x.id === offer.id ? "accepted" : "closed";
     });
     return result;
-  });
+  }, financialOrderScope(idOf(data), auth.user.id, data.offerId));
 }
 async function getTripTrackingAsync(data, auth) {
   if (!auth?.user) return fail("UNAUTHENTICATED", "Войдите в приложение");
-  const store = await readStoreAsync();
+  const store = await readStoreAsync(trackingScope(idOf(data)));
   const o = store.orders.find((x) => x.id === idOf(data));
   if (!o || ![o.userId, o.driverId].includes(auth.user.id))
     return fail("ORDER_FORBIDDEN", "Нет доступа к маршруту");

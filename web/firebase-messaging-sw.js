@@ -5,8 +5,8 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
   event.stopImmediatePropagation();
   const message = event.notification.data?.FCM_MSG;
-  const route = message?.data?.type === 'KASPI_TOPUP_REQUEST'
-    ? '/admin/collection?collection=payments' : '/admin';
+  const data=message?.data||{};
+  const route = data.targetRole === 'driver' ? '/homeDriver' : data.type === 'KASPI_TOPUP_REQUEST' ? '/admin/collection?collection=payments' : data.targetRole === 'passenger' ? '/homePage' : '/admin';
   const url = new URL(route, self.location.origin).href;
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then(async windows => {

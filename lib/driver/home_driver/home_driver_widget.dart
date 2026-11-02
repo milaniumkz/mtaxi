@@ -1,9 +1,12 @@
 import '/design/bottom_navigation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '/design/order_preview.dart';
+import '/design/mtaxi_icon.dart';
 import '/design/mtaxi_theme.dart';
-import '/design/map_attribution.dart';
-import 'package:flutter_map/flutter_map.dart' as maps;
-import 'package:latlong2/latlong.dart' as geo;
+import '/backend/push_notifications/push_notifications_util.dart'
+    show syncCurrentFcmTokenState;
+import '/backend/push_notifications/driver_order_notifications.dart';
+import '/trips/driver_background_location.dart';
 import '/trips/order_offers.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/app_settings/app_settings.dart';
@@ -57,14 +60,17 @@ class HomeDriverWidget extends StatefulWidget {
 class _HomeDriverWidgetState extends State<HomeDriverWidget> {
   late HomeDriverModel _model;
   bool _tabActive = true;
-  bool _showFeed = false;
+  bool _availabilityBusy = false;
+  final Set<String> _nearbySeen = {};
   String? _feedType;
+  Stream<List<OrderRecord>>? _cachedOrderStream;
   bool _redirectingToPassengerMode = false;
   bool _recoveringActiveDriverOrder = false;
   bool _openingAcceptedDriverOrder = false;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   LatLng? currentUserLocationValue;
+  double? _lastGpsAccuracy;
   String? _locationError;
   final Set<String> _seenOrderIds = {};
   final Map<String, DocumentReference> _visibleOrderRefsById = {};
@@ -430,7 +436,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
       Text(from,
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
       const SizedBox(height: 10),
-      Text('→ $to'),
+      MTaxiDestinationLine(to),
       if (_orderDistanceLabel(order) != null) ...[
         const SizedBox(height: 10),
         _orderDistanceText(order)
@@ -600,6 +606,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
               'coords': {
                 'latitude': location.latitude,
                 'longitude': location.longitude,
+                'accuracy': _lastGpsAccuracy,
               },
             },
           );
@@ -652,7 +659,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
   }
 
   Stream<List<OrderRecord>> _driverOrderStream() {
-    return availableDriverOrdersStreamFromBackend(
+    return _cachedOrderStream ??= availableDriverOrdersStreamFromBackend(
       driverLocation: () =>
           currentUserLocationValue ?? currentUserDocument?.coords,
       radiusKm: _maxOrderDistanceKm,
@@ -687,6 +694,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
       );
       setState(() {
         _locationError = null;
+        _lastGpsAccuracy = position.accuracy;
         currentUserLocationValue =
             LatLng(position.latitude, position.longitude);
       });
@@ -996,92 +1004,90 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     super.dispose();
   }
 
-  Widget _driverLanding(LatLng center) {
+  Future<void> _toggleAvailability() async {
+    if (_availabilityBusy) return;
+    setState(() => _availabilityBusy = true);
+    final online = currentUserDocument?.snapshotData['driverOnLine'] == true;
+    try {
+      bool notifications = true;
+      if (!online) {
+        notifications = await enableDriverOrderNotifications();
+        await _resolveLocation();
+      }
+      final location = currentUserLocationValue;
+      final r = await makeCloudCall('updateUserPreferences', {
+        'targetRoleState': online ? 'DRIVER_OFFLINE' : 'DRIVER_ONLINE',
+        if (!online && location != null)
+          'coords': {
+            'latitude': location.latitude,
+            'longitude': location.longitude,
+            'accuracy': _lastGpsAccuracy
+          },
+      });
+      if (r['success'] != true)
+        throw StateError(
+            r['error']?.toString() ?? 'Не удалось изменить статус');
+      currentUserDocument =
+          await applyBackendUserResponse(r) ?? currentUserDocument;
+      UserModeResolver.setTransientRoleState(
+          online ? 'DRIVER_OFFLINE' : 'DRIVER_ONLINE');
+      await syncCurrentFcmTokenState(orderAlertsEnabled: !online);
+      await DriverBackgroundLocation.sync(currentUserDocument == null
+          ? null
+          : Map<String, dynamic>.from(currentUserDocument!.snapshotData));
+      FFAppState().update(() {});
+      if (!online && !notifications && mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Вы на линии. Для всплывающих заказов разрешите уведомления и на Android — показ поверх других приложений.')));
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e is StateError
+                ? e.message.toString()
+                : 'Не удалось изменить статус. Повторите.')));
+    } finally {
+      if (mounted) setState(() => _availabilityBusy = false);
+    }
+  }
+
+  Widget _driverFeedShell(Widget child) {
+    final online = currentUserDocument?.snapshotData['driverOnLine'] == true;
     String tr(String ru, String kk) =>
         FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
-    final user = currentUserDocument;
-    return Column(children: [
-      Expanded(
-          child: Stack(children: [
-        maps.FlutterMap(
-            options: maps.MapOptions(
-                initialCenter: geo.LatLng(center.latitude, center.longitude),
-                initialZoom: 14,
-                maxZoom: 18),
-            children: [
-              maps.TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.mtaxi.app'),
-              if (currentUserLocationValue != null)
-                maps.MarkerLayer(markers: [
-                  maps.Marker(
-                      point: geo.LatLng(center.latitude, center.longitude),
-                      width: 44,
-                      height: 44,
-                      child: const Icon(Icons.local_taxi,
-                          size: 36, color: MTaxiDesign.ink))
-                ]),
-              const MTaxiMapAttribution(),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              const Expanded(child: MTaxiBrand()),
+              Text(
+                  online
+                      ? tr('На линии', 'Желіде')
+                      : tr('Не на линии', 'Желіде емес'),
+                  style: TextStyle(
+                      color: online
+                          ? MTaxiDesign.teal
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700))
             ]),
-        const Positioned(top: 36, left: 22, child: MTaxiBrand()),
-      ])),
-      ConstrainedBox(
-          constraints:
-              BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .5),
-          child: SingleChildScrollView(
-              padding: const EdgeInsets.all(22),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(tr('Хорошего дня!', 'Күніңіз сәтті өтсін!'),
-                        style: const TextStyle(
-                            fontSize: 27, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 16),
-                    MTaxiCard(
-                        child: Wrap(spacing: 24, runSpacing: 16, children: [
-                      Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(tr('Денежный счёт', 'Ақша шоты')),
-                            const SizedBox(height: 6),
-                            Text(
-                                user == null
-                                    ? '—'
-                                    : formatAppCurrency(user.balance),
-                                style: const TextStyle(
-                                    fontSize: 22, fontWeight: FontWeight.w700))
-                          ]),
-                      Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(tr(
-                                'Бонусы на комиссию', 'Комиссияға бонустар')),
-                            const SizedBox(height: 6),
-                            Text(
-                                user?.snapshotData['bonusBalance'] is num
-                                    ? formatAppCurrency(
-                                        (user!.snapshotData['bonusBalance']
-                                                as num)
-                                            .toDouble())
-                                    : '—',
-                                style: const TextStyle(
-                                    fontSize: 22, fontWeight: FontWeight.w700))
-                          ]),
-                    ])),
-                    const SizedBox(height: 18),
-                    FilledButton(
-                        style: FilledButton.styleFrom(
-                            backgroundColor: MTaxiDesign.ink,
-                            foregroundColor: Colors.white),
-                        onPressed: () => setState(() => _showFeed = true),
-                        child:
-                            Text(tr('Смотреть заказы', 'Тапсырыстарды қарау'))),
-                    const SizedBox(height: 12),
-                    Text(
-                        tr('Бонусы оплачивают комиссию сервиса. Деньги и бонусы учитываются отдельно.',
-                            'Бонустар сервис комиссиясын төлейді. Ақша мен бонустар бөлек есептеледі.'),
-                        style: const TextStyle(fontSize: 12)),
-                  ]))),
+            const SizedBox(height: 12),
+            FilledButton(
+                key: const ValueKey('driver-online-toggle'),
+                onPressed: _availabilityBusy ? null : _toggleAvailability,
+                style: FilledButton.styleFrom(
+                    backgroundColor:
+                        online ? MTaxiDesign.ink : MTaxiDesign.gold,
+                    foregroundColor: online ? Colors.white : MTaxiDesign.ink,
+                    minimumSize: const Size.fromHeight(52)),
+                child: Text(_availabilityBusy
+                    ? tr('Подтверждаем…', 'Расталуда…')
+                    : online
+                        ? tr('Сойти с линии', 'Желіден шығу')
+                        : tr('Выйти на линию', 'Желіге шығу'))),
+          ])),
+      Expanded(child: child),
     ]);
   }
 
@@ -1266,20 +1272,26 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                   ),
                 );
               }
-              if (!_showFeed) return _driverLanding(effectiveLocation);
               final orderStream = _driverOrderStream();
-              return StreamBuilder<List<OrderRecord>>(
+              return _driverFeedShell(StreamBuilder<List<OrderRecord>>(
                   stream: orderStream,
                   initialData: const [],
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return Center(
-                        child: Text(
-                          'Не удалось загрузить заказы',
-                          style: FlutterFlowTheme.of(context)
-                              .bodyMedium
-                              .override(color: _mtaxiMuted),
-                        ),
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text(FFLocalizations.of(context).getVariableText(
+                              ruText: 'Не удалось загрузить заказы',
+                              kkText: 'Тапсырыстар жүктелмеді')),
+                          TextButton(
+                              onPressed: () =>
+                                  setState(() => _cachedOrderStream = null),
+                              child: Text(FFLocalizations.of(context)
+                                  .getVariableText(
+                                      ruText: 'Повторить',
+                                      kkText: 'Қайталау'))),
+                        ]),
                       );
                     }
                     final driverOrderRecordList =
@@ -1370,8 +1382,53 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                       (order) => _dismissedUnavailableOrderIds
                           .contains(order.reference.id),
                     );
-                    if (_soundEnabledUi) {
-                      _playNewOrderSounds(displayOrders);
+                    if (currentUserDocument?.snapshotData['driverOnLine'] ==
+                            true &&
+                        currentUserLocationValue != null) {
+                      for (final order in displayOrders) {
+                        final point = order.otCoords;
+                        if (point == null ||
+                            _nearbySeen.contains(order.reference.id)) continue;
+                        final distance = Geolocator.distanceBetween(
+                            currentUserLocationValue!.latitude,
+                            currentUserLocationValue!.longitude,
+                            point.latitude,
+                            point.longitude);
+                        if (_lastGpsAccuracy != null &&
+                            _lastGpsAccuracy! > 0 &&
+                            distance + _lastGpsAccuracy! <= 1000) {
+                          _nearbySeen.add(order.reference.id);
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted)
+                              unawaited(showNearbyDriverOrder({
+                                'type': 'ORDER_AVAILABLE',
+                                'overlayEligible': 'true',
+                                'orderDocPath': order.reference.path,
+                                'sentAtMs': DateTime.now()
+                                    .millisecondsSinceEpoch
+                                    .toString()
+                              }));
+                          });
+                          break;
+                        }
+                      }
+                    }
+                    if (_soundEnabledUi &&
+                        kIsWeb &&
+                        currentUserDocument?.snapshotData['driverOnLine'] ==
+                            true) {
+                      _playNewOrderSounds(displayOrders
+                          .where((o) =>
+                              o.otCoords != null &&
+                              currentUserLocationValue != null &&
+                              Geolocator.distanceBetween(
+                                          currentUserLocationValue!.latitude,
+                                          currentUserLocationValue!.longitude,
+                                          o.otCoords!.latitude,
+                                          o.otCoords!.longitude) +
+                                      (_lastGpsAccuracy ?? 1001) <=
+                                  1000)
+                          .toList());
                     }
 
                     return Column(
@@ -1381,11 +1438,6 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                         Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Row(children: [
-                              IconButton(
-                                  tooltip: 'К карте',
-                                  onPressed: () =>
-                                      setState(() => _showFeed = false),
-                                  icon: const Icon(Icons.arrow_back)),
                               Expanded(
                                   child: SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
@@ -1689,16 +1741,19 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                                         busy: _takingOrderIds
                                                             .contains(liveOrder
                                                                 .reference.id),
-                                                        onOffer: () =>
-                                                            proposeDriverPrice(
-                                                                context,
-                                                                liveOrder
-                                                                    .reference
-                                                                    .path,
-                                                                initialPrice:
-                                                                    liveOrder
-                                                                        .price
-                                                                        .toInt()),
+                                                        onOffer: () async {
+                                                          Navigator.of(context)
+                                                              .pop();
+                                                          await proposeDriverPrice(
+                                                              parentContext,
+                                                              liveOrder
+                                                                  .reference
+                                                                  .path,
+                                                              initialPrice:
+                                                                  liveOrder
+                                                                      .price
+                                                                      .toInt());
+                                                        },
                                                         onAccept: () async {
                                                           if (isAssignedToCurrentDriver) {
                                                             Navigator.pop(
@@ -1810,7 +1865,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                           ),
                       ],
                     );
-                  });
+                  }));
             },
           ),
         ),

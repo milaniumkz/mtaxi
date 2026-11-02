@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:upgrader/upgrader.dart';
 
 import '/backend/app_settings/app_settings.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -26,7 +27,12 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
   bool _checking = false;
   bool _forceRequired = false;
   bool _showSoftPrompt = false;
-  bool _softPromptDismissed = false;
+
+  final Upgrader _storeChecker =
+      Upgrader(debugLogging: false, countryCode: 'KZ', languageCode: 'ru');
+  String _resolvedStoreUrl = '';
+  DateTime? _storeCheckedAt;
+  bool _storeHasUpdate = false;
   String _currentVersion = '';
   int _currentBuild = 0;
   AppVersionPolicy _policy = const AppVersionPolicy();
@@ -52,18 +58,17 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
   }
 
   Future<void> _openStore() async {
-    final rawUrl = _policy.storeUrl.trim();
-    if (rawUrl.isEmpty) {
-      return;
+    final uri = Uri.tryParse(_resolvedStoreUrl);
+    if (uri == null) return;
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication))
+        throw StateError('Store unavailable');
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Не удалось открыть магазин. Проверьте подключение и повторите.')));
     }
-    final uri = Uri.tryParse(rawUrl);
-    if (uri == null) {
-      return;
-    }
-    await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
   }
 
   Future<void> _checkVersion() async {
@@ -77,16 +82,41 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
       final policy = currentAppVersionPolicy;
       final currentVersion = packageInfo.version.trim();
       final currentBuild = int.tryParse(packageInfo.buildNumber.trim()) ?? 0;
+      if (_storeCheckedAt == null ||
+          DateTime.now().difference(_storeCheckedAt!) >=
+              const Duration(minutes: 15)) {
+        try {
+          await _storeChecker.initialize().timeout(const Duration(seconds: 8));
+          if (_storeCheckedAt != null)
+            await _storeChecker
+                .updateVersionInfo()
+                .timeout(const Duration(seconds: 8));
+          _storeHasUpdate = _storeChecker.isUpdateAvailable();
+          _storeCheckedAt = DateTime.now();
+        } catch (_) {/* Store lookup errors are not evidence of an update. */}
+      }
+      String validStore(String raw) {
+        final u = Uri.tryParse(raw.trim());
+        if (u?.scheme != 'https') return '';
+        return isAndroid && u!.host == 'play.google.com' ||
+                isiOS && u!.host == 'apps.apple.com'
+            ? u.toString()
+            : '';
+      }
+
+      final detectedStore =
+          validStore(_storeChecker.versionInfo?.appStoreListingURL ?? '');
+      final storeUrl = detectedStore.isNotEmpty
+          ? detectedStore
+          : validStore(policy.storeUrl);
       final forceRequired = policy.forceUpdateEnabled &&
-          policy.minSupportedBuildNumber > 0 &&
-          currentBuild < policy.minSupportedBuildNumber;
-      final newerBuildAvailable = policy.latestBuildNumber > 0 &&
-          currentBuild < policy.latestBuildNumber;
-      final newerVersionAvailable = policy.latestVersion.isNotEmpty &&
-          _compareVersions(currentVersion, policy.latestVersion) < 0;
-      final showSoftPrompt = !forceRequired &&
-          !_softPromptDismissed &&
-          (newerBuildAvailable || newerVersionAvailable);
+          ((policy.minSupportedBuildNumber > 0 &&
+                  currentBuild < policy.minSupportedBuildNumber) ||
+              (policy.minSupportedVersion.isNotEmpty &&
+                  _compareVersions(currentVersion, policy.minSupportedVersion) <
+                      0));
+      final mandatoryUpdate =
+          storeUrl.isNotEmpty && (forceRequired || _storeHasUpdate);
       if (!mounted) {
         return;
       }
@@ -94,8 +124,9 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
         _policy = policy;
         _currentVersion = currentVersion;
         _currentBuild = currentBuild;
-        _forceRequired = forceRequired;
-        _showSoftPrompt = showSoftPrompt;
+        _resolvedStoreUrl = storeUrl;
+        _forceRequired = mandatoryUpdate;
+        _showSoftPrompt = false;
       });
     } catch (_) {
       // Keep app usable if settings are temporarily unavailable.
@@ -134,8 +165,6 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
     final mutedColor = isDark ? const Color(0xFF9EA8B0) : _mtaxiMuted;
     final borderColor =
         isDark ? const Color(0xFF2C3A3F) : const Color(0xFFE8EBE5);
-    final buttonText =
-        isDark ? const Color(0xFF13191D) : const Color(0xFF12051B);
     final updateMessage = _policy.updateMessage.isNotEmpty
         ? _policy.updateMessage
         : blocking
@@ -208,7 +237,6 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
                     TextButton(
                       onPressed: () {
                         setState(() {
-                          _softPromptDismissed = true;
                           _showSoftPrompt = false;
                         });
                       },
@@ -224,7 +252,7 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _mtaxiMint,
-                      foregroundColor: buttonText,
+                      foregroundColor: Colors.white,
                     ),
                     onPressed: _openStore,
                     child: Text(
@@ -250,21 +278,23 @@ class _ForceUpdateGateState extends State<ForceUpdateGate>
     }
 
     if (_forceRequired) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          widget.child,
-          ColoredBox(
-            color: Colors.black.withValues(alpha: 0.72),
-            child: Center(
-              child: _buildUpdateCard(
-                blocking: true,
-                context: context,
+      return PopScope(
+          canPop: false,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              widget.child,
+              ColoredBox(
+                color: Colors.black.withValues(alpha: 0.72),
+                child: Center(
+                  child: _buildUpdateCard(
+                    blocking: true,
+                    context: context,
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
-      );
+            ],
+          ));
     }
 
     if (_showSoftPrompt) {

@@ -1,6 +1,7 @@
 const { withStoreAsync, readStoreAsync, writeStoreAsync, newId } = require("./store");
 const { requireAdmin } = require("./admin");
 const { asNumber, normalizeString } = require("./utils/values");
+const {newOrderNotification,onlineDriver,recipientOrderNotification}=require('./driver_order_alerts');
 const { sendPushBatch } = require("./push_transport");
 
 function docId(value) {
@@ -144,6 +145,7 @@ function upsertToken(store, data, auth) {
   } else if (token.orderAlertsEnabled == null) {
     token.orderAlertsEnabled = true;
   }
+  if (typeof data.supportsOrderOverlay === 'boolean') token.supportsOrderOverlay = data.supportsOrderOverlay;
   token.disabled = false;
   token.updatedAt = now;
 
@@ -168,9 +170,11 @@ async function updateFcmTokenStateAsync(data = {}, auth) {
 
 function tokenMatchesTarget(store, token, notification) {
   if (token.disabled) return false;
-  const user = store.users.find((item) => item.id === token.userId);
+  const user = store.users.find((item) => item.id === token.userId) ||
+    (store.pushAudience || []).find((item) => item.id === token.userId);
   if (!user) return false;
   if (notification.orderAlert === true && token.orderAlertsEnabled === false) return false;
+  if (newOrderNotification(notification) && !onlineDriver(user)) return false;
 
   const role = normalizeRole(notification.targetRole);
   if (role === 'admin' && user.role !== 'admin' && user.roleState !== 'ADMIN') return false;
@@ -263,7 +267,10 @@ function publicNotification(store, notification) {
   const deliveries = (store.notificationDeliveries || [])
     .filter((item) => item.notificationId === notification.id);
   const failed = deliveries.filter((item) => item.status === "failed").length;
-  const sent = deliveries.filter((item) => item.status !== "failed").length;
+  const sent = deliveries.filter((item) => item.status === 'sent').length;
+  const queued = deliveries.filter((item) => item.status === 'queued').length;
+  const cancelled = deliveries.filter((item) => item.status === 'cancelled').length;
+  const acks = (store.pushDeliveryAcks || []).filter(item => item.notificationId === notification.id);
   return {
     id: notification.id,
     notification_title: notification.title || "",
@@ -272,7 +279,10 @@ function publicNotification(store, notification) {
     parameter_data: notification.parameterData || {},
     target_role: notification.targetRole || "all",
     target_audience: notification.targetDeviceType || "All",
-    status: failed > 0 && sent > 0 ? "partial" : failed > 0 ? "failed" : "succeeded",
+    status: queued > 0 ? 'started' : failed > 0 && sent > 0 ? 'partial' : failed > 0 ? 'failed' : sent > 0 ? 'succeeded' : cancelled > 0 ? 'cancelled' : 'no_devices',
+    num_queued: queued,
+    num_received: new Set(acks.filter(a => ['received','opened'].includes(a.eventType)).map(a => a.userId)).size,
+    num_opened: new Set(acks.filter(a => a.eventType === 'opened').map(a => a.userId)).size,
     created_at: notification.createdAt || null,
     error: notification.error || "",
     num_sent: sent,
@@ -354,7 +364,8 @@ function adminQueueBroadcastInStore(store, data, auth, { title, body }) {
       notificationId: queued.notificationId,
       numTargetUsers: targetUsers.length,
       numTargetTokens: queued.numTargetTokens || 0,
-      numSent: queued.numTargetTokens || 0,
+      numSent: 0,
+      numQueued: queued.numTargetTokens || 0,
       numFailed: 0,
       numChatMessages,
       notification: notification ? publicNotification(store, notification) : null,
@@ -424,9 +435,11 @@ async function flushQueuedPushDeliveriesForStore(store, limit, persistStore) {
       continue;
     }
     try {
+      const recipientNotification = recipientOrderNotification(store,notification,token);
+      if (!recipientNotification) { delivery.status='cancelled'; delivery.updatedAt=new Date().toISOString(); delivery.error='Order unavailable or driver offline'; continue; }
       const sent = await sendPushBatch({
         tokens: [token.fcmToken],
-        notification,
+        notification: recipientNotification,
       });
       mode = sent.mode;
       const result = sent.responses[0] || {};
@@ -504,7 +517,7 @@ function queueOrderPushEventInStore(store, {
     initialPageName: initialPageName || (role === "driver" ? "homeDriver" : "seachDriver"),
     dedupeKey: `${order.id}:${normalizedEvent}:${role}:${targetUserIds.join(",")}${eventId ? ":" + eventId : ""}`,
     dataPayload: {
-      type: normalizedEvent,
+      type: normalizedEvent === 'ORDER_CREATED' ? 'ORDER_AVAILABLE' : normalizedEvent,
       orderDocPath,
       orderId: order.id,
       orderStatus: String(status),

@@ -87,9 +87,12 @@ Future<List<OrderRecord>> loadAvailableDriverOrdersFromBackend({
     'radiusKm': radiusKm,
     'limit': limit,
   });
-  if (response['success'] != true) return const [];
+  if (response['success'] != true) {
+    throw StateError(
+        response['error']?.toString() ?? 'Не удалось загрузить заказы');
+  }
   final rawOrders = response['orders'];
-  if (rawOrders is! List) return const [];
+  if (rawOrders is! List) throw StateError('Некорректный ответ списка заказов');
   return rawOrders
       .whereType<Map>()
       .map((item) => orderRecordFromBackendJson(
@@ -132,8 +135,8 @@ Stream<List<OrderRecord>> availableDriverOrdersStreamFromBackend({
         driverLocation: driverLocation?.call(),
         radiusKm: radiusKm,
       );
-    } catch (_) {
-      yield const [];
+    } catch (error, stack) {
+      yield* Stream<List<OrderRecord>>.error(error, stack);
     }
     await Future<void>.delayed(const Duration(seconds: 2));
   }
