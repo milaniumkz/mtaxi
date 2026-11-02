@@ -23,9 +23,29 @@ const store = require(process.cwd() + '/src/store');
       }
       return response;
     };
+    let historyChecked = false;
+    const readHistory = async session => {
+      if (historyChecked) return; historyChecked = true;
+      const unresolved = snapshot.payments.filter(p => p.provider === 'kaspi_manual' && p.status === 'pending' && p.kaspiPosAttemptId && !p.kaspiPosOperationId);
+      if (!unresolved.length) return;
+      const host = 'https://qrpay.kaspi.kz', path = '/v01/remote/history', body = JSON.stringify({ MaxResult: 20 });
+      const reply = await bank.request(host, path, bank.headers(host, path, session, body), body);
+      const candidates = [];
+      const visit = (value, depth = 0) => {
+        if (!value || typeof value !== 'object' || depth > 5) return;
+        if (!Array.isArray(value)) for (const p of unresolved) {
+          const matchedComment = Object.entries(value).some(([key,v]) => /comment|description/i.test(key) && typeof v === 'string' && v.includes(p.paymentId));
+          if (matchedComment) candidates.push({ paymentId: p.paymentId, operationId: value.Id ?? value.QrOperationId, status: value.Status, amount: typeof value.Amount === 'number' ? value.Amount : String(value.Amount || '').replace(/[^0-9., +-]/g,''), phoneMatches: String(value.ClientMobile || '').replace(/\D/g,'').slice(-10) === String(p.kaspiPhone || '').replace(/\D/g,'').slice(-10) });
+        }
+        for (const child of Object.values(value)) if (child && typeof child === 'object') visit(child, depth + 1);
+      };
+      visit(reply.body?.Data);
+      console.log(JSON.stringify({ diagnostic: 'UNRESOLVED_INVOICE_HISTORY', unresolvedCount: unresolved.length, historyKeys: reply.body?.Data && typeof reply.body.Data === 'object' ? Object.keys(reply.body.Data) : [], candidates }));
+    };
     const status = bank.testLinkStatus.bind(bank);
     bank.testLinkStatus = async (session, id) => {
       const result = await status(session, id);
+      await readHistory(session);
       if (result.Status === 'Processed') {
         const host = 'https://qrpay.kaspi.kz', path = '/v01/kaspi-qr/operations/details', body = JSON.stringify({ Id: Number(id), OperationMethod: 0 });
         const reply = await bank.request(host, path, bank.headers(host, path, session, body), body);
