@@ -29,6 +29,7 @@ const store = require(process.cwd() + '/src/store');
           if (!data || typeof data !== 'object' || depth > 3) return null;
           const fields = {}, children = {};
           for (const [key,value] of Object.entries(data)) {
+            if (/amount|sum/i.test(key)) fields[key + 'Format'] = { type: typeof value, numericPart: String(value ?? '').replace(/[^0-9., -]/g, ''), hasTengeSymbol: String(value).includes('₸'), hasKztCode: /KZT/i.test(String(value)), length: String(value ?? '').length };
             if (/amount|sum|^Id$|^Status$|^OperationMethod$/i.test(key) && (typeof value === 'number' || typeof value === 'string' && /^[a-zA-Z0-9_. ,:-]{0,80}$/.test(value))) fields[key] = value;
             if (value && typeof value === 'object' && !Array.isArray(value)) children[key] = shape(value, depth + 1);
           }
