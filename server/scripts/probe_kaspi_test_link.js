@@ -1,4 +1,4 @@
-// Read-only bank status diagnostic. No QR creation, invoices, debit or wallet credit.
+// Bank reads only. Optional, explicitly selected closing of a fully matched rejected legacy invoice; never issues, debits or credits.
 const { createKaspiService } = require(process.cwd() + '/src/kaspi_pos');
 const { KaspiProtocol } = require(process.cwd() + '/src/kaspi_pos/protocol');
 const store = require(process.cwd() + '/src/store');
@@ -34,7 +34,7 @@ const store = require(process.cwd() + '/src/store');
       const visit = (value, depth = 0) => {
         if (!value || typeof value !== 'object' || depth > 5) return;
         if (!Array.isArray(value)) for (const p of unresolved) {
-          const matchedComment = Object.entries(value).some(([key,v]) => /comment|description/i.test(key) && typeof v === 'string' && v.includes(p.paymentId));
+          const matchedComment = Object.entries(value).some(([key,v]) => /comment|description/i.test(key) && typeof v === 'string' && v.trim() === 'MTaxi ' + p.paymentId);
           if (matchedComment) candidates.push({ paymentId: p.paymentId, operationId: value.Id ?? value.QrOperationId, status: value.Status, amount: typeof value.Amount === 'number' ? value.Amount : String(value.Amount || '').replace(/[^0-9., +-]/g,''), phoneMatches: String(value.ClientMobile || '').replace(/\D/g,'').slice(-10) === String(p.kaspiPhone || '').replace(/\D/g,'').slice(-10) });
         }
         for (const child of Object.values(value)) if (child && typeof child === 'object') visit(child, depth + 1);
@@ -45,6 +45,20 @@ const store = require(process.cwd() + '/src/store');
         if (!p || !candidate.operationId) continue;
         const details = await bank.invoiceDetails(session, String(candidate.operationId));
         const phone10 = value => String(value || '').replace(/\D/g,'').slice(-10);
+        const { bankAmount } = require(process.cwd() + '/src/kaspi_pos/protocol');
+        const verifiedDecline = candidates.filter(x => x.paymentId === p.paymentId).length === 1 && details.Status === 'RemotePaymentRejected' &&
+          String(details.Id ?? details.QrOperationId) === String(candidate.operationId) && bankAmount(details.Amount) === Number(p.amount) &&
+          !!details.ClientMobile && phone10(details.ClientMobile) === phone10(p.kaspiPhone) && p.kaspiPosOrganizationId === session.organizationId && p.kaspiPosOrganizationIin === session.organizationIin;
+        if (process.env.MTAXI_RESOLVE_DECLINED === 'true' && verifiedDecline) {
+          await store.withStoreAsync(db => {
+            const current = db.payments.find(x => x.paymentId === p.paymentId);
+            if (!current || current.status !== 'pending' || current.applied || current.kaspiPosOperationId || current.amount !== p.amount || current.kaspiPhone !== p.kaspiPhone || current.kaspiPosAttemptId !== p.kaspiPosAttemptId) throw Error('Request changed; resolution aborted');
+            current.kaspiPosOperationId = String(candidate.operationId); current.kaspiPosCreateState = 'sent'; current.kaspiPosBankState = 'failed'; current.kaspiPosCheckedAt = new Date().toISOString();
+            db.auditLogs ||= []; db.auditLogs.push({id:store.newId('audit'),action:'reconcileDeclinedKaspiInvoice',target:'payments/'+current.id,adminId:user.id,after:{bankState:'failed',amount:current.amount},createdAt:new Date().toISOString()});
+          });
+          const resolved = await require(process.cwd() + '/src/payments').failDriverTopUpPaymentAsync({paymentId:p.paymentId},{user});
+          console.log(JSON.stringify({diagnostic:'LEGACY_DECLINE_RESOLVED',paymentId:p.paymentId,success:resolved.success,code:resolved.code}));
+        }
         console.log(JSON.stringify({ diagnostic: 'UNRESOLVED_INVOICE_DETAILS', paymentId: p.paymentId, dataKeys: Object.keys(details),
           operationMatches: String(details.Id ?? details.QrOperationId) === String(candidate.operationId),
           status: details.Status, amount: typeof details.Amount === 'number' ? details.Amount : String(details.Amount || '').replace(/[^0-9., +-]/g,''),
