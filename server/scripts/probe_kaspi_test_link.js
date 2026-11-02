@@ -17,6 +17,11 @@ const store = require(process.cwd() + '/src/store');
       states: deliveries.reduce((counts,d) => { const key = ['sent','queued','failed','cancelled'].includes(d.status) ? d.status : 'other'; counts[key]=(counts[key]||0)+1; return counts; }, {}),
       providerMessageIds: deliveries.filter(d => !!d.messageId).length,
       errorKinds: deliveries.filter(d=>d.status === 'failed').map(d=> { const message=String(d.error||''); return /not a valid FCM registration token|invalid registration token/i.test(message) ? 'invalid_registration' : /registration-token-not-registered|Requested entity was not found|not registered/i.test(message) ? 'expired_registration' : /credential|authentication|unauthenticated|permission/i.test(message) ? 'credentials' : 'other'; }),
+      failedMetadata: deliveries.filter(d => d.status === 'failed').map(d => {
+        const token = (snapshot.fcmTokens || []).find(t => t.id === d.tokenId), message = String(d.error || '');
+        return { hasToken: !!token, disabled: token?.disabled === true, ownerMatches: token?.userId === d.userId, platform: token?.deviceType,
+          errorLength: message.length, errorFlags: ['registration','token','permission','entity','project','timeout','credential','unavailable','invalid','payload','auth','vapid','third-party','network'].filter(word => message.toLowerCase().includes(word)) };
+      }),
       errorCodes: [...new Set(deliveries.map(d => d.errorCode).filter(v => typeof v === 'string' && /^[a-zA-Z0-9_/-]{1,100}$/.test(v)))],
       received: acks.filter(a => a.eventType === 'received').length, opened: acks.filter(a => a.eventType === 'opened').length }));
   }
