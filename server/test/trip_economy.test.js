@@ -449,3 +449,23 @@ test('trip chat is participant-only, idempotent under thirty retries and closes 
   assert.equal((await send({...data,requestId:'audit-chat-00000002'},auth(d))).code,'TRIP_CHAT_CLOSED');
   assert.equal((await listChat(args(o),auth(p))).code,'TRIP_CHAT_CLOSED');
 });
+
+test('thirty moderation and legacy session transitions preserve chosen role and one welcome reward', async () => {
+  const {approveDriverAsync}=require('../src/admin');
+  const {getSessionBootstrapAsync}=require('../src/session');
+  await write(s=>{const driver=u(s,'d');driver.bonusBalance=0;driver.driverWelcomeBonusGranted=false;});
+  for(let i=0;i<30;i++) {
+    const mode=i%2?'passenger':'driver';
+    await write(s=>{Object.assign(u(s,'d'),{statusDriver:'pending',roleState:i%3?'DRIVER_PENDING':'DRIVER_PENDING_REVIEW',driverApplicationId:`audit-application-${i}`,activeMode:mode,preferredClientMode:mode,driverOnLine:true});});
+    const result=await approveDriverAsync({userDocPath:'users/d'},auth(a));
+    assert.equal(result.success,true);
+    const expected=mode==='passenger'?'PASSENGER':'DRIVER_OFFLINE';
+    assert.equal(result.user.roleState,expected);
+    assert.equal(result.user.driverOnLine,false);
+    assert.equal(result.user.bonusBalance,1000);
+    await write(s=>{u(s,'d').roleState='DRIVER_PENDING_REVIEW';});
+    const session=await getSessionBootstrapAsync({},auth(d));
+    assert.equal(session.roleState,expected);
+    assert.equal(session.user.bonusBalance,1000);
+  }
+});

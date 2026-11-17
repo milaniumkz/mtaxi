@@ -60,6 +60,13 @@ function buildSessionBootstrap(store, authUser) {
     user.roleState = "PASSENGER";
   }
 
+  // Heal accounts approved before the moderation role transition was fixed.
+  if (!driverOrder && user.isDriver && user.statusDriver === 'approved' && ['DRIVER_PENDING', 'DRIVER_PENDING_REVIEW'].includes(user.roleState)) {
+    const passengerMode = user.preferredClientMode === 'passenger' || user.activeMode === 'passenger';
+    user.roleState = passengerMode ? 'PASSENGER' : 'DRIVER_OFFLINE';
+    user.driverOnLine = false;
+  }
+
   const driverBonus = user.isDriver ? bonusStatus(store, user) : null;
   const publicSessionUser = publicUser(user);
 

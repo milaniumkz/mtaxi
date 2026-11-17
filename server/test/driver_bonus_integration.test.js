@@ -121,3 +121,25 @@ test('Kaspi request notifies admin and credits cash only once after manual confi
   await failDriverTopUpPaymentAsync({ paymentId: declined.paymentId }, adminAuth);
   assert.equal((await confirmDriverTopUpPaymentAsync({ paymentId: declined.paymentId }, adminAuth)).code, 'PAYMENT_FAILED');
 });
+
+test('thirty approvals and legacy sessions leave pending state without enabling online mode', async () => {
+  const snapshot=await readStoreAsync();
+  const admin=snapshot.users.find(u=>u.role==='admin');
+  for(let i=0;i<30;i++) {
+    const mode=i%2?'passenger':'driver';
+    const user={id:`approval-mode-${i}`,phone:`+700001${String(i).padStart(5,'0')}`,isDriver:true,statusDriver:'pending',roleState:'DRIVER_PENDING',activeMode:mode,preferredClientMode:mode,driverOnLine:true,balance:0};
+    await withStoreAsync(s=>{s.users.push(user);});
+    const request={userDocPath:`users/${user.id}`};
+    const approved=await approveDriverAsync(request,{user:admin});
+    assert.equal(approved.success,true);
+    assert.equal(approved.user.roleState,mode==='passenger'?'PASSENGER':'DRIVER_OFFLINE');
+    assert.equal(approved.user.driverOnLine,false);
+    await approveDriverAsync(request,{user:admin});
+    assert.equal((await readStoreAsync()).notifications.filter(n=>n.type==='DRIVER_APPROVED'&&n.targetUserIds.includes(user.id)).length,1);
+    await withStoreAsync(s=>{s.users.find(u=>u.id===user.id).roleState='DRIVER_PENDING';});
+    const session=await getSessionBootstrapAsync({},{user});
+    assert.equal(session.roleState,mode==='passenger'?'PASSENGER':'DRIVER_OFFLINE');
+    assert.equal(session.user.driverOnLine,false);
+    assert.equal(session.user.bonusBalance,1000);
+  }
+});

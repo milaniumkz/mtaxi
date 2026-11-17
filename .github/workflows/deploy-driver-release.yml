@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Deploy audit fixes and verify GPS/financial transactions on disposable PostgreSQL; no APK.
+# Deploy final audit fixes: reconcile approved driver roles, GPS and finance; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]
