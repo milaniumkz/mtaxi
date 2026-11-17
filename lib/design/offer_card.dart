@@ -91,16 +91,16 @@ class _DriverOfferCardState extends State<DriverOfferCard> {
           '${rating == null ? '★ —' : '★ ${rating.toStringAsFixed(1)}'} · ${offer['etaMinutes'] == null ? tr('Подача уточняется', 'Келу уақыты белгісіз') : '${offer['etaMinutes']} ${tr('мин', 'мин')}'}';
       return Container(
         key: ValueKey('compact-offer-${offer['id']}'),
-        margin: const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             border: Border.all(color: Theme.of(context).dividerColor),
             borderRadius: BorderRadius.circular(12)),
         child: Row(children: [
           const CircleAvatar(
-              radius: 14, child: Icon(Icons.person_outline, size: 18)),
-          const SizedBox(width: 7),
+              radius: 22, child: Icon(Icons.person_outline, size: 26)),
+          const SizedBox(width: 10),
           Expanded(
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,49 +110,51 @@ class _DriverOfferCardState extends State<DriverOfferCard> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
+                        fontSize: 17, fontWeight: FontWeight.w700)),
                 Text(meta,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11)),
+                    style: const TextStyle(fontSize: 13)),
                 if ('${offer['driverCar'] ?? ''} ${offer['driverPlate'] ?? ''}'
                     .trim()
                     .isNotEmpty)
                   Text(
                       '${offer['driverCar'] ?? ''} ${offer['driverPlate'] ?? ''}'
                           .trim(),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10)),
+                      style: const TextStyle(fontSize: 12)),
               ])),
           const SizedBox(width: 6),
           SizedBox(
-              width: 82,
+              width: 96,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text(
-                        '${price ?? '—'} ₸${seconds == null ? '' : ' · ${seconds}с'}',
+                    child: Text('${price ?? '—'} ₸',
                         style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13))),
+                            fontWeight: FontWeight.w700, fontSize: 20))),
+                const SizedBox(height: 4),
                 SizedBox(
-                    height: 30,
-                    width: 82,
+                    height: 44,
+                    width: 96,
                     child: FilledButton(
                         style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            minimumSize: const Size(0, 30)),
+                            minimumSize: const Size(0, 44)),
                         onPressed: expired || busy ? null : onAccept,
                         child: Text(tr('Принять', 'Қабылдау'),
-                            style: const TextStyle(fontSize: 12)))),
+                            style: const TextStyle(fontSize: 14)))),
+                if (seconds != null)
+                  Text('${seconds}с', style: const TextStyle(fontSize: 12)),
               ])),
           SizedBox(
-              width: 24,
+              width: 30,
               child: IconButton(
                   padding: EdgeInsets.zero,
                   tooltip: tr('Отклонить', 'Қабылдамау'),
                   onPressed: expired || busy ? null : onDecline,
-                  icon: const Icon(Icons.close, size: 16))),
+                  icon: const Icon(Icons.close, size: 21))),
         ]),
       );
     }

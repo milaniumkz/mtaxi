@@ -123,12 +123,13 @@ void main() {
           await tester.pump(const Duration(milliseconds: 100));
         }
         expect(find.byType(DriverOfferCard), findsNWidgets(5));
-        for (final button
-            in find.widgetWithText(FilledButton, 'Принять').evaluate()) {
-          final box = button.renderObject! as RenderBox;
-          expect(box.localToGlobal(Offset.zero).dy + box.size.height,
-              lessThanOrEqualTo(600));
-        }
+        expect(tester.getSize(find.byType(DriverOfferCard).first).height,
+            greaterThanOrEqualTo(90));
+        await tester
+            .ensureVisible(find.widgetWithText(FilledButton, 'Принять').last);
+        await tester.pump();
+        expect(find.widgetWithText(FilledButton, 'Принять').last.hitTestable(),
+            findsOneWidget);
         final card =
             tester.widget<DriverOfferCard>(find.byType(DriverOfferCard).first);
         card.onAccept!();

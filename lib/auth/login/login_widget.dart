@@ -1,3 +1,4 @@
+import '/utils/kazakhstan_phone_formatter.dart';
 import '/design/mtaxi_theme.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/auth/backend_auth/backend_user_provider.dart';
@@ -23,7 +24,7 @@ class LoginWidget extends StatefulWidget {
 
 class _LoginWidgetState extends State<LoginWidget> {
   final _formKey = GlobalKey<FormState>();
-  final _phone = TextEditingController();
+  final _phone = TextEditingController(text: '+7');
   final _password = TextEditingController();
   final _repeat = TextEditingController();
   bool _register = false;
@@ -432,6 +433,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                       TextFormField(
                           key: const ValueKey('login-phone'),
                           controller: _phone,
+                          inputFormatters: const [KazakhstanPhoneFormatter()],
                           enabled: !_busy,
                           keyboardType: TextInputType.phone,
                           autofillHints: const [AutofillHints.telephoneNumber],
@@ -562,7 +564,9 @@ class _LoginWidgetState extends State<LoginWidget> {
                                       _error = '';
                                       _password.clear();
                                       _repeat.clear();
+                                      final phone = _phone.value;
                                       _formKey.currentState?.reset();
+                                      _phone.value = phone;
                                     }),
                             child: Text(_register
                                 ? _tr('Уже есть аккаунт? Войти',

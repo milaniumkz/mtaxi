@@ -63,6 +63,8 @@ class _PassengerOffersState extends State<PassengerOffers> {
   bool _responding = false, _failed = false;
   final Set<String> _decided = {};
   int _generation = 0;
+  String? _lastError;
+  DateTime? _lastErrorAt;
   @override
   void initState() {
     super.initState();
@@ -77,6 +79,8 @@ class _PassengerOffersState extends State<PassengerOffers> {
       _generation++;
       _offers = [];
       _decided.clear();
+      _lastError = null;
+      _lastErrorAt = null;
       _busy = _responding = _failed = false;
       _refresh();
     }
@@ -115,6 +119,20 @@ class _PassengerOffersState extends State<PassengerOffers> {
     }
   }
 
+  void _showDecisionError(String message) {
+    final now = DateTime.now();
+    if (!mounted ||
+        (_lastError == message &&
+            _lastErrorAt != null &&
+            now.difference(_lastErrorAt!).inSeconds < 5)) return;
+    _lastError = message;
+    _lastErrorAt = now;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+          content: Text(message), duration: const Duration(seconds: 2)));
+  }
+
   Future<void> _respond(
       Map<String, dynamic> offer, bool accept, String orderPath) async {
     final generation = _generation;
@@ -136,14 +154,12 @@ class _PassengerOffersState extends State<PassengerOffers> {
       if (!mounted || generation != _generation) return;
       if (result['success'] == true) _decided.add(id);
       if (result['success'] != true)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result['error']?.toString() ??
-                'Предложение больше недоступно. Обновите заказ.')));
+        _showDecisionError(result['error']?.toString() ??
+            'Предложение больше недоступно. Обновите заказ.');
     } catch (_) {
       if (mounted && generation == _generation)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Ответ не получен. Проверяем состояние заказа; цена не считается принятой до подтверждения сервера.')));
+        _showDecisionError(
+            'Ответ не получен. Проверяем состояние заказа; цена не считается принятой до подтверждения сервера.');
     } finally {
       if (mounted && generation == _generation)
         setState(() => _responding = false);
@@ -182,8 +198,8 @@ class _PassengerOffersState extends State<PassengerOffers> {
                 ConstrainedBox(
                     constraints: BoxConstraints(
                         maxHeight: math
-                            .min(350, MediaQuery.sizeOf(context).height - 200)
-                            .clamp(250, 350)
+                            .min(450, MediaQuery.sizeOf(context).height - 220)
+                            .clamp(250, 450)
                             .toDouble()),
                     child: SingleChildScrollView(
                         child:

@@ -103,6 +103,10 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
     final audience = targetRole.toLowerCase() == PushDeepLinkRouter.targetDriver
         ? 'driver'
         : 'passenger';
+    if (targetRole.toLowerCase() == PushDeepLinkRouter.targetPassenger &&
+        orderRef != null &&
+        type != 'TRIP_CHAT_MESSAGE' &&
+        type != 'SUPPORT_CHAT_MESSAGE') return;
     if (audience == 'driver' &&
         type == PushDeepLinkRouter.orderAvailableType &&
         !shouldAnnounceDriverAvailableOrderOnce(orderRef)) {

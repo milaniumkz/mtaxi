@@ -50,6 +50,8 @@ class _DriverOfferWaitingState extends State<DriverOfferWaiting> {
     if (_finished || !mounted) return;
     _finished = true;
     _timer?.cancel();
+    // A root restoration may already have replaced this route. Never pop its successor.
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
     if (message != null)
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));

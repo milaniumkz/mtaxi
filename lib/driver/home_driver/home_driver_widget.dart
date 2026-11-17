@@ -1,3 +1,4 @@
+import '/trips/driver_order_navigation.dart';
 import '/trips/driver_position_filter.dart';
 import '/design/bottom_navigation.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -796,19 +797,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
     _stabilizeAcceptedDriverOrder(orderRef.path);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.goNamed(
-        HomeDriverOrderWidget.routeName,
-        queryParameters: {
-          'orderDocPath': orderRef.path,
-        },
-        extra: <String, dynamic>{
-          kTransitionInfoKey: TransitionInfo(
-            hasTransition: true,
-            transitionType: PageTransitionType.scale,
-            alignment: Alignment.bottomCenter,
-          ),
-        },
-      );
+      openDriverOrderOnce(context, orderRef.path);
     });
   }
 

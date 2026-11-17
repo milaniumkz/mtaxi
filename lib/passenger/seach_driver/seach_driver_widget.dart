@@ -742,14 +742,7 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
     if (status == 3) {
       unawaited(_playDriverArrivedSound());
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+    // The trip panel reflects this state; repeated foreground banners obscure it.
   }
 
   void _maybeNotifyOrderStatus(OrderRecord order) {

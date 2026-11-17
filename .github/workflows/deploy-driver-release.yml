@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Deploy final audit fixes: reconcile approved driver roles, GPS and finance; no APK.
+# Deploy 1.3.2 (70): +7 login, larger offers, stable trip restoration and quiet passenger UI; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]
@@ -70,6 +70,12 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'install -d -m 700 /opt/mtaxi-incoming'
           sshpass -e scp -o StrictHostKeyChecking=yes "$RUNNER_TEMP/web.tar.gz" deploy/deploy_audited.sh root@89.126.192.185:/opt/mtaxi-incoming/
           sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 "bash /opt/mtaxi-incoming/deploy_audited.sh '$GITHUB_SHA' --skip-apk"
+      - name: Read-only assignment consistency counts
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=yes root@89.126.192.185 'cd /opt/mtaxi && docker compose -p mtaxi -f docker-compose.production.yml -f deploy/vps.compose.yml exec -T backend node -' < server/scripts/trip_assignment_diagnostics.js
       - name: Verify both public sites
         run: |
           curl --fail --silent --show-error "$APP_URL/readyz"

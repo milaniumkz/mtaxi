@@ -4,7 +4,7 @@ const activeTrip = 'SELECT active_driver_order_id FROM users WHERE id = $1';
 function sessionScope(userId) {
   return { tables: {
     users: filter('id = $1', userId),
-    orders: filter('id IN (SELECT active_passenger_order_id FROM users WHERE id=$1 UNION SELECT active_driver_order_id FROM users WHERE id=$1)', userId),
+    orders: filter('id IN (SELECT active_passenger_order_id FROM users WHERE id=$1 UNION SELECT active_driver_order_id FROM users WHERE id=$1) OR (driver_id=$1 AND status IN (2,3,4))', userId),
     app_settings: true,
   }};
 }

@@ -469,3 +469,20 @@ test('thirty moderation and legacy session transitions preserve chosen role and 
     assert.equal(session.user.bonusBalance,1000);
   }
 });
+
+test('accepted counteroffer survives thirty lost driver references and session reloads without another commission', async () => {
+ const {getSessionBootstrapAsync}=require('../src/session');
+ const o=await make();const proposed=await offer({...args(o),price:700},auth(d));
+ assert.equal((await respond({...args(o),offerId:proposed.offer.id,accept:true},auth(p))).accepted,true);
+ const initial=await read();const money=u(initial,'d').balance,bonus=u(initial,'d').bonusBalance;
+ for(let i=0;i<30;i++) {
+  await write(s=>Object.assign(u(s,'d'),{activeDriverOrderId:null,hasActiveDriverOrder:false,roleState:'DRIVER_ONLINE'}));
+  const session=await getSessionBootstrapAsync({},auth(d));
+  assert.equal(session.activeDriverOrderRef,o.orderDocPath);
+  assert.equal(session.roleState,'DRIVER_ON_TRIP');
+  assert.equal(session.user.balance,money);assert.equal(session.user.bonusBalance,bonus);
+  const state=await list(args(o),auth(d));assert.equal(state.assignedToCurrentDriver,true);
+ }
+ const final=await read();assert.equal(final.orders[0].driverId,d.id);
+ assert.equal(final.ledger.filter(x=>x.type==='order_commission').length,1);
+});

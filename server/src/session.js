@@ -40,9 +40,18 @@ function buildSessionBootstrap(store, authUser) {
   const passengerOrder = store.orders.find(
     (order) => order.id === user.activePassengerOrderId && isActiveOrder(order),
   );
-  const driverOrder = store.orders.find(
-    (order) => order.id === user.activeDriverOrderId && isActiveOrder(order),
+  let driverOrder = store.orders.find(
+    order => order.id === user.activeDriverOrderId && order.driverId === user.id && [2,3,4].includes(Number(order.status)),
   );
+  if (!driverOrder) {
+    driverOrder = store.orders.filter(order => order.driverId === user.id && [2,3,4].includes(Number(order.status)))
+      .sort((a,b) => (Date.parse(b.acceptedAt || b.updatedAt || b.createdAt) || 0) - (Date.parse(a.acceptedAt || a.updatedAt || a.createdAt) || 0))[0];
+  }
+  if (driverOrder) {
+    user.activeDriverOrderId = driverOrder.id;
+    user.hasActiveDriverOrder = true;
+    user.roleState = 'DRIVER_ON_TRIP';
+  }
 
   if (!passengerOrder && user.activePassengerOrderId) {
     user.activePassengerOrderId = null;

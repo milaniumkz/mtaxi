@@ -158,9 +158,8 @@ Future<DocumentReference?> _recoverDriverOrderRefFromBootstrap() async {
       return null;
     }
     final orderRef = BackendRefs.instance.doc(orderPath);
-    if (FFAppState().shouldIgnoreDriverOrderRef(orderRef)) {
-      return null;
-    }
+    // A confirmed active server assignment overrides a transient local failure.
+    FFAppState().clearIgnoredDriverOrderRef(orderPath);
     return orderRef;
   } catch (e) {
     print('recoverActiveDriverOrderRefFromServer:bootstrap $e');

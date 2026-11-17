@@ -1,3 +1,4 @@
+import '/trips/driver_order_navigation.dart';
 import '/design/bottom_navigation.dart';
 import '/backend/push_notifications/driver_order_notifications.dart';
 import '/trips/driver_background_location.dart';
@@ -1661,12 +1662,7 @@ class _NavBarPageState extends State<NavBarPage> {
       if (orderRef != null &&
           FFAppState().shouldPreferOptimisticDriverOrder(orderRef)) {
         if (!mounted) return;
-        GoRouter.of(context).goNamed(
-          HomeDriverOrderWidget.routeName,
-          queryParameters: {
-            'orderDocPath': orderRef.path,
-          },
-        );
+        openDriverOrderOnce(context, orderRef.path);
         return;
       }
       if (orderRef == null) {
@@ -1674,12 +1670,7 @@ class _NavBarPageState extends State<NavBarPage> {
           orderRef = getEffectiveDriverLegacyOrderRef();
           if (orderRef != null) {
             if (!mounted) return;
-            GoRouter.of(context).goNamed(
-              HomeDriverOrderWidget.routeName,
-              queryParameters: {
-                'orderDocPath': orderRef.path,
-              },
-            );
+            openDriverOrderOnce(context, orderRef.path);
             return;
           }
         }
@@ -1716,20 +1707,14 @@ class _NavBarPageState extends State<NavBarPage> {
         if (order == null) {
           final recoveredOrderRef =
               await recoverActiveDriverOrderRefFromServer();
-          if (recoveredOrderRef != null &&
-              recoveredOrderRef.path != orderRef.path) {
+          if (recoveredOrderRef != null) {
             FFAppState().syncLegacyOrderRefs(
               passengerOrderRef: getEffectivePassengerLegacyOrderRef(),
               driverOrderRef: recoveredOrderRef,
             );
             FFAppState().update(() {});
             if (!mounted) return;
-            GoRouter.of(context).goNamed(
-              HomeDriverOrderWidget.routeName,
-              queryParameters: {
-                'orderDocPath': recoveredOrderRef.path,
-              },
-            );
+            openDriverOrderOnce(context, recoveredOrderRef.path);
             return;
           }
           FFAppState().markDriverOrderClosedLocally(orderRef);
@@ -1786,12 +1771,7 @@ class _NavBarPageState extends State<NavBarPage> {
         }
 
         if (!mounted) return;
-        GoRouter.of(context).goNamed(
-          HomeDriverOrderWidget.routeName,
-          queryParameters: {
-            'orderDocPath': order.reference.path,
-          },
-        );
+        openDriverOrderOnce(context, order.reference.path);
       } catch (_) {
         final recoveredOrderRef = await recoverActiveDriverOrderRefFromServer();
         if (FFAppState().shouldIgnoreDriverOrderRef(recoveredOrderRef)) {
@@ -1814,12 +1794,7 @@ class _NavBarPageState extends State<NavBarPage> {
             driverOrderRef: recoveredOrderRef,
           );
           FFAppState().update(() {});
-          GoRouter.of(context).goNamed(
-            HomeDriverOrderWidget.routeName,
-            queryParameters: {
-              'orderDocPath': recoveredOrderRef.path,
-            },
-          );
+          openDriverOrderOnce(context, recoveredOrderRef.path);
         }
       }
     } finally {
