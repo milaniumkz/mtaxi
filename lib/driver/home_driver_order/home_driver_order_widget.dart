@@ -86,6 +86,16 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   LatLng? _lastWrittenLocation;
   late final DateTime _openedAt;
   OrderRecord? _lastVisibleDriverOrder;
+  String? _detailsStreamPath;
+  Stream<OrderRecord>? _detailsStream;
+  Stream<OrderRecord> _streamForOrder(String path) {
+    if (_detailsStreamPath != path || _detailsStream == null) {
+      _detailsStreamPath = path;
+      _detailsStream = orderDetailsStreamFromBackend(path);
+    }
+    return _detailsStream!;
+  }
+
   DocumentReference? _screenOrderRef;
   bool _verifyingAuthoritativeAssignment = false;
 
@@ -1090,7 +1100,7 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
               }
 
               return StreamBuilder<OrderRecord>(
-                stream: orderDetailsStreamFromBackend(screenOrderRef.path),
+                stream: _streamForOrder(screenOrderRef.path),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     _recoverActiveDriverOrderOrLeave();
@@ -1103,7 +1113,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                     );
                   }
                   final streamedOrder = snapshot.data;
-                  if (streamedOrder == null) {
+                  if (streamedOrder == null ||
+                      streamedOrder.reference.id != screenOrderRef.id) {
                     return _buildOpeningOrderState(
                       message: _tr(
                         ru: 'Загружаем данные заказа...',

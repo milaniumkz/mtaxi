@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Deploy 1.3.2 (70): +7 login, larger offers, stable trip restoration and quiet passenger UI; no APK.
+# Deploy 1.3.2 (70) including persistent active-trip subscriptions; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]
