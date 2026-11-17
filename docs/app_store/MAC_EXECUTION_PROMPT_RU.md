@@ -19,6 +19,8 @@
 
 Прочитай:
 
+- `docs/releases/2026-11-17-audit30.md` — актуальный аудит, исправления GPS/ролей/чата и границы проверки;
+- `docs/releases/2026-11-17-trip-fixes.md`;
 - `docs/app_store/APPLE_REPLY_EN.md` — полный ответ по всем девяти пунктам;
 - `docs/app_store/full_source_audit_2026-11-02.md` — результаты нового аудита и реальные изменения;
 - `docs/app_store/review_4_3_2026-11-02.md` и `internet_research_4_3_2026-11-02.md`;
@@ -56,9 +58,11 @@
 
 ## 4. Собери и загрузи новую iOS-сборку
 
-Сначала проверь текущее состояние App Store Connect и максимальный загруженный build. Номер должен быть выше него, минимум 67, если пока максимум 66. В исходниках подготовлен 1.3.1+67, но более новые чужие сборки нельзя перезаписывать. Версию 1.3.1 оставь, если отклонённая карточка допускает новую сборку; новую маркетинговую версию создавай только по необходимости.
+Сначала проверь текущее состояние App Store Connect и максимальный загруженный build. Актуальные исходники после аудита 17 ноября — 1.3.2+69, ветка codex/full-audit-20261023, код аудита e3aad8f или более новый коммит. Не собирай исторические 1.3.1+67/68 вместо текущего кода. Build должен быть не ниже 69 и строго выше уже загруженного максимума; если 69 занят, увеличь номер. Согласуй маркетинговую версию 1.3.2 в pubspec, архиве и карточке App Store Connect; сохраняй App ID и Bundle ID. Не перезаписывай новые пользовательские изменения.
 
 Используй существующие signing/provisioning и правильную Firebase/APNs-конфигурацию MTaxi. Не подменяй её конфигурацией Taxi 24 и не создавай фиктивный GoogleService-Info.plist. Не печатай приватные ключи/токены/профили в лог или Git. Если нет прав подписи/ключей, установи конкретный недостающий доступ и продолжи остальные этапы; не объявляй архив готовым.
+
+В Linux не проверялись физические iPhone/Android, фоновые уведомления, GPS на улице и реальная озвучка. Перед отметкой о нативной готовности проверь эти сценарии на устройстве с новой сборкой. Apple APNs владелец планировал загрузить позже: проверь реальную доставку, а не только наличие entitlements. Не называй браузерные/Flutter-тесты физическим TestFlight-тестированием.
 
 Проверь доступность реальных production URL перед сборкой:
 
@@ -69,7 +73,7 @@
 
 Релизная конфигурация: MTAXI_BACKEND_URL=https://mtaxi.89.126.192.185.sslip.io и MTAXI_REQUIRE_REMOTE_BACKEND=true. Архив не должен указывать на localhost/временный тестовый backend. Если инфраструктура поменялась, сначала установи правильную конфигурацию, а не подставляй выдуманный адрес.
 
-Используй штатный flutter build ipa/Xcode Archive с подходящей действительной экспортной конфигурацией. Проверь итоговые Info.plist основного приложения и ImageNotification: Bundle ID, team, подпись, entitlements, CFBundleShortVersionString и CFBundleVersion. В новой конфигурации версии Runner/extension наследуют Flutter Generated.xcconfig через общий AppVersion.xcconfig; проверь это на Mac через xcodebuild -showBuildSettings и по собранным plist. Linux-проверка структуры не заменяет Xcode build. Не возвращай фиксированные 1.1.1/57. Запусти проверку реального архива: python3 scripts/verify_ios_archive.py ПУТЬ_К_IPA_ИЛИ_XCARCHIVE --expected-version 1.3.1 --expected-build ФАКТИЧЕСКИЙ_НОМЕР --require-firebase. Скрипт читает метаданные, проверяет основной Bundle ID, версию extension и Firebase project; подпись и entitlements проверь отдельно штатными средствами Xcode/codesign.
+Используй штатный flutter build ipa/Xcode Archive с подходящей действительной экспортной конфигурацией. Проверь итоговые Info.plist основного приложения и ImageNotification: Bundle ID, team, подпись, entitlements, CFBundleShortVersionString и CFBundleVersion. В новой конфигурации версии Runner/extension наследуют Flutter Generated.xcconfig через общий AppVersion.xcconfig; проверь это на Mac через xcodebuild -showBuildSettings и по собранным plist. Linux-проверка структуры не заменяет Xcode build. Не возвращай фиксированные 1.1.1/57. Запусти проверку реального архива: python3 scripts/verify_ios_archive.py ПУТЬ_К_IPA_ИЛИ_XCARCHIVE --expected-version 1.3.2 --expected-build ФАКТИЧЕСКИЙ_НОМЕР --require-firebase. Скрипт читает метаданные, проверяет основной Bundle ID, версию extension и Firebase project; подпись и entitlements проверь отдельно штатными средствами Xcode/codesign.
 
 Проверь итоговые SDK privacy manifests, usage descriptions и App Privacy в App Store Connect по реальным данным сборки. Пустой app manifest сам по себе не доказывает отсутствие данных; third-party SDK manifests и App Privacy — разные вещи.
 
