@@ -379,7 +379,7 @@ async function adminListPushNotificationsAsync(data = {}, auth) {
   return withStoreAsync(async (store) => {
     ensureTokenArrays(store);
     const notifications = [...store.notifications]
-      .filter((item) => normalizeString(item.targetRole))
+      .filter((item) => normalizeString(item.targetRole) && item.type !== 'TRIP_CHAT_MESSAGE')
       .sort((a, b) => (asNumber(b.sentAtMs) || Date.parse(b.createdAt || "") || 0) -
         (asNumber(a.sentAtMs) || Date.parse(a.createdAt || "") || 0))
       .slice(0, limit)

@@ -5675,6 +5675,7 @@ test("updateUserPreferences switches approved driver mode and rejects passenger 
     coords: {
       latitude: 49.948,
       longitude: 82.617,
+      accuracy: 10,
     },
   }, { user: driver });
   assert.equal(updated.success, true);

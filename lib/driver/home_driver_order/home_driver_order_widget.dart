@@ -1,3 +1,5 @@
+import '/trips/driver_position_filter.dart';
+import '/trips/trip_chat.dart';
 import '/design/bottom_navigation.dart';
 import '/trips/trip_receipt.dart';
 import '/design/trip_panel.dart';
@@ -317,27 +319,24 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   }
 
   Widget _buildPassengerContactActions(String phone) {
-    if (phone.trim().isEmpty) {
-      return Text(
-        _tr(
-          ru: 'Телефон не указан',
-          kk: 'Телефон көрсетілмеген',
-        ),
-        style: FlutterFlowTheme.of(context).bodySmall,
-      );
-    }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(_formatPhone(phone), style: FlutterFlowTheme.of(context).bodySmall),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(
-            onPressed: () => _callPhone(phone),
+            onPressed: phone.trim().isEmpty ? null : () => _callPhone(phone),
             icon: const Icon(Icons.call_outlined, size: 18),
             label: Text(_tr(ru: 'Позвонить', kk: 'Қоңырау'))),
         OutlinedButton.icon(
-            onPressed: () => _openWhatsApp(phone),
+            onPressed: phone.trim().isEmpty ? null : () => _openWhatsApp(phone),
             icon: const Icon(Icons.chat_bubble_outline, size: 18),
             label: const Text('WhatsApp')),
+        OutlinedButton.icon(
+            onPressed: _currentScreenOrderRef() == null
+                ? null
+                : () => openTripChat(context, _currentScreenOrderRef()!.path),
+            icon: const Icon(Icons.forum_outlined, size: 18),
+            label: const Text('Чат')),
       ]),
     ]);
   }
@@ -700,6 +699,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   }
 
   double? _lastGpsAccuracy, _gpsHeading;
+  DateTime? _lastGpsTimestamp;
+  final _gpsFilter = DriverPositionFilter();
   Future<void>? _locationFuture;
   bool _locationTickBusy = false;
 
@@ -780,29 +781,6 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
 
     Map<String, dynamic> response;
     try {
-      if (nextStatus == 3) {
-        await _resolveLocation();
-        final location = currentUserLocationValue, accuracy = _lastGpsAccuracy;
-        if (location == null ||
-            accuracy == null ||
-            !accuracy.isFinite ||
-            accuracy <= 0 ||
-            accuracy > 40) {
-          throw StateError(
-              'Для прибытия включите точную геолокацию и дождитесь GPS рядом с местом посадки.');
-        }
-        final synced = await makeCloudCall('updateUserPreferences', {
-          'coords': {
-            'latitude': location.latitude,
-            'longitude': location.longitude,
-            'accuracy': accuracy
-          }
-        });
-        if (synced['success'] != true)
-          throw StateError(
-              'Не удалось передать геопозицию. Проверьте связь и повторите.');
-        _rememberSyncedDriverLocation(location);
-      }
       response = await makeCloudCall(
         'advanceDriverOrderStatus',
         {
@@ -932,10 +910,12 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
               DateTime.now().difference(cached.timestamp).inSeconds <= 5
           ? cached
           : await getSafeCurrentPosition(
-              accuracy: LocationAccuracy.high,
+              accuracy: LocationAccuracy.bestForNavigation,
               timeLimit: const Duration(seconds: 8),
             );
       if (!mounted) return;
+      if (!_gpsFilter.accept(position)) return;
+      _lastGpsTimestamp = position.timestamp;
       setState(() {
         _gpsHeading = position.speed > 1.5 &&
                 position.heading.isFinite &&
@@ -993,6 +973,7 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                     'latitude': nextLocation.latitude,
                     'longitude': nextLocation.longitude,
                     'accuracy': _lastGpsAccuracy,
+                    'timestamp': _lastGpsTimestamp?.toUtc().toIso8601String(),
                   },
                 },
               );

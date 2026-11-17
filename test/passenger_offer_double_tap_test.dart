@@ -56,8 +56,15 @@ void main() {
         for (var i = 0; i < 8; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
+        expect(find.byType(DriverOfferCard), findsNWidgets(5));
+        for (final button
+            in find.widgetWithText(FilledButton, 'Принять').evaluate()) {
+          final box = button.renderObject! as RenderBox;
+          expect(box.localToGlobal(Offset.zero).dy + box.size.height,
+              lessThanOrEqualTo(600));
+        }
         final card =
-            tester.widget<DriverOfferCard>(find.byType(DriverOfferCard));
+            tester.widget<DriverOfferCard>(find.byType(DriverOfferCard).first);
         card.onAccept!();
         await tester.pump(const Duration(milliseconds: 30));
         if (secondAccept) {
@@ -82,14 +89,15 @@ void main() {
                       'offers': responses > 0
                           ? []
                           : [
-                              {
-                                'id': 'audit-offer',
-                                'driverName': 'Synthetic',
-                                'price': 700,
-                                'expiresAt': DateTime.now()
-                                    .add(const Duration(minutes: 1))
-                                    .toIso8601String()
-                              }
+                              for (var n = 0; n < 5; n++)
+                                {
+                                  'id': 'audit-offer-$n',
+                                  'driverName': 'Synthetic $n',
+                                  'price': 700,
+                                  'expiresAt': DateTime.now()
+                                      .add(const Duration(minutes: 1))
+                                      .toIso8601String()
+                                }
                             ]
                     }),
                     200);

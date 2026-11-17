@@ -919,7 +919,7 @@ async function advanceDriverOrderStatusAsync(data = {}, auth) {
   return withStoreAsync(async (store) => advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus), financialOrderScope(orderId, auth.user.id));
 }
 
-function advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus) {
+function advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus, { automatic = false } = {}) {
   const order = store.orders.find((item) => item.id === orderId);
   const driver = store.users.find((user) => user.id === auth.user.id);
   if (!order || !driver || order.driverId !== driver.id) {
@@ -934,14 +934,16 @@ function advanceDriverOrderStatusInStore(store, auth, orderId, nextStatus) {
     return { success: false, code: "ORDER_STATUS_ROLLBACK_DENIED", error: "Нельзя вернуть заказ на старый статус" };
   }
 
-  if (nextStatus === 3 && order.fromPoint) {
+  if (nextStatus === ORDER_STATUS.DRIVER_ARRIVED) {
     const { meters } = require('./trip_automation');
     const fresh = Date.now() - Date.parse(driver.coordsUpdatedAt || '') <= 30000;
     const accurate = Number(driver.coordsAccuracy) > 0 && Number(driver.coordsAccuracy) <= 40;
-    if (!fresh || !accurate || !driver.coords || meters(order.fromPoint, driver.coords) > 120) return { success:false, code:"PICKUP_GPS_REQUIRED",error:"Для прибытия нужна свежая точная геопозиция рядом с местом посадки" };
-    order.pickupPresenceVerified = true;
+    const verified = !!order.fromPoint && fresh && accurate && !!driver.coords && meters(order.fromPoint, driver.coords) <= 120;
+    if (automatic && !verified) return { success:false,code:'PICKUP_GPS_REQUIRED',error:'Автоматическое прибытие ожидает точную геопозицию у посадки' };
+    if (verified) order.pickupPresenceVerified = true;
+    if (!automatic) order.manualArrivalConfirmed = true;
   }
-  if (nextStatus === 4 && order.fromPoint && !order.pickupPresenceVerified) return { success:false,code:"PICKUP_NOT_VERIFIED",error:"Сначала подтвердите прибытие к месту посадки" };
+  if (nextStatus === ORDER_STATUS.TRIP_STARTED && order.fromPoint && !order.pickupPresenceVerified && (automatic || !order.manualArrivalConfirmed)) return { success:false,code:'PICKUP_NOT_VERIFIED',error:'Сначала подтвердите прибытие к месту посадки' };
   order.status = nextStatus;
   order.updatedAt = new Date().toISOString();
   if (nextStatus === ORDER_STATUS.DRIVER_ARRIVED) {

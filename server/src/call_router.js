@@ -1,3 +1,4 @@
+const {listTripChatAsync,sendTripChatAsync}=require('./trip_chat');
 const { kaspiAutomation } = require('./kaspi_pos/automation');
 const { kaspiService } = require('./kaspi_pos');
 const { submitOrderOfferAsync, listOrderOffersAsync, respondOrderOfferAsync, getTripTrackingAsync, rateTripDriverAsync } = require('./order_offers');
@@ -122,6 +123,8 @@ const blockedUserAllowedCalls = new Set([
 ]);
 
 const handlers = {
+  listTripChat: async ({data,auth}) => listTripChatAsync(data,auth),
+  sendTripChat: async ({data,auth}) => sendTripChatAsync(data,auth),
   adminKaspiPosTestLink: async ({data,auth}) => kaspiService().testLink(data,auth),
   adminKaspiPosCheckTestLink: async ({data,auth}) => kaspiService().checkTestLink(data,auth),
   adminKaspiPosStatus: async ({data,auth}) => kaspiService().getStatus(data,auth),

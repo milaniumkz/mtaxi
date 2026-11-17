@@ -33,7 +33,7 @@ void main() {
     expect(driverOfferIncrements(10000000), isEmpty);
   });
   testWidgets(
-      'driver selects one surcharge and sends exactly one total after confirmation',
+      'driver sends the selected total immediately without a price dialog',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     PackageInfo.setMockInitialValues(
@@ -47,33 +47,15 @@ void main() {
       await tester.pumpWidget(wrap(Scaffold(
           body: Builder(
               builder: (context) => FilledButton(
-                  onPressed: () => proposeDriverPrice(context, 'order/audit',
-                      initialPrice: 1000),
-                  child: const Text('Открыть'))))));
-      await tester.tap(find.text('Открыть'));
-      await tester.pumpAndSettle();
-      expect(find.byType(TextField), findsNothing);
-      expect(
-          find.byKey(const ValueKey('driver-offer-plus-200')), findsOneWidget);
-      expect(
-          find.byKey(const ValueKey('driver-offer-plus-400')), findsOneWidget);
-      expect(
-          find.byKey(const ValueKey('driver-offer-plus-600')), findsOneWidget);
-      expect(
-          tester
-              .widget<FilledButton>(
-                  find.widgetWithText(FilledButton, 'Предложить'))
-              .onPressed,
-          isNull);
-      await tester.tap(find.byKey(const ValueKey('driver-offer-plus-600')));
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('driver-offer-plus-200')));
-      await tester.pump();
-      expect(calls, isEmpty);
-      await tester.tap(find.text('Предложить за 1 200 ₸'));
+                  onPressed: () =>
+                      proposeDriverPrice(context, 'order/audit', price: 1200),
+                  child: const Text('Отправить +200'))))));
+      await tester.tap(find.text('Отправить +200'));
       await tester.pumpAndSettle();
       expect(calls.length, 1);
       expect(calls.single['price'], 1200);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(TextField), findsNothing);
     },
         () => MockClient((req) async {
               if (req.url.path.endsWith('/submitOrderOffer'))
@@ -84,24 +66,6 @@ void main() {
                   200,
                   headers: {'content-type': 'application/json'});
             }));
-  });
-  testWidgets('repeated cancel preserves the driver feed route',
-      (tester) async {
-    await tester.pumpWidget(wrap(Scaffold(
-        body: Builder(
-            builder: (context) => FilledButton(
-                onPressed: () => proposeDriverPrice(context, 'order/audit'),
-                child: const Text('Открыть'))))));
-    await tester.tap(find.text('Открыть'));
-    await tester.pumpAndSettle();
-    final cancel =
-        tester.widget<TextButton>(find.widgetWithText(TextButton, 'Отмена'));
-    cancel.onPressed!();
-    await tester.pump(const Duration(milliseconds: 30));
-    cancel.onPressed!();
-    await tester.pumpAndSettle();
-    expect(find.text('Открыть'), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
   testWidgets('fare balances use grouped tenge amounts', (tester) async {
     await tester.pumpWidget(wrap(const Scaffold(

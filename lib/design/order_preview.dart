@@ -1,3 +1,4 @@
+import '/trips/order_offers.dart' show driverOfferIncrements;
 import '/design/mtaxi_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,11 +14,13 @@ class OrderPreview extends StatefulWidget {
       required this.order,
       required this.onAccept,
       required this.onOffer,
+      this.onOfferPrice,
       this.unavailable = false,
       this.busy = false,
       this.mapOnly = false});
   final Map<String, dynamic> order;
   final VoidCallback onAccept, onOffer;
+  final ValueChanged<int>? onOfferPrice;
   final bool unavailable, busy, mapOnly;
   @override
   State<OrderPreview> createState() => _OrderPreviewState();
@@ -223,23 +226,43 @@ class _OrderPreviewState extends State<OrderPreview> {
                   if (!widget.unavailable) ...[
                     FilledButton(
                         style: FilledButton.styleFrom(
-                            backgroundColor: MTaxiDesign.ink,
-                            foregroundColor: Colors.white),
-                        onPressed: widget.busy ? null : widget.onOffer,
-                        child: Text(
-                            tr('Предложить свою цену', 'Өз бағаңызды ұсыну'))),
-                    const SizedBox(height: 10),
-                    Text(
-                        tr('Пассажир ответит в течение 30 секунд. Заказ начнётся после согласия пассажира.',
-                            'Жолаушы 30 секунд ішінде жауап береді. Тапсырыс жолаушы келіскеннен кейін басталады.'),
-                        style: const TextStyle(fontSize: 12)),
-                    const SizedBox(height: 14),
-                    OutlinedButton(
+                            backgroundColor: MTaxiDesign.gold,
+                            foregroundColor: MTaxiDesign.ink,
+                            minimumSize: const Size.fromHeight(52)),
                         onPressed: widget.busy ? null : widget.onAccept,
                         child: Text(widget.busy
                             ? tr('Подтверждаем…', 'Расталуда…')
                             : tr('Принять цену пассажира',
                                 'Жолаушы бағасын қабылдау'))),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      for (final increment in driverOfferIncrements(
+                          (widget.order['price'] as num? ?? 500).round()))
+                        Expanded(
+                            child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 3),
+                                child: OutlinedButton(
+                                    key: ValueKey(
+                                        'driver-offer-plus-$increment'),
+                                    style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 2),
+                                        minimumSize: const Size(0, 44)),
+                                    onPressed: widget.busy
+                                        ? null
+                                        : () => widget.onOfferPrice != null
+                                            ? widget.onOfferPrice!(
+                                                (widget.order['price'] as num? ?? 500).round() +
+                                                    increment)
+                                            : widget.onOffer(),
+                                    child: FittedBox(child: Text('+$increment ₸'))))),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(
+                        tr('Предложение отправится сразу. Дождитесь ответа пассажира.',
+                            'Ұсыныс бірден жіберіледі. Жолаушының жауабын күтіңіз.'),
+                        style: const TextStyle(fontSize: 12)),
                   ] else
                     Text(tr('Заказ больше недоступен',
                         'Тапсырыс енді қолжетімсіз')),

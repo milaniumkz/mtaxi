@@ -216,13 +216,19 @@ function updatePreferencesInStore(store, data, auth) {
     const latitude = asNumber(data.coords.latitude ?? data.coords.lat);
     const longitude = asNumber(data.coords.longitude ?? data.coords.lng);
     if (latitude != null && longitude != null && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) {
-      user.coords = { latitude, longitude };
-      user.coordsUpdatedAt = new Date().toISOString();
-      user.coordsAccuracy = asNumber(data.coords.accuracy);
+      const sample = { latitude, longitude, accuracy: asNumber(data.coords.accuracy), timestamp: data.coords.timestamp };
+      const accepted = user.isDriver === true ? require('./driver_position').acceptDriverPosition(user, sample) : true;
+      if (!accepted) {
+        const active = store.orders.find(o => o.id === user.activeDriverOrderId && o.driverId === user.id);
+        if (active) { delete active.autoArrivalSince; delete active.autoDepartureSince; }
+        user.updatedAt = new Date().toISOString();
+        return { success:true,code:'USER_PREFERENCES_UPDATED',locationAccepted:false,user:publicUser(user),userDocPath:`users/${user.id}`,roleState:user.roleState };
+      }
+      if (user.isDriver !== true) { user.coords = { latitude, longitude }; user.coordsUpdatedAt = new Date().toISOString(); user.coordsAccuracy = asNumber(data.coords.accuracy); }
       const { observeDriverPosition } = require('./trip_automation');
       const { advanceDriverOrderStatusInStore } = require('./orders');
       observeDriverPosition(store, user, { latitude, longitude, accuracy: asNumber(data.coords.accuracy) },
-        status => advanceDriverOrderStatusInStore(store, { user }, user.activeDriverOrderId, status));
+        status => advanceDriverOrderStatusInStore(store, { user }, user.activeDriverOrderId, status, { automatic: true }));
     }
   }
   user.updatedAt = new Date().toISOString();

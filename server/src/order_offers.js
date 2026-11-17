@@ -16,7 +16,7 @@ const point = (p) =>
     ? { lat: Number(p.latitude ?? p.lat), lng: Number(p.longitude ?? p.lng) }
     : null;
 const freshPoint = (u) =>
-  u?.coordsUpdatedAt && Date.now() - Date.parse(u.coordsUpdatedAt) < 120000
+  u?.coordsUpdatedAt && Number(u.coordsAccuracy) > 0 && Number(u.coordsAccuracy) <= 65 && Date.now() - Date.parse(u.coordsUpdatedAt) < 120000
     ? point(u.coords)
     : null;
 function driverDetails(store, user) {
@@ -91,7 +91,7 @@ async function submitOrderOfferAsync(data, auth) {
       price,
       etaMinutes,
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 30000).toISOString(),
+      expiresAt: new Date(Date.now() + Math.min(120, Math.max(15, Number(store.settings?.driverOfferLifetimeSec) || 30)) * 1000).toISOString(),
       status: "pending",
     };
     o.offers.push(offer);

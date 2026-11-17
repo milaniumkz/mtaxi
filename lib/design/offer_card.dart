@@ -13,12 +13,14 @@ class DriverOfferCard extends StatefulWidget {
       this.now,
       this.onAccept,
       this.onDecline,
-      this.busy = false});
+      this.busy = false,
+      this.compact = false});
   final Map<String, dynamic> offer;
   final num? passengerPrice;
   final DateTime Function()? now;
   final VoidCallback? onAccept, onDecline;
   final bool busy;
+  final bool compact;
   @override
   State<DriverOfferCard> createState() => _DriverOfferCardState();
 }
@@ -84,6 +86,76 @@ class _DriverOfferCardState extends State<DriverOfferCard> {
         : ((_expiry!.difference(_now).inMilliseconds / 1000).ceil())
             .clamp(0, 30);
     final scheme = Theme.of(context).colorScheme;
+    if (widget.compact) {
+      final meta =
+          '${rating == null ? '★ —' : '★ ${rating.toStringAsFixed(1)}'} · ${offer['etaMinutes'] == null ? tr('Подача уточняется', 'Келу уақыты белгісіз') : '${offer['etaMinutes']} ${tr('мин', 'мин')}'}';
+      return Container(
+        key: ValueKey('compact-offer-${offer['id']}'),
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border.all(color: Theme.of(context).dividerColor),
+            borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          const CircleAvatar(
+              radius: 14, child: Icon(Icons.person_outline, size: 18)),
+          const SizedBox(width: 7),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                Text(name.isEmpty ? tr('Водитель', 'Жүргізуші') : name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+                Text(meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11)),
+                if ('${offer['driverCar'] ?? ''} ${offer['driverPlate'] ?? ''}'
+                    .trim()
+                    .isNotEmpty)
+                  Text(
+                      '${offer['driverCar'] ?? ''} ${offer['driverPlate'] ?? ''}'
+                          .trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 10)),
+              ])),
+          const SizedBox(width: 6),
+          SizedBox(
+              width: 82,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                        '${price ?? '—'} ₸${seconds == null ? '' : ' · ${seconds}с'}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 13))),
+                SizedBox(
+                    height: 30,
+                    width: 82,
+                    child: FilledButton(
+                        style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 30)),
+                        onPressed: expired || busy ? null : onAccept,
+                        child: Text(tr('Принять', 'Қабылдау'),
+                            style: const TextStyle(fontSize: 12)))),
+              ])),
+          SizedBox(
+              width: 24,
+              child: IconButton(
+                  padding: EdgeInsets.zero,
+                  tooltip: tr('Отклонить', 'Қабылдамау'),
+                  onPressed: expired || busy ? null : onDecline,
+                  icon: const Icon(Icons.close, size: 16))),
+        ]),
+      );
+    }
     return MTaxiCard(
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

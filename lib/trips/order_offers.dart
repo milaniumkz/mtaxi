@@ -1,8 +1,6 @@
 import 'trip_receipt.dart';
 import 'dart:math' as math;
-import 'package:go_router/go_router.dart';
 import 'driver_offer_waiting.dart';
-import '/flutter_flow/flutter_flow_util.dart' show formatAppCurrency;
 import '/design/offer_card.dart';
 import '/design/mtaxi_theme.dart';
 import '/flutter_flow/internationalization.dart';
@@ -10,48 +8,31 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '/backend/backend_calls/backend_calls.dart';
 
-Future<void> proposeDriverPrice(BuildContext context, String path,
-    {int initialPrice = 500}) async {
-  final result = await showDialog<int>(
-      context: context,
-      builder: (_) => _OfferPriceDialog(initialPrice: initialPrice));
-  if (result == null || !context.mounted) return;
-  String tr(String ru, String kk) =>
-      FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+Future<bool> proposeDriverPrice(BuildContext context, String path,
+    {required int price}) async {
   try {
     final response = await makeCloudCall(
-        'submitOrderOffer', {'orderDocPath': path, 'price': result});
-    if (!context.mounted) return;
+        'submitOrderOffer', {'orderDocPath': path, 'price': price});
+    if (!context.mounted) return false;
     if (response['success'] == true && response['offer'] is Map) {
-      final offer = Map<String, dynamic>.from(response['offer'] as Map);
-      final accepted = await Navigator.of(context).push<bool>(MaterialPageRoute(
-          builder: (_) =>
-              DriverOfferWaiting(orderDocPath: path, offer: offer)));
-      if (accepted == true && context.mounted) {
-        context.goNamed('homeDriverOrder',
-            queryParameters: {'orderDocPath': path});
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(response['error']?.toString() ??
-              tr('Не удалось отправить предложение', 'Ұсыныс жіберілмеді'))));
+      return await Navigator.of(context).push<bool>(MaterialPageRoute(
+              builder: (_) => DriverOfferWaiting(
+                  orderDocPath: path,
+                  offer:
+                      Map<String, dynamic>.from(response['offer'] as Map)))) ==
+          true;
     }
-  } catch (_) {
-    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(tr('Ответ не получен. Проверьте предложения по заказу.',
-            'Жауап алынбады. Тапсырыс ұсыныстарын тексеріңіз.'))));
+        content: Text(response['error']?.toString() ??
+            'Не удалось отправить предложение')));
+  } catch (_) {
+    if (context.mounted)
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Ответ не получен. Проверьте предложение по заказу.')));
   }
+  return false;
 }
 
-class _OfferPriceDialog extends StatefulWidget {
-  const _OfferPriceDialog({required this.initialPrice});
-  final int initialPrice;
-  @override
-  State<_OfferPriceDialog> createState() => _OfferPriceDialogState();
-}
-
-/// Three proportional surcharges, rounded to 50 tenge for everyday fares.
 List<int> driverOfferIncrements(int passengerPrice) {
   final base = passengerPrice.clamp(500, 10000000);
   final room = 10000000 - base;
@@ -66,118 +47,6 @@ List<int> driverOfferIncrements(int passengerPrice) {
   ];
 }
 
-class _OfferPriceDialogState extends State<_OfferPriceDialog> {
-  bool _decided = false;
-  int? _selected;
-  void _finish(int? value) {
-    if (_decided) return;
-    _decided = true;
-    Navigator.pop(context, value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    String tr(String ru, String kk) =>
-        FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
-    final base = widget.initialPrice.clamp(500, 10000000);
-    final increments = driverOfferIncrements(base);
-    String money(int value) => formatAppCurrency(value.toDouble());
-    return AlertDialog(
-      title: Text(tr('Предложить цену', 'Баға ұсыну')),
-      content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-              child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(tr('Цена пассажира', 'Жолаушы бағасы')),
-              const SizedBox(height: 6),
-              Text(money(base),
-                  style: const TextStyle(
-                      fontSize: 28, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 16),
-              Text(tr('Выберите доплату к этой цене',
-                  'Осы бағаға қосымша ақыны таңдаңыз')),
-              const SizedBox(height: 12),
-              LayoutBuilder(builder: (context, constraints) {
-                final stacked = constraints.maxWidth < 300 ||
-                    MediaQuery.textScalerOf(context).scale(16) > 24;
-                final width = stacked
-                    ? constraints.maxWidth
-                    : (constraints.maxWidth - 16) / 3;
-                return Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final extra in increments)
-                    SizedBox(
-                        width: width,
-                        child: OutlinedButton(
-                          key: ValueKey('driver-offer-plus-$extra'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 14),
-                            foregroundColor:
-                                Theme.of(context).colorScheme.onSurface,
-                            backgroundColor: _selected == extra
-                                ? MTaxiDesign.gold.withValues(alpha: .25)
-                                : Theme.of(context).colorScheme.surface,
-                            side: BorderSide(
-                                color: _selected == extra
-                                    ? MTaxiDesign.gold
-                                    : Theme.of(context).dividerColor,
-                                width: _selected == extra ? 2 : 1),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16)),
-                          ),
-                          onPressed: () => setState(() => _selected = extra),
-                          child:
-                              Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Text('+',
-                                style: TextStyle(
-                                    fontSize: 32,
-                                    height: 1,
-                                    fontWeight: FontWeight.w700)),
-                            Text(money(extra),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    fontSize: 17, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Text(tr('Итого', 'Барлығы'),
-                                style: const TextStyle(fontSize: 12)),
-                            Text(money(base + extra),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 13)),
-                          ]),
-                        )),
-                ]);
-              }),
-              const SizedBox(height: 14),
-              Text(
-                  increments.isEmpty
-                      ? tr(
-                          'Достигнута максимальная цена. Можно принять цену пассажира.',
-                          'Ең жоғары бағаға жетті. Жолаушы бағасын қабылдауға болады.')
-                      : tr(
-                          'Предложение отправится после подтверждения. Заказ начнётся только с согласия пассажира.',
-                          'Ұсыныс растаудан кейін жіберіледі. Тапсырыс жолаушы келіскенде ғана басталады.'),
-                  style: const TextStyle(fontSize: 12)),
-            ],
-          ))),
-      actions: [
-        TextButton(
-            onPressed: () => _finish(null),
-            child: Text(tr('Отмена', 'Бас тарту'))),
-        FilledButton(
-            onPressed:
-                _selected == null ? null : () => _finish(base + _selected!),
-            child: Text(_selected == null
-                ? tr('Предложить', 'Ұсыну')
-                : tr('Предложить за ${money(base + _selected!)}',
-                    '${money(base + _selected!)} ұсыну'))),
-      ],
-    );
-  }
-}
-
 class PassengerOffers extends StatefulWidget {
   const PassengerOffers(
       {super.key, required this.orderDocPath, this.passengerPrice});
@@ -188,11 +57,11 @@ class PassengerOffers extends StatefulWidget {
 }
 
 class _PassengerOffersState extends State<PassengerOffers> {
-  Timer? _timer, _offerExpiryTimer;
-  final Set<String> _seen = {};
+  Timer? _timer;
   List<Map<String, dynamic>> _offers = [];
-  bool _busy = false, _dialog = false;
+  bool _busy = false;
   bool _responding = false, _failed = false;
+  final Set<String> _decided = {};
   @override
   void initState() {
     super.initState();
@@ -203,7 +72,6 @@ class _PassengerOffersState extends State<PassengerOffers> {
   @override
   void dispose() {
     _timer?.cancel();
-    _offerExpiryTimer?.cancel();
     super.dispose();
   }
 
@@ -226,14 +94,6 @@ class _PassengerOffersState extends State<PassengerOffers> {
         _offers = offers;
         _failed = false;
       });
-      if (!_dialog) {
-        for (final offer in offers) {
-          if (_seen.add(offer['id'].toString())) {
-            await _show(offer);
-            break;
-          }
-        }
-      }
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     } finally {
@@ -241,47 +101,14 @@ class _PassengerOffersState extends State<PassengerOffers> {
     }
   }
 
-  Future<void> _show(Map<String, dynamic> offer) async {
-    if (_dialog || _responding) return;
+  Future<void> _respond(Map<String, dynamic> offer, bool accept) async {
+    final id = offer['id']?.toString() ?? '';
+    if (_responding || _decided.contains(id)) return;
     final expires = DateTime.tryParse(offer['expiresAt']?.toString() ?? '');
-    if (expires != null && !expires.isAfter(DateTime.now())) return;
-    _dialog = true;
-    var decided = false;
-    final accept = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (dialog) {
-        if (expires != null)
-          _offerExpiryTimer ??= Timer(expires.difference(DateTime.now()), () {
-            if (!mounted ||
-                decided ||
-                !dialog.mounted ||
-                !(ModalRoute.of(dialog)?.isCurrent ?? false)) return;
-            decided = true;
-            Navigator.pop(dialog);
-          });
-        return SingleChildScrollView(
-            padding: const EdgeInsets.all(22),
-            child: DriverOfferCard(
-                offer: offer,
-                passengerPrice: widget.passengerPrice,
-                onAccept: () {
-                  if (decided) return;
-                  decided = true;
-                  Navigator.pop(dialog, true);
-                },
-                onDecline: () {
-                  if (decided) return;
-                  decided = true;
-                  Navigator.pop(dialog, false);
-                }));
-      },
-    );
-    _offerExpiryTimer?.cancel();
-    _offerExpiryTimer = null;
-    _dialog = false;
-    if (accept == null || !mounted) return;
+    if (expires != null && !expires.isAfter(DateTime.now())) {
+      await _refresh();
+      return;
+    }
     setState(() => _responding = true);
     try {
       final result = await makeCloudCall('respondOrderOffer', {
@@ -290,6 +117,7 @@ class _PassengerOffersState extends State<PassengerOffers> {
         'accept': accept
       });
       if (!mounted) return;
+      if (result['success'] == true) _decided.add(id);
       if (result['success'] != true)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(result['error']?.toString() ??
@@ -310,52 +138,48 @@ class _PassengerOffersState extends State<PassengerOffers> {
     String tr(String ru, String kk) =>
         FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
     return MTaxiCard(
+        padding: const EdgeInsets.all(8),
         child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-          Text(
-              _offers.isEmpty
-                  ? tr('Ожидаем предложения водителей',
-                      'Жүргізуші ұсыныстарын күтудеміз')
-                  : tr('Предложения водителей', 'Жүргізуші ұсыныстары'),
-              style:
-                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          if (_responding)
-            const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: LinearProgressIndicator()),
-          if (_failed)
-            TextButton(
-                onPressed: _refresh,
-                child: Text(tr(
-                    'Связь потеряна. Обновить', 'Байланыс үзілді. Жаңарту'))),
-          if (_offers.isNotEmpty)
-            ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
-                child: SingleChildScrollView(
-                    child: Column(children: [
-                  for (final offer in _offers)
-                    ListTile(
-                      enabled: !_responding,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const CircleAvatar(
-                          backgroundColor: MTaxiDesign.surface,
-                          foregroundColor: MTaxiDesign.ink,
-                          child: Icon(Icons.person_outline)),
-                      title: Text(
-                          '${offer['driverName'] ?? tr('Водитель', 'Жүргізуші')} · ${offer['price']} ₸'),
-                      subtitle: Text(offer['etaMinutes'] == null
-                          ? tr('Время подачи уточняется',
-                              'Келу уақыты нақтылануда')
-                          : tr(
-                              'Подача примерно через ${offer['etaMinutes']} мин',
-                              'Шамамен ${offer['etaMinutes']} минуттан кейін келеді')),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _show(offer),
-                    )
-                ]))),
-        ]));
+              Text(
+                  _offers.isEmpty
+                      ? tr('Ожидаем предложения водителей',
+                          'Жүргізуші ұсыныстарын күтудеміз')
+                      : tr('Предложения водителей', 'Жүргізуші ұсыныстары'),
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700)),
+              if (_responding)
+                const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: LinearProgressIndicator()),
+              if (_failed)
+                TextButton(
+                    onPressed: _refresh,
+                    child: Text(tr('Связь потеряна. Обновить',
+                        'Байланыс үзілді. Жаңарту'))),
+              if (_offers.isNotEmpty)
+                ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxHeight: math
+                            .min(350, MediaQuery.sizeOf(context).height - 200)
+                            .clamp(250, 350)
+                            .toDouble()),
+                    child: SingleChildScrollView(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                      for (final offer in _offers)
+                        DriverOfferCard(
+                            key: ValueKey(offer['id']),
+                            compact: true,
+                            offer: offer,
+                            passengerPrice: widget.passengerPrice,
+                            busy: _responding,
+                            onAccept: () => _respond(offer, true),
+                            onDecline: () => _respond(offer, false)),
+                    ]))),
+            ]));
   }
 }
 

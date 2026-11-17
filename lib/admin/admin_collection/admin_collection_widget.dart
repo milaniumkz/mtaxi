@@ -5184,6 +5184,26 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     ],
     'appSettings': [
       _FieldSpec(
+          key: 'autoArrivalRadiusM',
+          label: 'Радиус автоматического прибытия (м)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'autoArrivalDelaySec',
+          label: 'Ожидание автоматического прибытия (сек)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'autoDepartureRadiusM',
+          label: 'Удаление от подачи для автостарта (м)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'autoStartDelaySec',
+          label: 'Ожидание автоматического старта (сек)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'driverOfferLifetimeSec',
+          label: 'Срок предложения водителя (сек)',
+          type: _FieldType.intType),
+      _FieldSpec(
           key: 'passengerBonusPercent',
           label: 'Бонус пассажиру за поездку (%)',
           type: _FieldType.doubleType),

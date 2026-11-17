@@ -40,6 +40,8 @@ class DeliveryTaxiMap extends StatefulWidget {
   final double? width;
   final double? height;
 
+  final VoidCallback? onFromAddressEdited;
+  final VoidCallback? onToAddressEdited;
   final Function(String)? onFromAddressChanged;
   final Function(String)? onToAddressChanged;
   final Function(latlng.LatLng)? onFromCoordsChanged;
@@ -78,6 +80,8 @@ class DeliveryTaxiMap extends StatefulWidget {
     Key? key,
     this.width,
     this.height,
+    this.onFromAddressEdited,
+    this.onToAddressEdited,
     this.onFromAddressChanged,
     this.onToAddressChanged,
     this.onFromCoordsChanged,
@@ -240,7 +244,10 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
     super.dispose();
   }
 
-  Future<void> _getUserLocation() async {
+  Future<void> _getUserLocation({bool force = false}) async {
+    if (!force && _fromLocation != null) return;
+    final addressAtStart = _fromController.text;
+    final pointAtStart = _fromLocation;
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -274,6 +281,8 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         timeLimit: const Duration(seconds: 8),
       );
       if (!mounted) return;
+      if (_fromController.text != addressAtStart ||
+          _fromLocation != pointAtStart) return;
       final user = latlng.LatLng(position.latitude, position.longitude);
       setState(() {
         _userLocation = user;
@@ -300,7 +309,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   Future<void> _fillFromAddressForCoords(latlng.LatLng coords) async {
     if (!mounted || !widget.enableRemoteGeocoding) return;
     final resolved = await _reverseGeocode(coords);
-    if (!mounted || resolved.trim().isEmpty) return;
+    if (!mounted || _fromLocation != coords || resolved.trim().isEmpty) return;
     final address = _serviceType == 'intercity'
         ? _formatIntercityFromAddress(resolved)
         : resolved;
@@ -687,9 +696,13 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
     return [];
   }
 
+  int _routeRequestGeneration = 0;
+
   void _onFromChanged(String value) {
-    final previous = _fromController.text.trim();
-    if (previous != value.trim()) {
+    _routeRequestGeneration++;
+    _nextSearchVersion('from');
+    widget.onFromAddressEdited?.call();
+    {
       setState(() {
         _fromLocation = null;
         _routePoints = [];
@@ -709,7 +722,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       } else {
         items = await _fetchSuggestions(value);
       }
-      if (!mounted) return;
+      if (!mounted || _fromController.text.trim() != value.trim()) return;
       setState(() {
         _fromSuggestions = items;
       });
@@ -720,8 +733,10 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   }
 
   void _onToChanged(String value) {
-    final previous = _toController.text.trim();
-    if (previous != value.trim()) {
+    _routeRequestGeneration++;
+    _nextSearchVersion('to');
+    widget.onToAddressEdited?.call();
+    {
       setState(() {
         _toLocation = null;
         _selectedIntercityRoute = null;
@@ -809,26 +824,14 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         _activeField = 'to';
       });
       widget.onFromCoordsChanged?.call(coords);
-      if (widget.enableRemoteGeocoding) {
-        await _fillFromAddressForCoords(coords);
-      }
+      widget.onFromAddressChanged?.call(item);
     } else {
       setState(() {
         _toLocation = coords;
         _activeField = _nextFieldAfterToSelection();
       });
       widget.onToCoordsChanged?.call(coords);
-      if (widget.enableRemoteGeocoding) {
-        final resolved = await _reverseGeocode(coords);
-        if (mounted && resolved.trim().isNotEmpty) {
-          setState(() {
-            _toController.text = resolved;
-          });
-          widget.onToAddressChanged?.call(resolved);
-        }
-      } else {
-        widget.onToAddressChanged?.call(item);
-      }
+      widget.onToAddressChanged?.call(item);
     }
     _mapController.move(coords, 17.0);
     setState(() {
@@ -1037,9 +1040,15 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   }
 
   Future<void> _fetchRoute(latlng.LatLng from, latlng.LatLng to) async {
+    final generation = ++_routeRequestGeneration;
+    bool current() =>
+        mounted &&
+        generation == _routeRequestGeneration &&
+        _fromLocation == from &&
+        _toLocation == to;
     if (!widget.enableRemoteGeocoding) return;
     if (from == to) {
-      if (!mounted) return;
+      if (!current()) return;
       setState(() {
         _routePoints = [];
         _routeDistance = 0.0;
@@ -1048,7 +1057,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       return;
     }
 
-    if (!mounted) return;
+    if (!current()) return;
     setState(() {
       _isRouteLoading = true;
     });
@@ -1077,7 +1086,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         final duration =
             int.tryParse(response['durationMinutes']?.toString() ?? '') ?? 0;
 
-        if (!mounted) return;
+        if (!current()) return;
         setState(() {
           _routePoints = routePoints;
           _routeDistance = distance;
@@ -1088,7 +1097,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         _centerMapOnRoute(routePoints);
       } else {
         debugPrint('Ошибка получения маршрута: ${response['error']}');
-        if (!mounted) return;
+        if (!current()) return;
         setState(() {
           _routePoints = [];
           _routeDistance = 0.0;
@@ -1097,14 +1106,14 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       }
     } catch (e) {
       debugPrint('Ошибка получения маршрута: $e');
-      if (!mounted) return;
+      if (!current()) return;
       setState(() {
         _routePoints = [];
         _routeDistance = 0.0;
         _routeDuration = 0;
       });
     } finally {
-      if (!mounted) return;
+      if (!current()) return;
       setState(() {
         _isRouteLoading = false;
       });
@@ -1288,6 +1297,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
             ? _extractCityFromAddress(address)
             : null,
         targetField: field,
+        updateController: false,
       );
       if (!mounted) return;
       if (!_isCurrentSearchVersion(field, searchVersion)) {
@@ -1419,7 +1429,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       if (widget.enableAutoLocation &&
           _fromLocation == null &&
           _fromController.text.trim().isEmpty) {
-        _getUserLocation();
+        _getUserLocation(force: true);
       }
       if (_intercityLoaded) {
         _validateIntercityDestination();

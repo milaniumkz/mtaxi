@@ -1,3 +1,4 @@
+import 'driver_position_filter.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ class DriverBackgroundLocation {
   static StreamSubscription<Position>? _stream;
   static Position? latest;
   static bool _sending = false;
+  static DriverPositionFilter _filter = DriverPositionFilter();
   static DateTime? _sentAt;
   static Future<void> sync(Map<String, dynamic>? user) async {
     if (kIsWeb || !Platform.isAndroid) return;
@@ -21,6 +23,7 @@ class DriverBackgroundLocation {
       await _stream?.cancel();
       _stream = null;
       latest = null;
+      _filter = DriverPositionFilter();
       return;
     }
     if (_stream != null) return;
@@ -29,7 +32,7 @@ class DriverBackgroundLocation {
         permission == LocationPermission.deniedForever) return;
     _stream = Geolocator.getPositionStream(
             locationSettings: AndroidSettings(
-                accuracy: LocationAccuracy.high,
+                accuracy: LocationAccuracy.bestForNavigation,
                 distanceFilter: 5,
                 intervalDuration: const Duration(seconds: 3),
                 foregroundNotificationConfig: const ForegroundNotificationConfig(
@@ -39,6 +42,7 @@ class DriverBackgroundLocation {
                     enableWakeLock: true,
                     setOngoing: true)))
         .listen((p) {
+      if (!_filter.accept(p)) return;
       latest = p;
       if (_sending ||
           (_sentAt != null &&
@@ -50,7 +54,8 @@ class DriverBackgroundLocation {
             'coords': {
               'latitude': p.latitude,
               'longitude': p.longitude,
-              'accuracy': p.accuracy
+              'accuracy': p.accuracy,
+              'timestamp': p.timestamp.toUtc().toIso8601String()
             }
           });
           if (r['success'] == true) _sentAt = DateTime.now();

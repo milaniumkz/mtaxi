@@ -61,6 +61,7 @@ class _TripNavigationState extends State<TripNavigation>
   Map<String, dynamic>? _trip;
   List<LatLng> _route = [];
   List<Map> _steps = [];
+  int _orderGeneration = 0;
   DateTime? _routedAt;
   int? _routedStatus;
   String _message = 'Загружаем маршрут…';
@@ -118,6 +119,21 @@ class _TripNavigationState extends State<TripNavigation>
   @override
   void didUpdateWidget(covariant TripNavigation oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.orderDocPath != widget.orderDocPath) {
+      _orderGeneration++;
+      _route = [];
+      _steps = [];
+      _trip = null;
+      _routedAt = null;
+      _routedStatus = null;
+      _spoken.clear();
+      _display = _lastRaw = null;
+      _motion.stop();
+      _speechGeneration++;
+      unawaited(_tts.stop());
+      _message = 'Загружаем маршрут…';
+      unawaited(_refresh());
+    }
     if (widget.isDriver && widget.driverPosition != null)
       _updatePosition(widget.driverPosition, widget.driverHeading);
   }
@@ -188,10 +204,12 @@ class _TripNavigationState extends State<TripNavigation>
   Future<void> _refresh() async {
     if (_busy || !_tabActive) return;
     _busy = true;
+    final generation = _orderGeneration;
+    final orderPath = widget.orderDocPath;
     try {
-      final trip = await makeCloudCall(
-          'getTripTracking', {'orderDocPath': widget.orderDocPath});
-      if (!mounted || !_tabActive) return;
+      final trip =
+          await makeCloudCall('getTripTracking', {'orderDocPath': orderPath});
+      if (!mounted || !_tabActive || generation != _orderGeneration) return;
       if (trip['success'] != true) {
         setState(() => _message = 'Маршрут недоступен');
         return;
@@ -223,7 +241,7 @@ class _TripNavigationState extends State<TripNavigation>
           'from': {'lat': position.latitude, 'lng': position.longitude},
           'to': {'lat': target.latitude, 'lng': target.longitude}
         });
-        if (!mounted || !_tabActive) return;
+        if (!mounted || !_tabActive || generation != _orderGeneration) return;
         if (result['success'] == true) {
           final coordinates =
               (result['coordinates'] as List? ?? []).whereType<List>();

@@ -437,6 +437,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                     FFAppState().kudaCoords!.latitude,
                     FFAppState().kudaCoords!.longitude,
                   ),
+            onFromAddressEdited: () {
+              FFAppState().otkudaCoord = null;
+              _routeDistanceKm = null;
+              _resetLocalOrderQuote();
+            },
+            onToAddressEdited: () {
+              FFAppState().kudaCoords = null;
+              _routeDistanceKm = null;
+              _resetLocalOrderQuote();
+            },
             onFromAddressChanged: (value) {
               FFAppState().otkkudaString = value;
               _resetLocalOrderQuote();

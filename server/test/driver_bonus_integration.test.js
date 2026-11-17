@@ -31,6 +31,9 @@ test('approved driver receives one welcome reward, earns daily reward and cannot
   const data = { userDocPath: `users/${driver.id}` };
   assert.equal((await approveDriverAsync(data, adminAuth)).user.bonusBalance, 1000);
   assert.equal((await approveDriverAsync(data, adminAuth)).user.bonusBalance, 1000);
+  const approvals = (await readStoreAsync()).notifications.filter(n => n.type === 'DRIVER_APPROVED');
+  assert.equal(approvals.length, 1);
+  assert.deepEqual(approvals[0].targetUserIds, [driver.id]);
   for (let index = 0; index < 10; index++) {
     const id = `bonus-order-${index}`;
     await withStoreAsync(async store => {

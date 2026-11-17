@@ -11,6 +11,39 @@ import 'package:uuid/uuid.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend_calls/backend_calls.dart';
 
+class _KaspiPhoneFormatter extends TextInputFormatter {
+  const _KaspiPhoneFormatter();
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (!newValue.composing.isCollapsed) return newValue;
+    if (oldValue.text.startsWith('+7') &&
+        oldValue.selection.isCollapsed &&
+        newValue.text.length < oldValue.text.length &&
+        newValue.selection.extentOffset >= 0 &&
+        newValue.selection.extentOffset < 2) {
+      return oldValue.copyWith(
+          selection: const TextSelection.collapsed(offset: 2),
+          composing: TextRange.empty);
+    }
+    final prefixed = newValue.text.startsWith('+7');
+    var digits = (prefixed ? newValue.text.substring(2) : newValue.text)
+        .replaceAll(RegExp(r'\D'), '');
+    final pasted = newValue.text.length - oldValue.text.length > 1;
+    if (digits.length > 10 &&
+        (!prefixed || pasted) &&
+        (digits.startsWith('7') || digits.startsWith('8')))
+      digits = digits.substring(1);
+    if (digits.length > 10) digits = digits.substring(0, 10);
+    final text = '+7$digits';
+    final cursor = text == newValue.text && newValue.selection.isValid
+        ? newValue.selection.extentOffset.clamp(2, text.length).toInt()
+        : text.length;
+    return TextEditingValue(
+        text: text, selection: TextSelection.collapsed(offset: cursor));
+  }
+}
+
 class SelectBalanceWidget extends StatefulWidget {
   const SelectBalanceWidget({super.key, this.passenger = false});
   final bool passenger;
@@ -21,7 +54,7 @@ class SelectBalanceWidget extends StatefulWidget {
 class _SelectBalanceWidgetState extends State<SelectBalanceWidget>
     with WidgetsBindingObserver {
   final _amount = TextEditingController();
-  final _phone = TextEditingController();
+  final _phone = TextEditingController(text: '+7');
   String _requestKey = const Uuid().v4();
   String? _fingerprint;
   String? _paymentId;
@@ -94,7 +127,9 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget>
     WidgetsBinding.instance.addObserver(this);
     _storageKey =
         'mtaxi_topup_${currentUserUid}_${widget.passenger ? 'passenger' : 'driver'}';
-    _phone.text = currentUserDocument?.phoneNumber ?? '';
+    _phone.value = const _KaspiPhoneFormatter().formatEditUpdate(
+        TextEditingValue.empty,
+        TextEditingValue(text: currentUserDocument?.phoneNumber ?? ''));
     _restore();
   }
 
@@ -315,6 +350,7 @@ class _SelectBalanceWidgetState extends State<SelectBalanceWidget>
                   TextField(
                       controller: _phone,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: const [_KaspiPhoneFormatter()],
                       enabled: !_busy && !_uncertain && !_restoring,
                       decoration: InputDecoration(
                           labelText: tr('Номер Kaspi', 'Kaspi нөмірі'),

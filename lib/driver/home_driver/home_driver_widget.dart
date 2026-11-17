@@ -1,3 +1,4 @@
+import '/trips/driver_position_filter.dart';
 import '/design/bottom_navigation.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '/design/order_preview.dart';
@@ -61,12 +62,15 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
   late HomeDriverModel _model;
   bool _tabActive = true;
   bool _availabilityBusy = false;
+  final _gpsFilter = DriverPositionFilter();
+  DateTime? _gpsTimestamp;
   final Set<String> _nearbySeen = {};
   String? _feedType;
   Stream<List<OrderRecord>>? _cachedOrderStream;
   bool _redirectingToPassengerMode = false;
   bool _recoveringActiveDriverOrder = false;
   bool _openingAcceptedDriverOrder = false;
+  String? _navigatedAcceptedOrderPath;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   LatLng? currentUserLocationValue;
@@ -607,6 +611,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                 'latitude': location.latitude,
                 'longitude': location.longitude,
                 'accuracy': _lastGpsAccuracy,
+                'timestamp': _gpsTimestamp?.toUtc().toIso8601String(),
               },
             },
           );
@@ -689,9 +694,11 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
         return;
       }
       final position = await getSafeCurrentPosition(
-        accuracy: LocationAccuracy.high,
+        accuracy: LocationAccuracy.bestForNavigation,
         timeLimit: const Duration(seconds: 8),
       );
+      if (!mounted || !_gpsFilter.accept(position)) return;
+      _gpsTimestamp = position.timestamp;
       setState(() {
         _locationError = null;
         _lastGpsAccuracy = position.accuracy;
@@ -766,7 +773,10 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
   }
 
   Future<void> _openAcceptedDriverOrder(DocumentReference orderRef) async {
-    if (!mounted) return;
+    if (!mounted ||
+        _navigatedAcceptedOrderPath == orderRef.path ||
+        !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+    _navigatedAcceptedOrderPath = orderRef.path;
     setState(() {
       _openingAcceptedDriverOrder = true;
     });
@@ -1021,7 +1031,8 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
           'coords': {
             'latitude': location.latitude,
             'longitude': location.longitude,
-            'accuracy': _lastGpsAccuracy
+            'accuracy': _lastGpsAccuracy,
+            'timestamp': _gpsTimestamp?.toUtc().toIso8601String(),
           },
       });
       if (r['success'] != true)
@@ -1741,18 +1752,23 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
                                                         busy: _takingOrderIds
                                                             .contains(liveOrder
                                                                 .reference.id),
-                                                        onOffer: () async {
+                                                        onOffer: () {},
+                                                        onOfferPrice:
+                                                            (price) async {
                                                           Navigator.of(context)
                                                               .pop();
-                                                          await proposeDriverPrice(
-                                                              parentContext,
-                                                              liveOrder
-                                                                  .reference
-                                                                  .path,
-                                                              initialPrice:
+                                                          final accepted =
+                                                              await proposeDriverPrice(
+                                                                  parentContext,
                                                                   liveOrder
-                                                                      .price
-                                                                      .toInt());
+                                                                      .reference
+                                                                      .path,
+                                                                  price: price);
+                                                          if (accepted &&
+                                                              mounted)
+                                                            await _openAcceptedDriverOrder(
+                                                                liveOrder
+                                                                    .reference);
                                                         },
                                                         onAccept: () async {
                                                           if (isAssignedToCurrentDriver) {

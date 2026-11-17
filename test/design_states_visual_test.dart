@@ -94,7 +94,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 100));
         }
         if (id == 3) {
-          await tester.tap(find.text('Принять предложение'));
+          await tester.tap(find.text('Принять'));
         }
         if (id == 5) {
           await tester.enterText(find.byType(TextField).at(0), '+77019990011');

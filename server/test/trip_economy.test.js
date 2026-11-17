@@ -346,22 +346,14 @@ test("bad GPS accuracy and teleport reset automatic status timers", () => {
     assert.equal(o.status, 2);
   }
 });
-test("manual arrival cannot be faked away from pickup or with stale inaccurate GPS", async () => {
-  const from = { latitude: 53, longitude: 75 };
-  const o = await make({ from });
+test("manual arrival and start are available without a GPS fix", async () => {
+  const o = await make({ from: { latitude: 53, longitude: 75 } });
   await accept(args(o), auth(d));
-  assert.equal((await status(o, 3)).code, "PICKUP_GPS_REQUIRED");
-  await preferences(
-    { coords: { latitude: 54, longitude: 75, accuracy: 10 } },
-    auth(d),
-  );
-  assert.equal((await status(o, 3)).code, "PICKUP_GPS_REQUIRED");
-  await preferences({ coords: { ...from, accuracy: 200 } }, auth(d));
-  assert.equal((await status(o, 3)).code, "PICKUP_GPS_REQUIRED");
-  await preferences({ coords: { ...from, accuracy: 10 } }, auth(d));
+  assert.equal((await status(o, 3)).success, true);
   assert.equal((await status(o, 3)).success, true);
   assert.equal((await status(o, 4)).success, true);
 });
+
 test("admin edits cashback percent; invalid percentages and non-admin changes are refused", async () => {
   const { updateRuntimeSettingsAsync: update } = require("../src/settings");
   assert.equal(
@@ -441,4 +433,19 @@ test('driver waiting can observe acceptance without seeing competing driver offe
   const state=await list(args(o),auth(d));
   assert.equal(state.assignedToCurrentDriver,true);assert.equal(state.orderStatus,2);
   assert.equal(state.offers.length,1);assert.equal(state.offers[0].id,result.offer.id);
+});
+
+test('trip chat is participant-only, idempotent under twenty retries and closes at completion', async () => {
+  const {sendTripChatAsync:send,listTripChatAsync:listChat}=require('../src/trip_chat');
+  const o=await make();await accept(args(o),auth(d));
+  const data={...args(o),requestId:'audit-chat-00000001',text:'Я на месте'};
+  assert.equal((await send(data,auth(x))).code,'TRIP_CHAT_FORBIDDEN');
+  const replies=await Promise.all(Array.from({length:20},()=>send(data,auth(d))));
+  assert.equal(replies.every(r=>r.success),true);
+  assert.equal(new Set(replies.map(r=>r.messageId)).size,1);
+  const history=await listChat(args(o),auth(p));
+  assert.equal(history.messages.length,1);assert.equal(history.messages[0].text,data.text);
+  await finish(o);
+  assert.equal((await send({...data,requestId:'audit-chat-00000002'},auth(d))).code,'TRIP_CHAT_CLOSED');
+  assert.equal((await listChat(args(o),auth(p))).code,'TRIP_CHAT_CLOSED');
 });
