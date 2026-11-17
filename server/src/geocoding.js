@@ -3,8 +3,22 @@ const { normalizeString } = require("./utils/values");
 const userAgent = process.env.MTAXI_GEOCODING_USER_AGENT || "MTaxiBackend/0.1";
 
 function parseNumber(value) {
+  if (value == null || (typeof value === 'string' && !value.trim())) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function localityKey(value) {
+  return normalizeString(value).toLowerCase().replace(/ё/g, 'е').replace(/і/g, 'и')
+    .replace(/\b(?:village|town|city)\b/g, '').replace(/^(?:село|поселок|посёлок|город|с\.|п\.)\s*/u, '').trim();
+}
+function inRequestedLocality(item, city) {
+  if (!city || city.includes(',')) return true;
+  const address = item.address || {};
+  const locality = address.village || address.town || address.hamlet || address.city;
+  if (locality) return localityKey(locality) === localityKey(city);
+  return String(item.display_name || item.description || item.formatted_address || '')
+    .split(',').some(part => localityKey(part) === localityKey(city));
 }
 
 function formatNominatimAddress(address = {}) {
@@ -50,11 +64,11 @@ async function forwardGeocodeLookup(data = {}) {
   const params = new URLSearchParams({
     q: query,
     format: "jsonv2",
-    limit: "1",
+    limit: "8",
     addressdetails: "1",
   });
   const result = await fetchJson(`https://nominatim.openstreetmap.org/search?${params}`);
-  const first = Array.isArray(result) ? result[0] : null;
+  const first = Array.isArray(result) ? result.find(item => inRequestedLocality(item, normalizeString(data.city))) : null;
   const lat = parseNumber(first?.lat);
   const lng = parseNumber(first?.lon);
   if (lat == null || lng == null) {
@@ -127,7 +141,7 @@ async function placesAutocomplete(data = {}) {
       params.set("locationbias", normalizeString(data.locationbias));
     }
     const result = await fetchJson(`https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`);
-    const predictions = Array.isArray(result?.predictions) ? result.predictions : [];
+    const predictions = Array.isArray(result?.predictions) ? result.predictions.filter(item => inRequestedLocality(item, normalizeString(data.city))) : [];
     return {
       success: result?.status === "OK" || result?.status === "ZERO_RESULTS",
       code: "PLACES_AUTOCOMPLETE",
@@ -145,7 +159,7 @@ async function placesAutocomplete(data = {}) {
     "accept-language": language,
   });
   const result = await fetchJson(`https://nominatim.openstreetmap.org/search?${params}`);
-  const predictions = (Array.isArray(result) ? result : []).map((item) => ({
+  const predictions = (Array.isArray(result) ? result : []).filter(item => inRequestedLocality(item, normalizeString(data.city))).map((item) => ({
     description: formatNominatimAddress(item.address) || normalizeString(item.display_name),
     formatted_address: formatNominatimAddress(item.address) || normalizeString(item.display_name),
     place_id: normalizeString(item.place_id) || normalizeString(item.osm_id),
@@ -280,6 +294,18 @@ async function routeLookup(data = {}) {
     : [];
   if (!route || coordinates.length === 0) {
     return { success: false, code: "ROUTE_NOT_FOUND", error: "Маршрут не найден" };
+  }
+  const { meters } = require('./trip_automation');
+  const from = { latitude: fromLat, longitude: fromLng };
+  const to = { latitude: toLat, longitude: toLng };
+  const start = coordinates[0], end = coordinates[coordinates.length - 1];
+  const routeDistance = parseNumber(route.distance);
+  const validPoint = p => Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+  if (!coordinates.every(validPoint) || routeDistance == null || routeDistance < 0 ||
+      routeDistance + 100 < meters(from, to) ||
+      meters(from, { latitude: start[1], longitude: start[0] }) > 500 ||
+      meters(to, { latitude: end[1], longitude: end[0] }) > 500) {
+    return { success: false, code: 'ROUTE_ENDPOINT_MISMATCH', error: 'Не удалось построить маршрут по выбранным точкам. Уточните точки на карте.' };
   }
   return {
     success: true,

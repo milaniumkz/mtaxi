@@ -94,12 +94,12 @@ void main() {
           await tester.pump(const Duration(milliseconds: 100));
         }
         if (id == 3) {
-          await tester.tap(find.text('Принять предложение'));
+          await tester.tap(find.text('Принять'));
         }
         if (id == 5) {
           await tester.enterText(find.byType(TextField).at(0), '+77019990011');
           await tester.enterText(find.byType(TextField).at(1), '1000');
-          await tester.tap(find.text('Запросить счёт Kaspi'));
+          await tester.tap(find.text('Пополнить баланс'));
         }
         if (id == 7) {
           await tester.enterText(

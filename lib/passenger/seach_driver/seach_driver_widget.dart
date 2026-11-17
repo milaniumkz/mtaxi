@@ -1,3 +1,4 @@
+import '/trips/trip_chat.dart';
 import '/design/mtaxi_icon.dart';
 import '/design/mtaxi_theme.dart';
 import '/design/order_preview.dart';
@@ -60,6 +61,15 @@ class SeachDriverWidget extends StatefulWidget {
 
 class _SeachDriverWidgetState extends State<SeachDriverWidget> {
   late SeachDriverModel _model;
+  String? _detailsStreamPath;
+  Stream<OrderRecord>? _detailsStream;
+  Stream<OrderRecord> _streamForOrder(String path) {
+    if (_detailsStreamPath != path || _detailsStream == null) {
+      _detailsStreamPath = path;
+      _detailsStream = orderDetailsStreamFromBackend(path);
+    }
+    return _detailsStream!;
+  }
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final Set<String> _expireCheckedOrderIds = {};
@@ -732,14 +742,7 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
     if (status == 3) {
       unawaited(_playDriverArrivedSound());
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+    // The trip panel reflects this state; repeated foreground banners obscure it.
   }
 
   void _maybeNotifyOrderStatus(OrderRecord order) {
@@ -1034,7 +1037,7 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
                 );
               }
               return StreamBuilder<OrderRecord>(
-                stream: orderDetailsStreamFromBackend(orderRef.path),
+                stream: _streamForOrder(orderRef.path),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     final cachedOrder = _lastVisiblePassengerOrder;
@@ -1236,12 +1239,13 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 28, 16, 92),
                             child: Align(
-                              alignment: Alignment.bottomCenter,
+                              alignment: Alignment.topCenter,
                               child: SingleChildScrollView(
                                   child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                     PassengerOffers(
+                                        passengerPrice: visibleOrder.price,
                                         orderDocPath:
                                             visibleOrder.reference.path),
                                     _buildOrderInfoCard(
@@ -1397,6 +1401,11 @@ class _SeachDriverWidgetState extends State<SeachDriverWidget> {
                                       icon:
                                           const Icon(Icons.chat_bubble_outline),
                                       label: const Text('WhatsApp')),
+                                  OutlinedButton.icon(
+                                      onPressed: () => openTripChat(
+                                          context, visibleOrder.reference.path),
+                                      icon: const Icon(Icons.forum_outlined),
+                                      label: const Text('Чат')),
                                 ]),
                                 onCancel: effectiveStatus == 2 ||
                                         effectiveStatus == 3

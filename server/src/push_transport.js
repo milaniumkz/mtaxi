@@ -62,23 +62,28 @@ async function sendPushBatch({
 
   ensureFirebaseApp();
   const { getMessaging } = require("firebase-admin/messaging");
+  const isOrder=notification.dataPayload?.type === 'ORDER_AVAILABLE';
+  const ttl=(isOrder || notification.dataPayload?.type === 'DRIVER_PRICE_OFFER') ? 30000 : 86400000;
   const response = await getMessaging().sendEachForMulticast({
     tokens: cleanTokens,
-    notification: {
+    ...(notification.androidDataOnly ? {} : {notification: {
       title: normalizeString(notification.title || "MTaxi"),
       body: normalizeString(notification.body),
-    },
+    }}),
     data: stringifyDataPayload(notification.dataPayload || notification.data || {}),
     android: {
-      priority: "high",
-      notification: {
-        sound: "default",
-      },
+      priority: notification.deliveryPriority || 'high',
+      ttl,
+      ...(notification.androidDataOnly ? {} : {notification: {
+        channelId: isOrder ? (notification.deliveryPriority === 'normal' ? 'mtaxi_orders_quiet' : 'mtaxi_orders_nearby') : 'mtaxi_orders_v2',
+        ...(notification.deliveryPriority === 'normal' ? {} : {sound:'default'}),
+      }}),
     },
+    webpush: {notification:{requireInteraction:notification.dataPayload?.overlayEligible === 'true',silent:notification.deliveryPriority === 'normal'},headers:{TTL:String(Math.floor(ttl/1000)),Urgency:notification.deliveryPriority === 'normal' ? 'normal' : 'high'}},
     apns: {
       payload: {
         aps: {
-          sound: "default",
+          ...(notification.deliveryPriority === 'normal' ? {} : {sound:'default'}),
         },
       },
     },

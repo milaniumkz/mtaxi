@@ -1,4 +1,5 @@
 const { withStoreAsync, newId } = require("./store");
+const { preferencesScope } = require("./store/scopes");
 const { asNumber, normalizePhone, normalizeString } = require("./utils/values");
 const { hasUserPassword, setUserPassword } = require("./passwords");
 
@@ -189,6 +190,7 @@ function updatePreferencesInStore(store, data, auth) {
     if (targetRoleState.startsWith("DRIVER") && user.isDriver !== true) {
       return { success: false, code: "DRIVER_PROFILE_REQUIRED", error: "Профиль водителя не заполнен" };
     }
+    if (targetRoleState === 'DRIVER_ONLINE' && (user.statusDriver !== 'approved' || user.blocked)) return {success:false,code:'DRIVER_APPROVAL_REQUIRED',error:'Для выхода на линию дождитесь подтверждения водителя'};
     user.roleState = targetRoleState;
     if (targetRoleState === "PASSENGER") {
       user.activeMode = "passenger";
@@ -214,13 +216,19 @@ function updatePreferencesInStore(store, data, auth) {
     const latitude = asNumber(data.coords.latitude ?? data.coords.lat);
     const longitude = asNumber(data.coords.longitude ?? data.coords.lng);
     if (latitude != null && longitude != null && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) {
-      user.coords = { latitude, longitude };
-      user.coordsUpdatedAt = new Date().toISOString();
-      user.coordsAccuracy = asNumber(data.coords.accuracy);
+      const sample = { latitude, longitude, accuracy: asNumber(data.coords.accuracy), timestamp: data.coords.timestamp };
+      const accepted = user.isDriver === true ? require('./driver_position').acceptDriverPosition(user, sample) : true;
+      if (!accepted) {
+        const active = store.orders.find(o => o.id === user.activeDriverOrderId && o.driverId === user.id);
+        if (active) { delete active.autoArrivalSince; delete active.autoDepartureSince; }
+        user.updatedAt = new Date().toISOString();
+        return { success:true,code:'USER_PREFERENCES_UPDATED',locationAccepted:false,user:publicUser(user),userDocPath:`users/${user.id}`,roleState:user.roleState };
+      }
+      if (user.isDriver !== true) { user.coords = { latitude, longitude }; user.coordsUpdatedAt = new Date().toISOString(); user.coordsAccuracy = asNumber(data.coords.accuracy); }
       const { observeDriverPosition } = require('./trip_automation');
       const { advanceDriverOrderStatusInStore } = require('./orders');
       observeDriverPosition(store, user, { latitude, longitude, accuracy: asNumber(data.coords.accuracy) },
-        status => advanceDriverOrderStatusInStore(store, { user }, user.activeDriverOrderId, status));
+        status => advanceDriverOrderStatusInStore(store, { user }, user.activeDriverOrderId, status, { automatic: true }));
     }
   }
   user.updatedAt = new Date().toISOString();
@@ -263,7 +271,7 @@ async function submitDriverRegistrationAsync(data = {}, auth) {
 async function updateUserPreferencesAsync(data = {}, auth) {
   const authError = requireAuth(auth);
   if (authError) return authError;
-  return withStoreAsync(async (store) => updatePreferencesInStore(store, data, auth));
+  return withStoreAsync(async (store) => updatePreferencesInStore(store, data, auth), preferencesScope(auth.user.id));
 }
 
 async function setPasswordAsync(data = {}, auth) {

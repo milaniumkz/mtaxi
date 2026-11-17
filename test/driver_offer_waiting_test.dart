@@ -1,0 +1,171 @@
+import 'dart:convert';
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:mtaxi/trips/driver_offer_waiting.dart';
+import 'design_flow_test.dart' show wrap;
+
+void main() {
+  testWidgets('late acceptance cannot pop an active trip opened by restoration',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    PackageInfo.setMockInitialValues(
+        appName: 'MTaxi',
+        packageName: 'test.mtaxi',
+        version: '1',
+        buildNumber: '1',
+        buildSignature: '');
+    final response = Completer<http.Response>();
+    await http.runWithClient(() async {
+      await tester.pumpWidget(wrap(Scaffold(
+          body: Builder(
+              builder: (context) => FilledButton(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => DriverOfferWaiting(
+                              orderDocPath: 'order/test',
+                              offer: {
+                                'id': 'offer-1',
+                                'price': 700,
+                                'expiresAt': DateTime.now()
+                                    .add(const Duration(seconds: 30))
+                                    .toIso8601String()
+                              }))),
+                  child: const Text('Отправить'))))));
+      await tester.tap(find.text('Отправить'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final context = tester.element(find.text('Ожидаем ответ пассажира'));
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const Scaffold(body: Text('Активный заказ'))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      response.complete(http.Response(
+          jsonEncode({
+            'success': true,
+            'assignedToCurrentDriver': true,
+            'orderStatus': 2
+          }),
+          200));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Активный заказ'), findsOneWidget);
+      expect(find.text('Ожидаем ответ пассажира'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    }, () => MockClient((_) => response.future));
+  });
+  for (var pass = 0; pass < 30; pass++) {
+    for (final seconds in [15, 30, 60, 120]) {
+      testWidgets('server-controlled deadline $seconds seconds, pass $pass',
+          (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        PackageInfo.setMockInitialValues(
+            appName: 'MTaxi',
+            packageName: 'test.mtaxi',
+            version: '1',
+            buildNumber: '1',
+            buildSignature: '');
+        final now = tester.binding.clock.now();
+        await http.runWithClient(() async {
+          await tester.pumpWidget(wrap(DriverOfferWaiting(
+              orderDocPath: 'order/test',
+              offer: {
+                'id': 'offer-1',
+                'price': 700,
+                'expiresAt':
+                    now.add(Duration(seconds: seconds)).toIso8601String()
+              },
+              now: () => tester.binding.clock.now())));
+          await tester.pump();
+          expect(find.text('$seconds'), findsOneWidget);
+          expect(
+              tester
+                  .widget<CircularProgressIndicator>(
+                      find.byType(CircularProgressIndicator))
+                  .value,
+              1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+        },
+            () => MockClient((_) async => http.Response(
+                jsonEncode({
+                  'success': true,
+                  'orderStatus': 0,
+                  'offers': [
+                    {'id': 'offer-1', 'status': 'pending'}
+                  ]
+                }),
+                200)));
+      });
+    }
+  }
+  for (final outcome in ['accepted', 'declined', 'expired']) {
+    testWidgets('driver waiting ends safely on $outcome', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      PackageInfo.setMockInitialValues(
+          appName: 'MTaxi',
+          packageName: 'test.mtaxi',
+          version: '1',
+          buildNumber: '1',
+          buildSignature: '');
+      bool? result;
+      var calls = 0;
+      await http.runWithClient(() async {
+        await tester.pumpWidget(wrap(Scaffold(
+            body: Builder(
+                builder: (context) => FilledButton(
+                    onPressed: () async {
+                      result = await Navigator.of(context)
+                          .push<bool>(MaterialPageRoute(
+                              builder: (_) => DriverOfferWaiting(
+                                  orderDocPath: 'order/test',
+                                  offer: {
+                                    'id': 'offer-1',
+                                    'price': 700,
+                                    'expiresAt': tester.binding.clock
+                                        .now()
+                                        .add(const Duration(seconds: 30))
+                                        .toIso8601String()
+                                  },
+                                  now: () => tester.binding.clock.now())));
+                    },
+                    child: const Text('Лента заказов'))))));
+        await tester.tap(find.text('Лента заказов'));
+        await tester.pumpAndSettle();
+        if (outcome == 'expired') {
+          expect(find.text('Ожидаем ответ пассажира'), findsOneWidget);
+          await tester.pump(const Duration(seconds: 29));
+          await tester.pump();
+          expect(result, isNull);
+          await tester.pump(const Duration(seconds: 2));
+          await tester.pumpAndSettle();
+        }
+        expect(result, outcome == 'accepted');
+        expect(find.text('Лента заказов'), findsOneWidget);
+        expect(calls, greaterThan(0));
+        expect(tester.takeException(), isNull);
+      },
+          () => MockClient((request) async {
+                if (request.url.path.endsWith('/listOrderOffers')) calls++;
+                return http.Response(
+                    jsonEncode({
+                      'success': true,
+                      'orderStatus': outcome == 'accepted' ? 2 : 0,
+                      'assignedToCurrentDriver': outcome == 'accepted',
+                      'offers': [
+                        {
+                          'id': 'offer-1',
+                          'status':
+                              outcome == 'declined' ? 'declined' : 'pending'
+                        }
+                      ]
+                    }),
+                    200,
+                    headers: {'content-type': 'application/json'});
+              }));
+    });
+  }
+}

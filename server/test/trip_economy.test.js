@@ -346,22 +346,14 @@ test("bad GPS accuracy and teleport reset automatic status timers", () => {
     assert.equal(o.status, 2);
   }
 });
-test("manual arrival cannot be faked away from pickup or with stale inaccurate GPS", async () => {
-  const from = { latitude: 53, longitude: 75 };
-  const o = await make({ from });
+test("manual arrival and start are available without a GPS fix", async () => {
+  const o = await make({ from: { latitude: 53, longitude: 75 } });
   await accept(args(o), auth(d));
-  assert.equal((await status(o, 3)).code, "PICKUP_GPS_REQUIRED");
-  await preferences(
-    { coords: { latitude: 54, longitude: 75, accuracy: 10 } },
-    auth(d),
-  );
-  assert.equal((await status(o, 3)).code, "PICKUP_GPS_REQUIRED");
-  await preferences({ coords: { ...from, accuracy: 200 } }, auth(d));
-  assert.equal((await status(o, 3)).code, "PICKUP_GPS_REQUIRED");
-  await preferences({ coords: { ...from, accuracy: 10 } }, auth(d));
+  assert.equal((await status(o, 3)).success, true);
   assert.equal((await status(o, 3)).success, true);
   assert.equal((await status(o, 4)).success, true);
 });
+
 test("admin edits cashback percent; invalid percentages and non-admin changes are refused", async () => {
   const { updateRuntimeSettingsAsync: update } = require("../src/settings");
   assert.equal(
@@ -413,4 +405,84 @@ test('insufficient driver commission rolls back a repriced reservation',async()=
  await write(s=>{u(s,'d').balance=0;u(s,'d').bonusBalance=0;});const before=await read();
  assert.equal((await respond({...args(o),offerId:r.offer.id,accept:true},auth(p))).code,'INSUFFICIENT_DRIVER_BALANCE');
  const after=await read();assert.equal(u(after,'p').balance,u(before,'p').balance);assert.equal(after.orders[0].price,500);assert.deepEqual(after.ledger,before.ledger);
+});
+
+test('driver counteroffer lasts 30 seconds and expiry never changes money or assigns the order', async () => {
+  const o = await make();
+  const before = await read();
+  const result = await offer({...args(o),price:700},auth(d));
+  assert.equal(result.success,true);
+  const life=Date.parse(result.offer.expiresAt)-Date.parse(result.offer.createdAt);
+  assert.ok(life>=30000&&life<=30005);
+  const own=await list(args(o),auth(d));
+  assert.equal(own.success,true);assert.equal(own.offers.length,1);assert.equal(own.offers[0].driverId,d.id);
+  assert.equal((await list(args(o),auth(x))).code,'ORDER_FORBIDDEN');
+  await write(s=>{s.orders.find(v=>v.id===o.orderDocPath.split('/').pop()).offers[0].expiresAt=new Date(Date.now()-1).toISOString();});
+  assert.equal((await list(args(o),auth(d))).offers[0].status,'expired');
+  assert.equal((await respond({...args(o),offerId:result.offer.id,accept:true},auth(p))).code,'OFFER_EXPIRED');
+  const after=await read();
+  const order=after.orders.find(v=>v.id===o.orderDocPath.split('/').pop());
+  assert.equal(order.status,0);assert.equal(order.price,500);assert.ok(!order.driverId);
+  assert.equal(u(after,d.id).balance,u(before,d.id).balance);
+  assert.equal(u(after,d.id).bonusBalance,u(before,d.id).bonusBalance);
+});
+
+test('driver waiting can observe acceptance without seeing competing driver offers', async () => {
+  const o=await make();const result=await offer({...args(o),price:700},auth(d));
+  assert.equal((await respond({...args(o),offerId:result.offer.id,accept:true},auth(p))).success,true);
+  const state=await list(args(o),auth(d));
+  assert.equal(state.assignedToCurrentDriver,true);assert.equal(state.orderStatus,2);
+  assert.equal(state.offers.length,1);assert.equal(state.offers[0].id,result.offer.id);
+});
+
+test('trip chat is participant-only, idempotent under thirty retries and closes at completion', async () => {
+  const {sendTripChatAsync:send,listTripChatAsync:listChat}=require('../src/trip_chat');
+  const o=await make();await accept(args(o),auth(d));
+  const data={...args(o),requestId:'audit-chat-00000001',text:'Я на месте'};
+  assert.equal((await send(data,auth(x))).code,'TRIP_CHAT_FORBIDDEN');
+  const replies=await Promise.all(Array.from({length:30},()=>send(data,auth(d))));
+  assert.equal(replies.every(r=>r.success),true);
+  assert.equal(new Set(replies.map(r=>r.messageId)).size,1);
+  const history=await listChat(args(o),auth(p));
+  assert.equal(history.messages.length,1);assert.equal(history.messages[0].text,data.text);
+  await finish(o);
+  assert.equal((await send({...data,requestId:'audit-chat-00000002'},auth(d))).code,'TRIP_CHAT_CLOSED');
+  assert.equal((await listChat(args(o),auth(p))).code,'TRIP_CHAT_CLOSED');
+});
+
+test('thirty moderation and legacy session transitions preserve chosen role and one welcome reward', async () => {
+  const {approveDriverAsync}=require('../src/admin');
+  const {getSessionBootstrapAsync}=require('../src/session');
+  await write(s=>{const driver=u(s,'d');driver.bonusBalance=0;driver.driverWelcomeBonusGranted=false;});
+  for(let i=0;i<30;i++) {
+    const mode=i%2?'passenger':'driver';
+    await write(s=>{Object.assign(u(s,'d'),{statusDriver:'pending',roleState:i%3?'DRIVER_PENDING':'DRIVER_PENDING_REVIEW',driverApplicationId:`audit-application-${i}`,activeMode:mode,preferredClientMode:mode,driverOnLine:true});});
+    const result=await approveDriverAsync({userDocPath:'users/d'},auth(a));
+    assert.equal(result.success,true);
+    const expected=mode==='passenger'?'PASSENGER':'DRIVER_OFFLINE';
+    assert.equal(result.user.roleState,expected);
+    assert.equal(result.user.driverOnLine,false);
+    assert.equal(result.user.bonusBalance,1000);
+    await write(s=>{u(s,'d').roleState='DRIVER_PENDING_REVIEW';});
+    const session=await getSessionBootstrapAsync({},auth(d));
+    assert.equal(session.roleState,expected);
+    assert.equal(session.user.bonusBalance,1000);
+  }
+});
+
+test('accepted counteroffer survives thirty lost driver references and session reloads without another commission', async () => {
+ const {getSessionBootstrapAsync}=require('../src/session');
+ const o=await make();const proposed=await offer({...args(o),price:700},auth(d));
+ assert.equal((await respond({...args(o),offerId:proposed.offer.id,accept:true},auth(p))).accepted,true);
+ const initial=await read();const money=u(initial,'d').balance,bonus=u(initial,'d').bonusBalance;
+ for(let i=0;i<30;i++) {
+  await write(s=>Object.assign(u(s,'d'),{activeDriverOrderId:null,hasActiveDriverOrder:false,roleState:'DRIVER_ONLINE'}));
+  const session=await getSessionBootstrapAsync({},auth(d));
+  assert.equal(session.activeDriverOrderRef,o.orderDocPath);
+  assert.equal(session.roleState,'DRIVER_ON_TRIP');
+  assert.equal(session.user.balance,money);assert.equal(session.user.bonusBalance,bonus);
+  const state=await list(args(o),auth(d));assert.equal(state.assignedToCurrentDriver,true);
+ }
+ const final=await read();assert.equal(final.orders[0].driverId,d.id);
+ assert.equal(final.ledger.filter(x=>x.type==='order_commission').length,1);
 });

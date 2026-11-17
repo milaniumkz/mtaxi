@@ -23,6 +23,7 @@ const _apnsTokenRetryAttempts = 20;
 const _apnsTokenRetryDelay = Duration(milliseconds: 500);
 
 Future<NotificationSettings?> _requestPushPermission() async {
+  if (!firebasePushInitialized) return null;
   if (kIsWeb) {
     return firebaseWebPushEnabled
         ? FirebaseMessaging.instance.getNotificationSettings()
@@ -46,7 +47,8 @@ Future<NotificationSettings?> _requestPushPermission() async {
 Future<String?> _getFcmTokenAfterNativeRegistration() async {
   if (kIsWeb) {
     return firebaseWebPushEnabled
-        ? FirebaseMessaging.instance.getToken(vapidKey: firebaseWebVapidKey)
+        ? FirebaseMessaging.instance.getToken(
+            vapidKey: firebaseWebVapidKey.isEmpty ? null : firebaseWebVapidKey)
         : null;
   }
   if (!(Platform.isIOS || Platform.isAndroid)) {
@@ -121,7 +123,8 @@ final fcmTokenUserStream = authenticatedUserStream
 });
 
 Future<bool> enableBrowserPushForCurrentUser() async {
-  if (!kIsWeb || !firebaseWebPushEnabled) return false;
+  if (!kIsWeb || !firebaseWebPushEnabled || !firebasePushInitialized)
+    return false;
   final userPath = currentUserDocument?.reference.path ?? '';
   if (userPath.isEmpty || !await FirebaseMessaging.instance.isSupported())
     return false;
@@ -132,8 +135,8 @@ Future<bool> enableBrowserPushForCurrentUser() async {
   );
   if (settings.authorizationStatus != AuthorizationStatus.authorized)
     return false;
-  final token =
-      await FirebaseMessaging.instance.getToken(vapidKey: firebaseWebVapidKey);
+  final token = await FirebaseMessaging.instance.getToken(
+      vapidKey: firebaseWebVapidKey.isEmpty ? null : firebaseWebVapidKey);
   if (token == null || token.isEmpty) return false;
   final response = await makeCloudCall('addFcmToken', {
     'userDocPath': userPath,

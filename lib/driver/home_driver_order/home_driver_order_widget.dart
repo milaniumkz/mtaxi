@@ -1,7 +1,10 @@
+import '/trips/driver_position_filter.dart';
+import '/trips/trip_chat.dart';
 import '/design/bottom_navigation.dart';
 import '/trips/trip_receipt.dart';
 import '/design/trip_panel.dart';
 import '/trips/trip_navigation.dart';
+import '/trips/driver_background_location.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/backend_orders.dart';
@@ -20,6 +23,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' as navigation_geo;
 import 'home_driver_order_model.dart';
 export 'home_driver_order_model.dart';
 
@@ -82,6 +86,16 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   LatLng? _lastWrittenLocation;
   late final DateTime _openedAt;
   OrderRecord? _lastVisibleDriverOrder;
+  String? _detailsStreamPath;
+  Stream<OrderRecord>? _detailsStream;
+  Stream<OrderRecord> _streamForOrder(String path) {
+    if (_detailsStreamPath != path || _detailsStream == null) {
+      _detailsStreamPath = path;
+      _detailsStream = orderDetailsStreamFromBackend(path);
+    }
+    return _detailsStream!;
+  }
+
   DocumentReference? _screenOrderRef;
   bool _verifyingAuthoritativeAssignment = false;
 
@@ -315,27 +329,24 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   }
 
   Widget _buildPassengerContactActions(String phone) {
-    if (phone.trim().isEmpty) {
-      return Text(
-        _tr(
-          ru: 'Телефон не указан',
-          kk: 'Телефон көрсетілмеген',
-        ),
-        style: FlutterFlowTheme.of(context).bodySmall,
-      );
-    }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(_formatPhone(phone), style: FlutterFlowTheme.of(context).bodySmall),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(
-            onPressed: () => _callPhone(phone),
+            onPressed: phone.trim().isEmpty ? null : () => _callPhone(phone),
             icon: const Icon(Icons.call_outlined, size: 18),
             label: Text(_tr(ru: 'Позвонить', kk: 'Қоңырау'))),
         OutlinedButton.icon(
-            onPressed: () => _openWhatsApp(phone),
+            onPressed: phone.trim().isEmpty ? null : () => _openWhatsApp(phone),
             icon: const Icon(Icons.chat_bubble_outline, size: 18),
             label: const Text('WhatsApp')),
+        OutlinedButton.icon(
+            onPressed: _currentScreenOrderRef() == null
+                ? null
+                : () => openTripChat(context, _currentScreenOrderRef()!.path),
+            icon: const Icon(Icons.forum_outlined, size: 18),
+            label: const Text('Чат')),
       ]),
     ]);
   }
@@ -697,7 +708,11 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
     );
   }
 
-  double? _lastGpsAccuracy;
+  double? _lastGpsAccuracy, _gpsHeading;
+  DateTime? _lastGpsTimestamp;
+  final _gpsFilter = DriverPositionFilter();
+  Future<void>? _locationFuture;
+  bool _locationTickBusy = false;
 
   bool _shouldSyncDriverLocation(LatLng nextLocation) {
     final lastWriteAt = _lastLocationWriteAt;
@@ -774,14 +789,28 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       _pendingOrderStatus = nextStatus;
     });
 
-    final response = await makeCloudCall(
-      'advanceDriverOrderStatus',
-      {
-        'orderDocPath': order.reference.path,
-        'userDocPath': _authoritativeDriverPath(),
-        'nextStatus': nextStatus,
-      },
-    );
+    Map<String, dynamic> response;
+    try {
+      response = await makeCloudCall(
+        'advanceDriverOrderStatus',
+        {
+          'orderDocPath': order.reference.path,
+          'userDocPath': _authoritativeDriverPath(),
+          'nextStatus': nextStatus,
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _statusActionInFlight = false;
+        _statusActionTarget = null;
+        _pendingOrderStatus = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              error is StateError ? error.message.toString() : fallbackError)));
+      return;
+    }
 
     if (!mounted) return;
 
@@ -853,10 +882,22 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
   }
 
   Future<void> _resolveLocation() async {
+    if (_locationFuture != null) return _locationFuture;
+    final future = _resolveLocationOnce();
+    _locationFuture = future;
+    try {
+      await future;
+    } finally {
+      _locationFuture = null;
+    }
+  }
+
+  Future<void> _resolveLocationOnce() async {
     if (!_tabActive) return;
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        if (!mounted) return;
         setState(() {
           currentUserLocationValue = null;
         });
@@ -868,21 +909,35 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
         setState(() {
           currentUserLocationValue = null;
         });
         return;
       }
-      final position = await getSafeCurrentPosition(
-        accuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 8),
-      );
+      final cached = DriverBackgroundLocation.latest;
+      final position = cached != null &&
+              DateTime.now().difference(cached.timestamp).inSeconds <= 5
+          ? cached
+          : await getSafeCurrentPosition(
+              accuracy: LocationAccuracy.bestForNavigation,
+              timeLimit: const Duration(seconds: 8),
+            );
+      if (!mounted) return;
+      if (!_gpsFilter.accept(position)) return;
+      _lastGpsTimestamp = position.timestamp;
       setState(() {
+        _gpsHeading = position.speed > 1.5 &&
+                position.heading.isFinite &&
+                position.heading >= 0
+            ? position.heading
+            : _gpsHeading;
         _lastGpsAccuracy = position.accuracy;
         currentUserLocationValue =
             LatLng(position.latitude, position.longitude);
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         currentUserLocationValue = null;
       });
@@ -913,23 +968,31 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
               (WidgetsBinding.instance.lifecycleState != null &&
                   WidgetsBinding.instance.lifecycleState !=
                       AppLifecycleState.resumed)) return;
-          await _resolveLocation();
-          if (!_tabActive || !mounted) return;
-          final nextLocation = currentUserLocationValue;
-          if (nextLocation != null && _shouldSyncDriverLocation(nextLocation)) {
-            await makeCloudCall(
-              'updateUserPreferences',
-              {
-                'coords': {
-                  'latitude': nextLocation.latitude,
-                  'longitude': nextLocation.longitude,
-                  'accuracy': _lastGpsAccuracy,
+          if (_locationTickBusy) return;
+          _locationTickBusy = true;
+          try {
+            await _resolveLocation();
+            if (!_tabActive || !mounted) return;
+            final nextLocation = currentUserLocationValue;
+            if (nextLocation != null &&
+                _shouldSyncDriverLocation(nextLocation)) {
+              await makeCloudCall(
+                'updateUserPreferences',
+                {
+                  'coords': {
+                    'latitude': nextLocation.latitude,
+                    'longitude': nextLocation.longitude,
+                    'accuracy': _lastGpsAccuracy,
+                    'timestamp': _lastGpsTimestamp?.toUtc().toIso8601String(),
+                  },
                 },
-              },
-            );
-            _rememberSyncedDriverLocation(nextLocation);
+              );
+              _rememberSyncedDriverLocation(nextLocation);
+            }
+            await _pollDriverOrderState();
+          } finally {
+            _locationTickBusy = false;
           }
-          await _pollDriverOrderState();
         },
         startImmediately: true,
       );
@@ -1037,7 +1100,7 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
               }
 
               return StreamBuilder<OrderRecord>(
-                stream: orderDetailsStreamFromBackend(screenOrderRef.path),
+                stream: _streamForOrder(screenOrderRef.path),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     _recoverActiveDriverOrderOrLeave();
@@ -1050,7 +1113,8 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                     );
                   }
                   final streamedOrder = snapshot.data;
-                  if (streamedOrder == null) {
+                  if (streamedOrder == null ||
+                      streamedOrder.reference.id != screenOrderRef.id) {
                     return _buildOpeningOrderState(
                       message: _tr(
                         ru: 'Загружаем данные заказа...',
@@ -1167,7 +1231,14 @@ class _HomeDriverOrderWidgetState extends State<HomeDriverOrderWidget> {
                     children: [
                       Positioned.fill(
                         child: TripNavigation(
-                            orderDocPath: order.reference.path, isDriver: true),
+                            orderDocPath: order.reference.path,
+                            isDriver: true,
+                            driverPosition: currentUserLocationValue == null
+                                ? null
+                                : navigation_geo.LatLng(
+                                    currentUserLocationValue!.latitude,
+                                    currentUserLocationValue!.longitude),
+                            driverHeading: _gpsHeading),
                       ),
                       Align(
                         alignment: Alignment.bottomCenter,

@@ -1,3 +1,4 @@
+import '/utils/kazakhstan_phone_formatter.dart';
 import '/design/mtaxi_theme.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/auth/backend_auth/backend_user_provider.dart';
@@ -23,10 +24,11 @@ class LoginWidget extends StatefulWidget {
 
 class _LoginWidgetState extends State<LoginWidget> {
   final _formKey = GlobalKey<FormState>();
-  final _phone = TextEditingController();
+  final _phone = TextEditingController(text: '+7');
   final _password = TextEditingController();
   final _repeat = TextEditingController();
   bool _register = false;
+  String? _registrationRole;
   bool _busy = false;
   bool _obscure = true;
   bool _accepted = false;
@@ -53,6 +55,11 @@ class _LoginWidgetState extends State<LoginWidget> {
 
   Future<void> _submit() async {
     if (_busy || !_formKey.currentState!.validate()) return;
+    if (_register && _registrationRole == null) {
+      setState(() => _error = _tr('Выберите: пассажир или водитель',
+          'Жолаушы немесе жүргізуші рөлін таңдаңыз'));
+      return;
+    }
     if (_register && !_accepted) {
       setState(() => _error = _tr('Примите пользовательское соглашение',
           'Пайдаланушы келісімін қабылдаңыз'));
@@ -88,7 +95,8 @@ class _LoginWidgetState extends State<LoginWidget> {
       AppStateNotifier.instance.updateNotifyOnAuthChange(false);
       AppStateNotifier.instance.update(activeUser);
       FFAppState().phone = phone;
-      FFAppState().pendingRegistrationRole = '';
+      FFAppState().pendingRegistrationRole =
+          _register ? _registrationRole! : '';
       FFAppState().smsKod = 0;
       FFAppState().update(() {});
       TextInput.finishAutofillContext();
@@ -348,34 +356,84 @@ class _LoginWidgetState extends State<LoginWidget> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 7),
                                 child: Text(
-                                    _register
-                                        ? _tr('Начнём знакомство', 'Танысайық')
-                                        : _tr('С возвращением',
-                                            'Қайта қош келдіңіз'),
+                                    _adminHost
+                                        ? _tr('Панель управления',
+                                            'Басқару панелі')
+                                        : _register
+                                            ? _tr('Начнём знакомство',
+                                                'Танысайық')
+                                            : _tr('С возвращением',
+                                                'Қайта қош келдіңіз'),
                                     style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700))),
                           )),
                       const SizedBox(height: 18),
                       Text(
-                          _register
-                              ? _tr('Создать аккаунт', 'Аккаунт құру')
-                              : _tr('Поехали\nпо вашим делам.',
-                                  'Істеріңіз бойынша\nжолға шығайық.'),
+                          _adminHost
+                              ? _tr('Вход в админку', 'Әкімшіге кіру')
+                              : _register
+                                  ? _tr('Создать аккаунт', 'Аккаунт құру')
+                                  : _tr('Поехали\nпо вашим делам.',
+                                      'Істеріңіз бойынша\nжолға шығайық.'),
                           style: const TextStyle(
                               fontSize: 31,
                               fontWeight: FontWeight.w700,
                               height: 1.18)),
                       const SizedBox(height: 12),
-                      Text(_register
-                          ? _tr('Укажите номер телефона и придумайте пароль.',
-                              'Телефон нөмірін көрсетіп, құпиясөз жасаңыз.')
-                          : _tr('Такси рядом. Войдите, чтобы заказать поездку.',
-                              'Такси жақын жерде. Сапарға тапсырыс беру үшін кіріңіз.')),
+                      Text(_adminHost
+                          ? _tr('Управляйте заказами, водителями и платежами.',
+                              'Тапсырыстарды, жүргізушілерді және төлемдерді басқарыңыз.')
+                          : _register
+                              ? _tr(
+                                  'Укажите номер телефона и придумайте пароль.',
+                                  'Телефон нөмірін көрсетіп, құпиясөз жасаңыз.')
+                              : _tr(
+                                  'Такси рядом. Войдите, чтобы заказать поездку.',
+                                  'Такси жақын жерде. Сапарға тапсырыс беру үшін кіріңіз.')),
                       const SizedBox(height: 28),
+                      if (_register) ...[
+                        Text(
+                            _tr('Как будете пользоваться?',
+                                'Қалай пайдаланасыз?'),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 10),
+                        Wrap(spacing: 12, runSpacing: 8, children: [
+                          ChoiceChip(
+                            key: const ValueKey('registration-role-passenger'),
+                            avatar: const Icon(Icons.person_outline, size: 20),
+                            label: Text(_tr('Пассажир', 'Жолаушы')),
+                            selected: _registrationRole == 'passenger',
+                            selectedColor: MTaxiDesign.gold,
+                            onSelected: _busy
+                                ? null
+                                : (_) => setState(() {
+                                      _registrationRole = 'passenger';
+                                      _error = '';
+                                    }),
+                          ),
+                          ChoiceChip(
+                            key: const ValueKey('registration-role-driver'),
+                            avatar:
+                                const Icon(Icons.local_taxi_outlined, size: 20),
+                            label: Text(_tr('Водитель', 'Жүргізуші')),
+                            selected: _registrationRole == 'driver',
+                            selectedColor: MTaxiDesign.gold,
+                            onSelected: _busy
+                                ? null
+                                : (_) => setState(() {
+                                      _registrationRole = 'driver';
+                                      _error = '';
+                                    }),
+                          ),
+                        ]),
+                        const SizedBox(height: 20),
+                      ],
                       TextFormField(
                           key: const ValueKey('login-phone'),
                           controller: _phone,
+                          inputFormatters: const [KazakhstanPhoneFormatter()],
                           enabled: !_busy,
                           keyboardType: TextInputType.phone,
                           autofillHints: const [AutofillHints.telephoneNumber],
@@ -458,13 +516,13 @@ class _LoginWidgetState extends State<LoginWidget> {
                                 : (value) =>
                                     setState(() => _accepted = value ?? false),
                             title: Text(_tr(
-                                'Принимаю пользовательское соглашение',
-                                'Пайдаланушы келісімін қабылдаймын'))),
+                                'Принимаю соглашение и оферту, даю согласие на обработку данных и ознакомлен с политикой конфиденциальности',
+                                'Келісім мен офертаны қабылдаймын, деректерді өңдеуге келісемін және құпиялық саясатымен таныстым'))),
                         TextButton(
                             onPressed: () =>
                                 context.pushNamed(PolitikaWidget.routeName),
-                            child: Text(_tr('Пользовательское соглашение',
-                                'Пайдаланушы келісімі'))),
+                            child: Text(_tr('Документы и условия MTaxi',
+                                'MTaxi құжаттары мен шарттары'))),
                       ],
                       if (_error.isNotEmpty)
                         Padding(
@@ -502,10 +560,13 @@ class _LoginWidgetState extends State<LoginWidget> {
                                 ? null
                                 : () => setState(() {
                                       _register = !_register;
+                                      _registrationRole = null;
                                       _error = '';
                                       _password.clear();
                                       _repeat.clear();
+                                      final phone = _phone.value;
                                       _formKey.currentState?.reset();
+                                      _phone.value = phone;
                                     }),
                             child: Text(_register
                                 ? _tr('Уже есть аккаунт? Войти',

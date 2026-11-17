@@ -3,6 +3,11 @@ const { requireAdmin } = require("./admin");
 const { asNumber } = require("./utils/values");
 
 const NUMERIC_SETTING_FIELDS = new Set([
+  "autoArrivalRadiusM",
+  "autoArrivalDelaySec",
+  "autoDepartureRadiusM",
+  "autoStartDelaySec",
+  "driverOfferLifetimeSec",
   "orderRadiusKm",
   "orderPendingTtlMin",
   "pendingOrderLifetimeMin",
@@ -40,6 +45,11 @@ function runtimeSettingsFromStore(store) {
   const settings = store.settings || {};
   const intercity = store.intercityTariff || {};
   return {
+    autoArrivalRadiusM: asNumber(settings.autoArrivalRadiusM) ?? 60,
+    autoArrivalDelaySec: asNumber(settings.autoArrivalDelaySec) ?? 15,
+    autoDepartureRadiusM: asNumber(settings.autoDepartureRadiusM) ?? 100,
+    autoStartDelaySec: asNumber(settings.autoStartDelaySec) ?? 15,
+    driverOfferLifetimeSec: asNumber(settings.driverOfferLifetimeSec) ?? 30,
     passengerBonusPercent: asNumber(settings.passengerBonusPercent) ?? 2,
     passengerBonusSpendPercent: asNumber(settings.passengerBonusSpendPercent) ?? 100,
     intercityEnabled: settings.intercityEnabled === true,
@@ -142,6 +152,13 @@ function updateRuntimeSettingsInStore(store, fields = {}) {
     if (key === 'driverBonusReward' && (!Number.isFinite(parsed) || parsed < 0)) {
       throw new Error(`SETTING_INVALID:${key}`);
     }
+    const policyRanges = {
+      autoArrivalRadiusM: [20, 120], autoArrivalDelaySec: [5, 120],
+      autoDepartureRadiusM: [80, 500], autoStartDelaySec: [5, 120],
+      driverOfferLifetimeSec: [15, 120],
+    };
+    const range = policyRanges[key];
+    if (range && (!Number.isSafeInteger(parsed) || parsed < range[0] || parsed > range[1])) throw new Error(`SETTING_INVALID:${key}`);
     updated[key] = parsed;
     store.settings[key] = parsed;
   });

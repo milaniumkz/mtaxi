@@ -1,4 +1,6 @@
-const { withStoreAsync } = require("./store");
+const { isDeepStrictEqual } = require("node:util");
+const { withStoreAsync, readStoreAsync } = require("./store");
+const { sessionScope } = require("./store/scopes");
 const { compactOrder, ORDER_STATUS } = require("./orders");
 const { publicUser } = require("./users");
 const { bonusStatus } = require("./driver_bonuses");
@@ -16,7 +18,13 @@ async function getSessionBootstrapAsync(_data, auth) {
     };
   }
 
-  return withStoreAsync(async (store) => buildSessionBootstrap(store, auth.user));
+  const snapshot = await readStoreAsync(sessionScope(auth.user.id));
+  const user = snapshot.users.find(item => item.id === auth.user.id);
+  const before = user ? structuredClone(user) : null;
+  const result = buildSessionBootstrap(snapshot, auth.user);
+  if (isDeepStrictEqual(before, user || null)) return result;
+  // Stale active references and day rollover still need an atomic fresh write.
+  return withStoreAsync(async (store) => buildSessionBootstrap(store, auth.user), sessionScope(auth.user.id));
 }
 
 function buildSessionBootstrap(store, authUser) {
@@ -32,9 +40,18 @@ function buildSessionBootstrap(store, authUser) {
   const passengerOrder = store.orders.find(
     (order) => order.id === user.activePassengerOrderId && isActiveOrder(order),
   );
-  const driverOrder = store.orders.find(
-    (order) => order.id === user.activeDriverOrderId && isActiveOrder(order),
+  let driverOrder = store.orders.find(
+    order => order.id === user.activeDriverOrderId && order.driverId === user.id && [2,3,4].includes(Number(order.status)),
   );
+  if (!driverOrder) {
+    driverOrder = store.orders.filter(order => order.driverId === user.id && [2,3,4].includes(Number(order.status)))
+      .sort((a,b) => (Date.parse(b.acceptedAt || b.updatedAt || b.createdAt) || 0) - (Date.parse(a.acceptedAt || a.updatedAt || a.createdAt) || 0))[0];
+  }
+  if (driverOrder) {
+    user.activeDriverOrderId = driverOrder.id;
+    user.hasActiveDriverOrder = true;
+    user.roleState = 'DRIVER_ON_TRIP';
+  }
 
   if (!passengerOrder && user.activePassengerOrderId) {
     user.activePassengerOrderId = null;
@@ -50,6 +67,13 @@ function buildSessionBootstrap(store, authUser) {
   }
   if (!passengerOrder && !driverOrder && !user.isDriver) {
     user.roleState = "PASSENGER";
+  }
+
+  // Heal accounts approved before the moderation role transition was fixed.
+  if (!driverOrder && user.isDriver && user.statusDriver === 'approved' && ['DRIVER_PENDING', 'DRIVER_PENDING_REVIEW'].includes(user.roleState)) {
+    const passengerMode = user.preferredClientMode === 'passenger' || user.activeMode === 'passenger';
+    user.roleState = passengerMode ? 'PASSENGER' : 'DRIVER_OFFLINE';
+    user.driverOnLine = false;
   }
 
   const driverBonus = user.isDriver ? bonusStatus(store, user) : null;

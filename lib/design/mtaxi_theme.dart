@@ -94,8 +94,11 @@ abstract final class MTaxiDesign {
               (states) => states.contains(WidgetState.selected) ? teal : null)),
       progressIndicatorTheme: const ProgressIndicatorThemeData(color: teal),
       snackBarTheme: const SnackBarThemeData(
-        contentTextStyle: TextStyle(
-            fontFamily: font, fontSize: 14, color: Colors.white),
+        backgroundColor: ink,
+        actionTextColor: gold,
+        disabledActionTextColor: Colors.white70,
+        contentTextStyle:
+            TextStyle(fontFamily: font, fontSize: 14, color: Colors.white),
       ),
       dividerTheme: DividerThemeData(color: dark ? Colors.white12 : border),
       bottomSheetTheme: BottomSheetThemeData(

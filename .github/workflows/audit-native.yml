@@ -1,0 +1,59 @@
+name: Build isolated MTaxi audit APK without deployment
+# Final audit candidate: cached-tab approval refresh, document labels and role links; no VPS changes.
+on:
+  push:
+    branches: [codex/full-audit-20261023]
+    paths: [.github/workflows/audit-native.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install pinned Flutter
+        run: |
+          git clone --depth 1 --branch 3.41.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = 90673a4eef275d1a6692c26ac80d6d746d41a73a
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Read existing test key without changing the VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh ~/.android
+          printf '%s\n' '89.126.192.185 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY8hkshZ0Nhs9jOJzO1aYdJqf2UjZHqpvlnAKDV552G' > ~/.ssh/known_hosts
+          sshpass -e scp -o StrictHostKeyChecking=yes root@89.126.192.185:/etc/mtaxi/test-debug.keystore ~/.android/debug.keystore
+      - name: Build for the local isolated backend and compare concrete APKs
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          export MTAXI_TEST_KEYSTORE="$HOME/.android/debug.keystore"
+          flutter build apk --profile --no-pub --dart-define=MTAXI_BACKEND_URL=http://127.0.0.1:18084
+          mkdir -p output/audit-native
+          apksigner_bin="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
+          "$apksigner_bin" sign --ks "$MTAXI_TEST_KEYSTORE" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out output/audit-native/mtaxi-audit.apk build/app/outputs/flutter-apk/app-profile.apk
+          . scripts/apk_signing_certificate.sh
+          audit_certificate="$("$apksigner_bin" verify --print-certs output/audit-native/mtaxi-audit.apk | mtaxi_apk_certificate_sha256)"
+          curl --fail --silent --show-error https://mtaxi.89.126.192.185.sslip.io/downloads/mtaxi-staging.apk -o "$RUNNER_TEMP/previous.apk"
+          previous_certificate="$("$apksigner_bin" verify --print-certs "$RUNNER_TEMP/previous.apk" | mtaxi_apk_certificate_sha256)"
+          test "$audit_certificate" = "$previous_certificate"
+          "$(dirname "$apksigner_bin")/aapt" dump badging output/audit-native/mtaxi-audit.apk | sed -n '1p' > output/audit-native/package.txt
+          printf '%s\n' "$audit_certificate" > output/audit-native/certificate-sha256.txt
+          (cd output/audit-native && sha256sum mtaxi-audit.apk > mtaxi-audit.apk.sha256)
+          printf 'revision=%s\nbackend=http://127.0.0.1:18084\nprevious_apk_same_certificate=true\ninstallation_upgrade_test=blocked_no_device\nnot_deployed=true\n' "$GITHUB_SHA" > output/audit-native/verification.txt
+      - name: Save private audit artifacts only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mtaxi-isolated-audit-apk
+          path: output/audit-native/
+          retention-days: 7

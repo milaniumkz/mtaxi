@@ -1,3 +1,4 @@
+import '/trips/payment_summary.dart';
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend_calls/backend_calls.dart';
 import '/design/mtaxi_theme.dart';
@@ -144,10 +145,7 @@ class _MeOrderWidgetState extends State<MeOrderWidget> {
                         ],
                         if (order['paymentMode'] != null) ...[
                           const Divider(height: 28),
-                          Text(order['paymentMode'] == 'wallet'
-                              ? tr('Оплата со счёта приложения',
-                                  'Қосымша шотынан төлеу')
-                              : tr('Оплата наличными', 'Қолма-қол төлеу'))
+                          Text(passengerPaymentSummary(order, tr))
                         ],
                         if (order['passengerBonusUsed'] is num &&
                             (order['passengerBonusUsed'] as num) > 0)

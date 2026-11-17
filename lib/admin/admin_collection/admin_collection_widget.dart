@@ -1,9 +1,9 @@
+import '/backend/uploads/mtaxi_network_image.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'kaspi_payment_actions.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -236,7 +236,7 @@ class _AdminImageWithFallbackState extends State<_AdminImageWithFallback> {
     if (widget.urls.isEmpty) {
       return widget.errorChild;
     }
-    return Image.network(
+    return MTaxiNetworkImage(
       widget.urls[_currentIndex],
       fit: widget.fit,
       errorBuilder: (_, __, ___) {
@@ -976,7 +976,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                   title,
                   style: FlutterFlowTheme.of(context).titleMedium.override(
                         color: _mtaxiAdminText,
-                        font: GoogleFonts.readexPro(
+                        font: TextStyle(
+                          fontFamily: 'Noto Sans',
                           fontWeight: FontWeight.w600,
                           fontStyle: FlutterFlowTheme.of(context)
                               .titleMedium
@@ -1060,7 +1061,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           children: [
             _buildSingletonSettingsCard(
               context,
-              title: 'main',
+              title: _collectionLabels[widget.collectionName] ??
+                  'Параметры сервиса',
               data: data,
               onEdit: () => _openBackendContentEditor(
                 context,
@@ -1519,7 +1521,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           children: [
             _buildSingletonSettingsCard(
               context,
-              title: 'main',
+              title: _collectionLabels[widget.collectionName] ??
+                  'Параметры сервиса',
               data: data,
               onEdit: () => _openBackendAppSettingsEditor(
                 context,
@@ -1913,7 +1916,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                       child: Text(
                         _backendPathId(data, 'userDocPath'),
                         style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.readexPro(
+                              font: TextStyle(
+                                fontFamily: 'Noto Sans',
                                 fontWeight: FontWeight.w600,
                                 fontStyle: FlutterFlowTheme.of(context)
                                     .bodyMedium
@@ -2322,7 +2326,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                 Text(
                   _backendPathId(data, 'orderDocPath'),
                   style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        font: GoogleFonts.readexPro(
+                        font: TextStyle(
+                          fontFamily: 'Noto Sans',
                           fontWeight: FontWeight.w600,
                           fontStyle:
                               FlutterFlowTheme.of(context).bodyMedium.fontStyle,
@@ -2466,7 +2471,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                         style:
                             FlutterFlowTheme.of(context).titleMedium.override(
                                   color: _mtaxiAdminText,
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .titleMedium
@@ -2482,7 +2488,12 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                     ),
                     _buildStatusChip(
                       context,
-                      label: status.isEmpty ? 'status' : status,
+                      label: {
+                            'success': 'Оплачено',
+                            'pending': 'Ожидается оплата',
+                            'failed': 'Отклонено / отменено'
+                          }[status] ??
+                          (status.isEmpty ? 'Ожидание' : status),
                       color: statusColor,
                     ),
                   ],
@@ -2507,6 +2518,19 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                       ),
                   ],
                 ),
+                if (payment['provider'] == 'kaspi_qr') ...[
+                  const SizedBox(height: 8),
+                  Text(status == 'pending'
+                      ? 'Kaspi · ссылка. Оплата и зачисление проверяются автоматически.'
+                      : 'Kaspi · оплата по ссылке'),
+                  if ((payment['paymentUrl'] ?? '').toString().isNotEmpty &&
+                      status == 'pending')
+                    TextButton.icon(
+                        onPressed: () => Clipboard.setData(ClipboardData(
+                            text: payment['paymentUrl'].toString())),
+                        icon: const Icon(Icons.copy),
+                        label: const Text('Копировать ссылку оплаты')),
+                ],
                 if (payment['provider'] == 'kaspi_manual' &&
                     status == 'pending')
                   KaspiPaymentActions(
@@ -2694,7 +2718,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                         style:
                             FlutterFlowTheme.of(context).titleMedium.override(
                                   color: _mtaxiAdminText,
-                                  font: GoogleFonts.readexPro(
+                                  font: TextStyle(
+                                    fontFamily: 'Noto Sans',
                                     fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .titleMedium
@@ -2770,7 +2795,9 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                           color: Colors.green,
                           textStyle:
                               FlutterFlowTheme.of(context).labelLarge.override(
-                                    font: GoogleFonts.readexPro(),
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
+                                    ),
                                     color: Colors.white,
                                     letterSpacing: 0.0,
                                   ),
@@ -2789,7 +2816,9 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                           color: Colors.red,
                           textStyle:
                               FlutterFlowTheme.of(context).labelLarge.override(
-                                    font: GoogleFonts.readexPro(),
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
+                                    ),
                                     color: Colors.white,
                                     letterSpacing: 0.0,
                                   ),
@@ -2929,7 +2958,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                 Text(
                   action.isEmpty ? 'Действие администратора' : action,
                   style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        font: GoogleFonts.readexPro(
+                        font: TextStyle(
+                          fontFamily: 'Noto Sans',
                           fontWeight: FontWeight.w600,
                           fontStyle:
                               FlutterFlowTheme.of(context).bodyMedium.fontStyle,
@@ -3550,7 +3580,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     required String value,
   }) {
     final labelStyle = FlutterFlowTheme.of(context).bodySmall.override(
-          font: GoogleFonts.readexPro(
+          font: TextStyle(
+            fontFamily: 'Noto Sans',
             fontWeight: FontWeight.w700,
             fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
           ),
@@ -3559,7 +3590,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
         );
     final valueStyle = FlutterFlowTheme.of(context).bodySmall.override(
-          font: GoogleFonts.readexPro(
+          font: TextStyle(
+            fontFamily: 'Noto Sans',
             fontWeight: FlutterFlowTheme.of(context).bodySmall.fontWeight,
             fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
           ),
@@ -4065,7 +4097,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
         Text(
           'Поставить статус',
           style: FlutterFlowTheme.of(context).labelMedium.override(
-                font: GoogleFonts.readexPro(
+                font: TextStyle(
+                  fontFamily: 'Noto Sans',
                   fontWeight: FontWeight.w700,
                   fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
                 ),
@@ -4550,7 +4583,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                               style: FlutterFlowTheme.of(sheetContext)
                                   .headlineSmall
                                   .override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.w600,
                                       fontStyle:
                                           FlutterFlowTheme.of(sheetContext)
@@ -4726,7 +4760,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           Text(
             label,
             style: FlutterFlowTheme.of(context).labelSmall.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w700,
                     fontStyle:
                         FlutterFlowTheme.of(context).labelSmall.fontStyle,
@@ -4926,7 +4961,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     'routercitytocity': 'Маршруты межгород',
     'RouterCityToCity': 'Маршруты межгород',
     'intercityTariff': 'Тариф межгород (км)',
-    'appSettings': 'Настройки (runtime/комиссия/доставка)',
+    'appSettings': 'Настройки сервиса',
     'order': 'Заказы',
     'gruz': 'Доставка (заказы)',
     'GruzDriver': 'Водители доставки',
@@ -5163,6 +5198,26 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
     ],
     'appSettings': [
       _FieldSpec(
+          key: 'autoArrivalRadiusM',
+          label: 'Радиус автоматического прибытия (м)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'autoArrivalDelaySec',
+          label: 'Ожидание автоматического прибытия (сек)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'autoDepartureRadiusM',
+          label: 'Удаление от подачи для автостарта (м)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'autoStartDelaySec',
+          label: 'Ожидание автоматического старта (сек)',
+          type: _FieldType.intType),
+      _FieldSpec(
+          key: 'driverOfferLifetimeSec',
+          label: 'Срок предложения водителя (сек)',
+          type: _FieldType.intType),
+      _FieldSpec(
           key: 'passengerBonusPercent',
           label: 'Бонус пассажиру за поездку (%)',
           type: _FieldType.doubleType),
@@ -5285,7 +5340,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
         title: Text(
           _collectionLabels[widget.collectionName] ?? widget.collectionName,
           style: FlutterFlowTheme.of(context).headlineMedium.override(
-                font: GoogleFonts.readexPro(
+                font: TextStyle(
+                  fontFamily: 'Noto Sans',
                   fontWeight: FontWeight.w600,
                   fontStyle:
                       FlutterFlowTheme.of(context).headlineMedium.fontStyle,
@@ -5383,7 +5439,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           Text(
             'Фильтры',
             style: FlutterFlowTheme.of(context).bodyMedium.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w600,
                     fontStyle:
                         FlutterFlowTheme.of(context).bodyMedium.fontStyle,
@@ -5569,7 +5626,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                   height: 36,
                   color: _mtaxiSurface2,
                   textStyle: FlutterFlowTheme.of(context).bodySmall.override(
-                        font: GoogleFonts.readexPro(
+                        font: TextStyle(
+                          fontFamily: 'Noto Sans',
                           fontWeight: FontWeight.w600,
                           fontStyle:
                               FlutterFlowTheme.of(context).bodySmall.fontStyle,
@@ -5834,7 +5892,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           Text(
             title,
             style: FlutterFlowTheme.of(context).bodyMedium.override(
-                  font: GoogleFonts.readexPro(
+                  font: TextStyle(
+                    fontFamily: 'Noto Sans',
                     fontWeight: FontWeight.w600,
                     fontStyle:
                         FlutterFlowTheme.of(context).bodyMedium.fontStyle,
@@ -5871,7 +5930,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
               height: 40,
               color: _mtaxiSurface2,
               textStyle: FlutterFlowTheme.of(context).bodySmall.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight: FontWeight.w600,
                       fontStyle:
                           FlutterFlowTheme.of(context).bodySmall.fontStyle,
@@ -5893,7 +5953,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
               height: 40,
               color: _mtaxiSurface2,
               textStyle: FlutterFlowTheme.of(context).bodySmall.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight: FontWeight.w600,
                       fontStyle:
                           FlutterFlowTheme.of(context).bodySmall.fontStyle,
@@ -5995,7 +6056,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                   : 'Коллекция не указана',
               textAlign: TextAlign.center,
               style: FlutterFlowTheme.of(context).bodyLarge.override(
-                    font: GoogleFonts.readexPro(
+                    font: TextStyle(
+                      fontFamily: 'Noto Sans',
                       fontWeight: FontWeight.w600,
                       fontStyle:
                           FlutterFlowTheme.of(context).bodyLarge.fontStyle,
@@ -6016,7 +6078,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                 height: 44,
                 color: _mtaxiMint,
                 textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                      font: GoogleFonts.readexPro(
+                      font: TextStyle(
+                        fontFamily: 'Noto Sans',
                         fontWeight: FontWeight.w600,
                         fontStyle:
                             FlutterFlowTheme.of(context).titleSmall.fontStyle,
@@ -6059,7 +6122,7 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
           'Акция водителей: ${data['driverBonusEnabled'] == true ? 'включена' : 'выключена'}',
         if (data['driverBonusTargetOrders'] != null &&
             data['driverBonusReward'] != null)
-          '${data['driverBonusTargetOrders']} заказов за сутки → ${data['driverBonusReward']} бонусных ₸',
+          '${data['driverBonusTargetOrders']} заказов за сутки; награда ${data['driverBonusReward']} бонусных ₸',
         if (data['passengerBonusPercent'] != null)
           'Бонус пассажиру: ${data['passengerBonusPercent']}%',
         if (data['passengerBonusSpendPercent'] != null)
@@ -6361,7 +6424,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                               : 'Редактирование',
                       style:
                           FlutterFlowTheme.of(context).headlineSmall.override(
-                                font: GoogleFonts.readexPro(
+                                font: TextStyle(
+                                  fontFamily: 'Noto Sans',
                                   fontWeight: FontWeight.w600,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .headlineSmall
@@ -6970,14 +7034,16 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                                                 ? _mtaxiMint
                                                 : FlutterFlowTheme.of(context)
                                                     .error,
-                                            textStyle: FlutterFlowTheme.of(
-                                                    context)
-                                                .bodySmall
-                                                .override(
-                                                  font: GoogleFonts.readexPro(),
-                                                  color: Colors.white,
-                                                  letterSpacing: 0.0,
-                                                ),
+                                            textStyle:
+                                                FlutterFlowTheme.of(context)
+                                                    .bodySmall
+                                                    .override(
+                                                      font: TextStyle(
+                                                        fontFamily: 'Noto Sans',
+                                                      ),
+                                                      color: Colors.white,
+                                                      letterSpacing: 0.0,
+                                                    ),
                                             elevation: 0,
                                             borderRadius:
                                                 BorderRadius.circular(10),
@@ -7071,7 +7137,9 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                                       style: FlutterFlowTheme.of(context)
                                           .bodySmall
                                           .override(
-                                            font: GoogleFonts.readexPro(),
+                                            font: TextStyle(
+                                              fontFamily: 'Noto Sans',
+                                            ),
                                             color: FlutterFlowTheme.of(context)
                                                 .error,
                                             letterSpacing: 0.0,
@@ -7152,7 +7220,9 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                           errorText!,
                           style:
                               FlutterFlowTheme.of(context).bodyMedium.override(
-                                    font: GoogleFonts.readexPro(),
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
+                                    ),
                                     color: FlutterFlowTheme.of(context).error,
                                     letterSpacing: 0.0,
                                   ),
@@ -7174,7 +7244,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                               textStyle: FlutterFlowTheme.of(context)
                                   .titleSmall
                                   .override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
@@ -7419,7 +7490,8 @@ class _AdminCollectionWidgetState extends State<AdminCollectionWidget> {
                               textStyle: FlutterFlowTheme.of(context)
                                   .titleSmall
                                   .override(
-                                    font: GoogleFonts.readexPro(
+                                    font: TextStyle(
+                                      fontFamily: 'Noto Sans',
                                       fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall

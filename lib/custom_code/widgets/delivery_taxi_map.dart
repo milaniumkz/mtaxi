@@ -1,4 +1,5 @@
 import '/design/map_attribution.dart';
+import '/design/service_type_cards.dart';
 import '/design/mtaxi_theme.dart';
 // ignore_for_file: unused_import, unused_element, unnecessary_import, deprecated_member_use
 
@@ -39,6 +40,8 @@ class DeliveryTaxiMap extends StatefulWidget {
   final double? width;
   final double? height;
 
+  final VoidCallback? onFromAddressEdited;
+  final VoidCallback? onToAddressEdited;
   final Function(String)? onFromAddressChanged;
   final Function(String)? onToAddressChanged;
   final Function(latlng.LatLng)? onFromCoordsChanged;
@@ -77,6 +80,8 @@ class DeliveryTaxiMap extends StatefulWidget {
     Key? key,
     this.width,
     this.height,
+    this.onFromAddressEdited,
+    this.onToAddressEdited,
     this.onFromAddressChanged,
     this.onToAddressChanged,
     this.onFromCoordsChanged,
@@ -239,7 +244,10 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
     super.dispose();
   }
 
-  Future<void> _getUserLocation() async {
+  Future<void> _getUserLocation({bool force = false}) async {
+    if (!force && _fromLocation != null) return;
+    final addressAtStart = _fromController.text;
+    final pointAtStart = _fromLocation;
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -273,6 +281,8 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         timeLimit: const Duration(seconds: 8),
       );
       if (!mounted) return;
+      if (_fromController.text != addressAtStart ||
+          _fromLocation != pointAtStart) return;
       final user = latlng.LatLng(position.latitude, position.longitude);
       setState(() {
         _userLocation = user;
@@ -299,7 +309,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   Future<void> _fillFromAddressForCoords(latlng.LatLng coords) async {
     if (!mounted || !widget.enableRemoteGeocoding) return;
     final resolved = await _reverseGeocode(coords);
-    if (!mounted || resolved.trim().isEmpty) return;
+    if (!mounted || _fromLocation != coords || resolved.trim().isEmpty) return;
     final address = _serviceType == 'intercity'
         ? _formatIntercityFromAddress(resolved)
         : resolved;
@@ -686,9 +696,13 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
     return [];
   }
 
+  int _routeRequestGeneration = 0;
+
   void _onFromChanged(String value) {
-    final previous = _fromController.text.trim();
-    if (previous != value.trim()) {
+    _routeRequestGeneration++;
+    _nextSearchVersion('from');
+    widget.onFromAddressEdited?.call();
+    {
       setState(() {
         _fromLocation = null;
         _routePoints = [];
@@ -708,7 +722,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       } else {
         items = await _fetchSuggestions(value);
       }
-      if (!mounted) return;
+      if (!mounted || _fromController.text.trim() != value.trim()) return;
       setState(() {
         _fromSuggestions = items;
       });
@@ -719,8 +733,10 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   }
 
   void _onToChanged(String value) {
-    final previous = _toController.text.trim();
-    if (previous != value.trim()) {
+    _routeRequestGeneration++;
+    _nextSearchVersion('to');
+    widget.onToAddressEdited?.call();
+    {
       setState(() {
         _toLocation = null;
         _selectedIntercityRoute = null;
@@ -808,26 +824,14 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         _activeField = 'to';
       });
       widget.onFromCoordsChanged?.call(coords);
-      if (widget.enableRemoteGeocoding) {
-        await _fillFromAddressForCoords(coords);
-      }
+      widget.onFromAddressChanged?.call(item);
     } else {
       setState(() {
         _toLocation = coords;
         _activeField = _nextFieldAfterToSelection();
       });
       widget.onToCoordsChanged?.call(coords);
-      if (widget.enableRemoteGeocoding) {
-        final resolved = await _reverseGeocode(coords);
-        if (mounted && resolved.trim().isNotEmpty) {
-          setState(() {
-            _toController.text = resolved;
-          });
-          widget.onToAddressChanged?.call(resolved);
-        }
-      } else {
-        widget.onToAddressChanged?.call(item);
-      }
+      widget.onToAddressChanged?.call(item);
     }
     _mapController.move(coords, 17.0);
     setState(() {
@@ -1036,9 +1040,15 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
   }
 
   Future<void> _fetchRoute(latlng.LatLng from, latlng.LatLng to) async {
+    final generation = ++_routeRequestGeneration;
+    bool current() =>
+        mounted &&
+        generation == _routeRequestGeneration &&
+        _fromLocation == from &&
+        _toLocation == to;
     if (!widget.enableRemoteGeocoding) return;
     if (from == to) {
-      if (!mounted) return;
+      if (!current()) return;
       setState(() {
         _routePoints = [];
         _routeDistance = 0.0;
@@ -1047,7 +1057,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       return;
     }
 
-    if (!mounted) return;
+    if (!current()) return;
     setState(() {
       _isRouteLoading = true;
     });
@@ -1076,7 +1086,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         final duration =
             int.tryParse(response['durationMinutes']?.toString() ?? '') ?? 0;
 
-        if (!mounted) return;
+        if (!current()) return;
         setState(() {
           _routePoints = routePoints;
           _routeDistance = distance;
@@ -1087,7 +1097,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
         _centerMapOnRoute(routePoints);
       } else {
         debugPrint('Ошибка получения маршрута: ${response['error']}');
-        if (!mounted) return;
+        if (!current()) return;
         setState(() {
           _routePoints = [];
           _routeDistance = 0.0;
@@ -1096,14 +1106,14 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       }
     } catch (e) {
       debugPrint('Ошибка получения маршрута: $e');
-      if (!mounted) return;
+      if (!current()) return;
       setState(() {
         _routePoints = [];
         _routeDistance = 0.0;
         _routeDuration = 0;
       });
     } finally {
-      if (!mounted) return;
+      if (!current()) return;
       setState(() {
         _isRouteLoading = false;
       });
@@ -1287,6 +1297,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
             ? _extractCityFromAddress(address)
             : null,
         targetField: field,
+        updateController: false,
       );
       if (!mounted) return;
       if (!_isCurrentSearchVersion(field, searchVersion)) {
@@ -1418,7 +1429,7 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
       if (widget.enableAutoLocation &&
           _fromLocation == null &&
           _fromController.text.trim().isEmpty) {
-        _getUserLocation();
+        _getUserLocation(force: true);
       }
       if (_intercityLoaded) {
         _validateIntercityDestination();
@@ -1614,19 +1625,16 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                   maxHeight: MediaQuery.sizeOf(context).height *
                       (keyboard ? .75 : .55)),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(children: [
                         Expanded(
-                            child: Text(
-                                _editorOpen
-                                    ? _tr('Куда поедем?', 'Қайда барамыз?')
-                                    : _tr('Куда поедем?', 'Қайда барамыз?'),
+                            child: Text(_tr('Куда поедем?', 'Қайда барамыз?'),
                                 style: const TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.w700))),
                         if (_editorOpen)
                           IconButton(
@@ -1638,75 +1646,125 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                               icon: const Icon(Icons.check))
                       ]),
                       const SizedBox(height: 12),
-                      if (!_editorOpen) ...[
-                        InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () => setState(() {
-                                  _editorOpen = true;
-                                  _activeField = 'to';
-                                }),
-                            child: Container(
-                                padding: const EdgeInsets.all(18),
-                                decoration: BoxDecoration(
-                                    color: Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? scheme.surface
-                                        : MTaxiDesign.surface,
-                                    borderRadius: BorderRadius.circular(14)),
-                                child: Row(children: [
-                                  const Icon(Icons.search),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                      child: Text(_toController.text.isEmpty
-                                          ? _tr('Куда едем?', 'Қайда барамыз?')
-                                          : _toController.text)),
-                                  const Icon(Icons.chevron_right)
-                                ]))),
-                        const SizedBox(height: 10),
-                        TextButton.icon(
-                            onPressed: () => setState(() {
-                                  _editorOpen = true;
-                                  _activeField = 'from';
-                                }),
-                            icon: const Icon(Icons.my_location, size: 18),
-                            label: Text(_fromController.text.isEmpty
-                                ? _tr('Указать место посадки',
-                                    'Отыру орнын көрсету')
-                                : _fromController.text)),
-                      ] else ...[
-                        TextField(
-                            controller: _fromController,
-                            decoration: InputDecoration(
-                                labelText: _tr('Откуда', 'Қайдан'),
-                                prefixIcon:
-                                    const Icon(Icons.radio_button_checked),
-                                suffixIcon: IconButton(
-                                    tooltip:
-                                        _tr('Найти адрес', 'Мекенжайды табу'),
-                                    icon: const Icon(Icons.search),
-                                    onPressed: () => _searchAddress(
-                                        _fromController.text, 'from'))),
-                            onTap: () => setState(() => _activeField = 'from'),
-                            onChanged: _onFromChanged,
-                            onSubmitted: (value) =>
-                                _searchAddress(value, 'from')),
-                        const SizedBox(height: 10),
-                        TextField(
-                            controller: _toController,
-                            decoration: InputDecoration(
-                                labelText: _tr('Куда', 'Қайда'),
-                                prefixIcon:
-                                    const Icon(Icons.location_on_outlined),
-                                suffixIcon: IconButton(
-                                    tooltip:
-                                        _tr('Найти адрес', 'Мекенжайды табу'),
-                                    icon: const Icon(Icons.search),
-                                    onPressed: () => _searchAddress(
-                                        _toController.text, 'to'))),
-                            onTap: () => setState(() => _activeField = 'to'),
-                            onChanged: _onToChanged,
-                            onSubmitted: (value) =>
-                                _searchAddress(value, 'to')),
+                      ServiceTypeCards(
+                        value: _serviceType,
+                        onChanged: _changeServiceType,
+                        taxiLabel: _tr('Такси', 'Такси'),
+                        deliveryLabel: _tr('Доставка', 'Жеткізу'),
+                        taxiDescription:
+                            _tr('Поездки по посёлку', 'Ауыл ішіндегі сапарлар'),
+                        deliveryDescription: _tr('Посылки и покупки',
+                            'Сәлемдемелер мен сатып алулар'),
+                      ),
+                      if (widget.intercityEnabled)
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => _changeServiceType('intercity'),
+                              icon: const Icon(Icons.alt_route),
+                              label: Text(_tr('Межгород', 'Қалааралық')),
+                            )),
+                      const SizedBox(height: 10),
+                      Container(
+                        key: const ValueKey('passenger_route_fields'),
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? scheme.surface
+                              : MTaxiDesign.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                              color:
+                                  scheme.outlineVariant.withValues(alpha: .45)),
+                        ),
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                          TextField(
+                              controller: _fromController,
+                              decoration: InputDecoration(
+                                  labelText: _tr('Откуда', 'Қайдан'),
+                                  hintText: _tr(
+                                      'Адрес отправления', 'Жөнелту мекенжайы'),
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  prefixIcon:
+                                      const Icon(Icons.radio_button_checked),
+                                  suffixIcon: IconButton(
+                                      tooltip:
+                                          _tr('Найти адрес', 'Мекенжайды табу'),
+                                      icon: const Icon(Icons.search),
+                                      onPressed: () {
+                                        setState(() {
+                                          _editorOpen = true;
+                                          _activeField = 'from';
+                                        });
+                                        _searchAddress(
+                                            _fromController.text, 'from');
+                                      })),
+                              onTap: () => setState(() {
+                                    _editorOpen = true;
+                                    _activeField = 'from';
+                                  }),
+                              onChanged: _onFromChanged,
+                              onSubmitted: (value) =>
+                                  _searchAddress(value, 'from')),
+                          Divider(
+                              height: 1,
+                              indent: 48,
+                              endIndent: 16,
+                              color: scheme.outlineVariant),
+                          TextField(
+                              controller: _toController,
+                              decoration: InputDecoration(
+                                  labelText: _tr('Куда', 'Қайда'),
+                                  hintText: _tr(
+                                      'Адрес назначения', 'Баратын мекенжай'),
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 40, minHeight: 40),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  prefixIcon:
+                                      const Icon(Icons.location_on_outlined),
+                                  suffixIcon: IconButton(
+                                      tooltip:
+                                          _tr('Найти адрес', 'Мекенжайды табу'),
+                                      icon: const Icon(Icons.search),
+                                      onPressed: () {
+                                        setState(() {
+                                          _editorOpen = true;
+                                          _activeField = 'to';
+                                        });
+                                        _searchAddress(
+                                            _toController.text, 'to');
+                                      })),
+                              onTap: () => setState(() {
+                                    _editorOpen = true;
+                                    _activeField = 'to';
+                                  }),
+                              onChanged: _onToChanged,
+                              onSubmitted: (value) =>
+                                  _searchAddress(value, 'to')),
+                        ]),
+                      ),
+                      if (_editorOpen) ...[
                         if (suggestions.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           for (final item in suggestions)
@@ -1748,24 +1806,6 @@ class _DeliveryTaxiMapState extends State<DeliveryTaxiMap> {
                                 },
                                 child: Text(_tr('Забрать отсюда',
                                     'Осы жерден алып кету')))),
-                      Wrap(spacing: 8, children: [
-                        ChoiceChip(
-                            label: Text(_tr('Такси', 'Такси')),
-                            selected: _serviceType == 'taxi',
-                            selectedColor: MTaxiDesign.gold,
-                            onSelected: (_) => _changeServiceType('taxi')),
-                        ChoiceChip(
-                            label: Text(_tr('Доставка', 'Жеткізу')),
-                            selected: _serviceType == 'delivery',
-                            selectedColor: MTaxiDesign.gold,
-                            onSelected: (_) => _changeServiceType('delivery')),
-                        if (widget.intercityEnabled)
-                          ChoiceChip(
-                              label: Text(_tr('Межгород', 'Қалааралық')),
-                              selected: false,
-                              onSelected: (_) =>
-                                  _changeServiceType('intercity')),
-                      ]),
                     ]),
               ))),
     ]);

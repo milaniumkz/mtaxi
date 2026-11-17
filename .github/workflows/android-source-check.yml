@@ -1,0 +1,38 @@
+name: Check Android sources without APK
+# Restore the wrapper from the pinned Flutter SDK cache before compile-only tasks.
+on:
+  push:
+    branches: [codex/full-audit-20261023]
+    paths: [.github/workflows/android-source-check.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile-only:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install pinned Flutter
+        run: |
+          git clone --depth 1 --branch 3.41.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = 90673a4eef275d1a6692c26ac80d6d746d41a73a
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile Dart, plugin sources and merged Android manifest only
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter precache --android
+          cp -rn "$RUNNER_TEMP/flutter/bin/cache/artifacts/gradle_wrapper/." android/
+          chmod +x android/gradlew
+          printf 'sdk.dir=%s\nflutter.sdk=%s\n' "$ANDROID_HOME" "$RUNNER_TEMP/flutter" > android/local.properties
+          cd android
+          ./gradlew --no-daemon --max-workers=2 :app:processDebugMainManifest :app:compileDebugKotlin -Ptarget-platform=android-arm64 -Ptarget=lib/main.dart
+      - name: Assert no Android package was built
+        run: |
+          test -z "$(find build -type f \( -name '*.apk' -o -name '*.aab' \) -print -quit)"
+          printf 'Android source and manifest compilation only. No APK/AAB, signing or publication.\n' >> "$GITHUB_STEP_SUMMARY"

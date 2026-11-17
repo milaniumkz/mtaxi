@@ -15,7 +15,6 @@ final cameraPermission = Permission.camera;
 final photoLibraryPermission = Permission.photos;
 final locationPermission = Permission.location;
 final notificationsPermission = Permission.notification;
-final calendarPermission = Permission.calendarFullAccess;
 
 Future<bool> getPermissionStatus(Permission setting) async {
   final status = await setting.status;

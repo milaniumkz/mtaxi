@@ -508,6 +508,23 @@ function approveDriverInStore(store, data, auth) {
       grantWelcomeBonus(store, user);
     }
   }
+  if (status === 'approved' && before.statusDriver !== 'approved') {
+    const { createPushNotificationInStore } = require('./push');
+    const queued = createPushNotificationInStore(store, {
+      type: 'DRIVER_APPROVED', targetUserIds: [user.id], targetRole: 'driver',
+      title: 'Аккаунт водителя одобрен',
+      body: 'Ваша заявка одобрена. Теперь вы можете выйти на линию и принимать заказы.',
+      initialPageName: 'homeDriver',
+      dedupeKey: `driver-approved:${user.id}:${before.driverApplicationId || before.updatedAt || 'initial'}`,
+      dataPayload: { type: 'DRIVER_APPROVED', targetRole: 'driver', initialPageName: 'homeDriver' },
+    }, auth);
+    if (queued.notification) queued.notification.dataPayload.notificationId = queued.notificationId;
+  }
+  if (status === 'approved' && ['DRIVER_PENDING', 'DRIVER_PENDING_REVIEW'].includes(before.roleState) && !user.activeDriverOrderId) {
+    const passengerMode = user.preferredClientMode === 'passenger' || user.activeMode === 'passenger';
+    user.roleState = passengerMode ? 'PASSENGER' : 'DRIVER_OFFLINE';
+    user.driverOnLine = false;
+  }
   user.updatedAt = new Date().toISOString();
   addAudit(store, auth, "approveDriver", userPath(user), before, { ...user }, { statusDriver: status });
   return { success: true, code: "DRIVER_STATUS_UPDATED", user: publicUser(user), userDocPath: userPath(user) };

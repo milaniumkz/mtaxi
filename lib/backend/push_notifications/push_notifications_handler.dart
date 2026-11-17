@@ -1,4 +1,5 @@
 import 'dart:async';
+import '/backend/push_notifications/driver_order_notifications.dart';
 
 import '/auth/backend_auth/auth_util.dart';
 import '/backend/backend.dart';
@@ -102,6 +103,10 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
     final audience = targetRole.toLowerCase() == PushDeepLinkRouter.targetDriver
         ? 'driver'
         : 'passenger';
+    if (targetRole.toLowerCase() == PushDeepLinkRouter.targetPassenger &&
+        orderRef != null &&
+        type != 'TRIP_CHAT_MESSAGE' &&
+        type != 'SUPPORT_CHAT_MESSAGE') return;
     if (audience == 'driver' &&
         type == PushDeepLinkRouter.orderAvailableType &&
         !shouldAnnounceDriverAvailableOrderOnce(orderRef)) {
@@ -115,6 +120,12 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
           orderRef: orderRef,
           status: orderStatus,
         )) {
+      return;
+    }
+    if (audience == 'driver' &&
+        type == PushDeepLinkRouter.orderAvailableType &&
+        data['overlayEligible']?.toString() == 'true') {
+      unawaited(showNearbyDriverOrder(data));
       return;
     }
     final message = _foregroundPushMessage(
@@ -141,6 +152,7 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
         ),
       );
     if (audience == 'driver' &&
+        data['overlayEligible']?.toString() == 'true' &&
         (type == PushDeepLinkRouter.orderAvailableType ||
             type == PushDeepLinkRouter.orderCancelledType)) {
       unawaited(_playDriverPushSound());
@@ -343,7 +355,7 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
   }
 
   Future handleOpenedPushNotification() async {
-    if (isWeb && !firebaseWebPushEnabled) {
+    if (!firebasePushInitialized || (isWeb && !firebaseWebPushEnabled)) {
       return;
     }
 

@@ -1,4 +1,6 @@
 import 'trip_receipt.dart';
+import 'dart:math' as math;
+import 'driver_offer_waiting.dart';
 import '/design/offer_card.dart';
 import '/design/mtaxi_theme.dart';
 import '/flutter_flow/internationalization.dart';
@@ -6,67 +8,82 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '/backend/backend_calls/backend_calls.dart';
 
-Future<void> proposeDriverPrice(BuildContext context, String path,
-    {int initialPrice = 500}) async {
-  final price =
-      TextEditingController(text: initialPrice.clamp(500, 10000000).toString());
-  var submitted = false;
-  final result = await showDialog<int>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-              title: const Text('Предложить свою цену'),
-              content: TextField(
-                  controller: price,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                      labelText: 'Цена, ₸',
-                      helperText:
-                          'Не менее 500 ₸. Время подачи рассчитывается по вашей геопозиции.')),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dialog),
-                    child: const Text('Отмена')),
-                FilledButton(
-                    onPressed: () {
-                      if (submitted) return;
-                      final v = int.tryParse(price.text);
-                      if (v != null && v >= 500 && v <= 10000000) {
-                        submitted = true;
-                        Navigator.pop(dialog, v);
-                      }
-                    },
-                    child: const Text('Предложить'))
-              ]));
-  price.dispose();
-  if (result == null || !context.mounted) return;
-  final r = await makeCloudCall(
-      'submitOrderOffer', {'orderDocPath': path, 'price': result});
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(r['success'] == true
-          ? 'Предложение отправлено пассажиру'
-          : r['error']?.toString() ?? 'Не удалось отправить предложение')));
+Future<bool> proposeDriverPrice(BuildContext context, String path,
+    {required int price}) async {
+  try {
+    final response = await makeCloudCall(
+        'submitOrderOffer', {'orderDocPath': path, 'price': price});
+    if (!context.mounted) return false;
+    if (response['success'] == true && response['offer'] is Map) {
+      return await Navigator.of(context).push<bool>(MaterialPageRoute(
+              builder: (_) => DriverOfferWaiting(
+                  orderDocPath: path,
+                  offer:
+                      Map<String, dynamic>.from(response['offer'] as Map)))) ==
+          true;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(response['error']?.toString() ??
+            'Не удалось отправить предложение')));
+  } catch (_) {
+    if (context.mounted)
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Ответ не получен. Проверьте предложение по заказу.')));
+  }
+  return false;
+}
+
+List<int> driverOfferIncrements(int passengerPrice) {
+  final base = passengerPrice.clamp(500, 10000000);
+  final room = 10000000 - base;
+  if (room <= 0) return const [];
+  final quantum = room >= 150 ? 50 : 1;
+  final proportional = math.max(100, (base / 250).round() * 50);
+  final step = math.min(
+      proportional, math.max(quantum, (room ~/ 3 ~/ quantum) * quantum));
+  return [
+    for (var n = 1; n <= 3; n++)
+      if (n * step <= room) n * step
+  ];
 }
 
 class PassengerOffers extends StatefulWidget {
-  const PassengerOffers({super.key, required this.orderDocPath});
+  const PassengerOffers(
+      {super.key, required this.orderDocPath, this.passengerPrice});
   final String orderDocPath;
+  final num? passengerPrice;
   @override
   State<PassengerOffers> createState() => _PassengerOffersState();
 }
 
 class _PassengerOffersState extends State<PassengerOffers> {
   Timer? _timer;
-  final Set<String> _seen = {};
   List<Map<String, dynamic>> _offers = [];
-  bool _busy = false, _dialog = false;
+  bool _busy = false;
   bool _responding = false, _failed = false;
+  final Set<String> _decided = {};
+  int _generation = 0;
+  String? _lastError;
+  DateTime? _lastErrorAt;
   @override
   void initState() {
     super.initState();
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+  }
+
+  @override
+  void didUpdateWidget(covariant PassengerOffers oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.orderDocPath != widget.orderDocPath) {
+      _generation++;
+      _offers = [];
+      _decided.clear();
+      _lastError = null;
+      _lastErrorAt = null;
+      _busy = _responding = _failed = false;
+      _refresh();
+    }
   }
 
   @override
@@ -77,11 +94,12 @@ class _PassengerOffersState extends State<PassengerOffers> {
 
   Future<void> _refresh() async {
     if (_busy) return;
+    final generation = _generation;
     _busy = true;
     try {
       final r = await makeCloudCall(
           'listOrderOffers', {'orderDocPath': widget.orderDocPath});
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       if (r['success'] != true) {
         setState(() => _failed = true);
         return;
@@ -94,56 +112,57 @@ class _PassengerOffersState extends State<PassengerOffers> {
         _offers = offers;
         _failed = false;
       });
-      if (!_dialog) {
-        for (final offer in offers) {
-          if (_seen.add(offer['id'].toString())) {
-            await _show(offer);
-            break;
-          }
-        }
-      }
     } catch (_) {
-      if (mounted) setState(() => _failed = true);
+      if (mounted && generation == _generation) setState(() => _failed = true);
     } finally {
-      _busy = false;
+      if (generation == _generation) _busy = false;
     }
   }
 
-  Future<void> _show(Map<String, dynamic> offer) async {
-    if (_dialog || _responding) return;
-    _dialog = true;
-    final accept = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (dialog) => SingleChildScrollView(
-          padding: const EdgeInsets.all(22),
-          child: DriverOfferCard(
-              offer: offer,
-              onAccept: () => Navigator.pop(dialog, true),
-              onDecline: () => Navigator.pop(dialog, false))),
-    );
-    _dialog = false;
-    if (accept == null || !mounted) return;
+  void _showDecisionError(String message) {
+    final now = DateTime.now();
+    if (!mounted ||
+        (_lastError == message &&
+            _lastErrorAt != null &&
+            now.difference(_lastErrorAt!).inSeconds < 5)) return;
+    _lastError = message;
+    _lastErrorAt = now;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+          content: Text(message), duration: const Duration(seconds: 2)));
+  }
+
+  Future<void> _respond(
+      Map<String, dynamic> offer, bool accept, String orderPath) async {
+    final generation = _generation;
+    if (orderPath != widget.orderDocPath) return;
+    final id = offer['id']?.toString() ?? '';
+    if (_responding || _decided.contains(id)) return;
+    final expires = DateTime.tryParse(offer['expiresAt']?.toString() ?? '');
+    if (expires != null && !expires.isAfter(DateTime.now())) {
+      await _refresh();
+      return;
+    }
     setState(() => _responding = true);
     try {
       final result = await makeCloudCall('respondOrderOffer', {
-        'orderDocPath': widget.orderDocPath,
+        'orderDocPath': orderPath,
         'offerId': offer['id'],
         'accept': accept
       });
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
+      if (result['success'] == true) _decided.add(id);
       if (result['success'] != true)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result['error']?.toString() ??
-                'Предложение больше недоступно. Обновите заказ.')));
+        _showDecisionError(result['error']?.toString() ??
+            'Предложение больше недоступно. Обновите заказ.');
     } catch (_) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Ответ не получен. Проверяем состояние заказа; цена не считается принятой до подтверждения сервера.')));
+      if (mounted && generation == _generation)
+        _showDecisionError(
+            'Ответ не получен. Проверяем состояние заказа; цена не считается принятой до подтверждения сервера.');
     } finally {
-      if (mounted) setState(() => _responding = false);
+      if (mounted && generation == _generation)
+        setState(() => _responding = false);
     }
     await _refresh();
   }
@@ -152,52 +171,50 @@ class _PassengerOffersState extends State<PassengerOffers> {
   Widget build(BuildContext context) {
     String tr(String ru, String kk) =>
         FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    final orderPath = widget.orderDocPath;
     return MTaxiCard(
+        padding: const EdgeInsets.all(8),
         child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-          Text(
-              _offers.isEmpty
-                  ? tr('Ожидаем предложения водителей',
-                      'Жүргізуші ұсыныстарын күтудеміз')
-                  : tr('Предложения водителей', 'Жүргізуші ұсыныстары'),
-              style:
-                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          if (_responding)
-            const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: LinearProgressIndicator()),
-          if (_failed)
-            TextButton(
-                onPressed: _refresh,
-                child: Text(tr(
-                    'Связь потеряна. Обновить', 'Байланыс үзілді. Жаңарту'))),
-          if (_offers.isNotEmpty)
-            ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
-                child: SingleChildScrollView(
-                    child: Column(children: [
-                  for (final offer in _offers)
-                    ListTile(
-                      enabled: !_responding,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const CircleAvatar(
-                          backgroundColor: MTaxiDesign.surface,
-                          foregroundColor: MTaxiDesign.ink,
-                          child: Icon(Icons.person_outline)),
-                      title: Text(
-                          '${offer['driverName'] ?? tr('Водитель', 'Жүргізуші')} · ${offer['price']} ₸'),
-                      subtitle: Text(offer['etaMinutes'] == null
-                          ? tr('Время подачи уточняется',
-                              'Келу уақыты нақтылануда')
-                          : tr('До вас ≈${offer['etaMinutes']} мин',
-                              'Сізге дейін ≈${offer['etaMinutes']} мин')),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _show(offer),
-                    )
-                ]))),
-        ]));
+              Text(
+                  _offers.isEmpty
+                      ? tr('Ожидаем предложения водителей',
+                          'Жүргізуші ұсыныстарын күтудеміз')
+                      : tr('Предложения водителей', 'Жүргізуші ұсыныстары'),
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700)),
+              if (_responding)
+                const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: LinearProgressIndicator()),
+              if (_failed)
+                TextButton(
+                    onPressed: _refresh,
+                    child: Text(tr('Связь потеряна. Обновить',
+                        'Байланыс үзілді. Жаңарту'))),
+              if (_offers.isNotEmpty)
+                ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxHeight: math
+                            .min(450, MediaQuery.sizeOf(context).height - 220)
+                            .clamp(250, 450)
+                            .toDouble()),
+                    child: SingleChildScrollView(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                      for (final offer in _offers)
+                        DriverOfferCard(
+                            key: ValueKey(offer['id']),
+                            compact: true,
+                            offer: offer,
+                            passengerPrice: widget.passengerPrice,
+                            busy: _responding,
+                            onAccept: () => _respond(offer, true, orderPath),
+                            onDecline: () => _respond(offer, false, orderPath)),
+                    ]))),
+            ]));
   }
 }
 

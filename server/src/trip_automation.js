@@ -15,6 +15,15 @@ function observeDriverPosition(
   advance,
   now = Date.now(),
 ) {
+  const settings = store.settings || {};
+  const bounded = (key, fallback, min, max) => {
+    const value = Number(settings[key]);
+    return Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback;
+  };
+  const arrivalRadius = bounded('autoArrivalRadiusM', 60, 20, 120);
+  const arrivalDelay = bounded('autoArrivalDelaySec', 15, 5, 120) * 1000;
+  const departureRadius = Math.max(arrivalRadius + 20, bounded('autoDepartureRadiusM', 100, 80, 500));
+  const startDelay = bounded('autoStartDelaySec', 15, 5, 120) * 1000;
   const order = store.orders.find(
     (o) => o.id === driver.activeDriverOrderId && o.driverId === driver.id,
   );
@@ -45,12 +54,12 @@ function observeDriverPosition(
   }
   const distance = meters(pickup, sample);
   if (Number(order.status) === 2) {
-    if (distance > 60) {
+    if (distance > arrivalRadius) {
       delete order.autoArrivalSince;
       return;
     }
     order.autoArrivalSince ??= now;
-    if (now - order.autoArrivalSince >= 15000) {
+    if (now - order.autoArrivalSince >= arrivalDelay) {
       const result = advance(3);
       if (result.success) {
         order.autoArrivedAt = new Date(now).toISOString();
@@ -60,13 +69,13 @@ function observeDriverPosition(
     return;
   }
   // A manual arrival far away must never permit an automatic start.
-  if (distance <= 60) order.pickupPresenceVerified = true;
-  if (!order.pickupPresenceVerified || distance < 100) {
+  if (distance <= arrivalRadius) order.pickupPresenceVerified = true;
+  if (!order.pickupPresenceVerified || distance < departureRadius) {
     delete order.autoDepartureSince;
     return;
   }
   order.autoDepartureSince ??= now;
-  if (now - order.autoDepartureSince >= 15000) {
+  if (now - order.autoDepartureSince >= startDelay) {
     const result = advance(4);
     if (result.success) order.autoStartedAt = new Date(now).toISOString();
   }

@@ -91,7 +91,11 @@ class _AdminNotificationsWidgetState extends State<AdminNotificationsWidget> {
       case 'failed':
         return 'Ошибка';
       case 'started':
-        return 'В обработке';
+        return 'В очереди';
+      case 'no_devices':
+        return 'Нет устройств';
+      case 'cancelled':
+        return 'Отменено';
       default:
         return status.isEmpty ? 'Ожидание' : status;
     }
