@@ -62,11 +62,24 @@ class _PassengerOffersState extends State<PassengerOffers> {
   bool _busy = false;
   bool _responding = false, _failed = false;
   final Set<String> _decided = {};
+  int _generation = 0;
   @override
   void initState() {
     super.initState();
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+  }
+
+  @override
+  void didUpdateWidget(covariant PassengerOffers oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.orderDocPath != widget.orderDocPath) {
+      _generation++;
+      _offers = [];
+      _decided.clear();
+      _busy = _responding = _failed = false;
+      _refresh();
+    }
   }
 
   @override
@@ -77,11 +90,12 @@ class _PassengerOffersState extends State<PassengerOffers> {
 
   Future<void> _refresh() async {
     if (_busy) return;
+    final generation = _generation;
     _busy = true;
     try {
       final r = await makeCloudCall(
           'listOrderOffers', {'orderDocPath': widget.orderDocPath});
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       if (r['success'] != true) {
         setState(() => _failed = true);
         return;
@@ -95,13 +109,16 @@ class _PassengerOffersState extends State<PassengerOffers> {
         _failed = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _failed = true);
+      if (mounted && generation == _generation) setState(() => _failed = true);
     } finally {
-      _busy = false;
+      if (generation == _generation) _busy = false;
     }
   }
 
-  Future<void> _respond(Map<String, dynamic> offer, bool accept) async {
+  Future<void> _respond(
+      Map<String, dynamic> offer, bool accept, String orderPath) async {
+    final generation = _generation;
+    if (orderPath != widget.orderDocPath) return;
     final id = offer['id']?.toString() ?? '';
     if (_responding || _decided.contains(id)) return;
     final expires = DateTime.tryParse(offer['expiresAt']?.toString() ?? '');
@@ -112,23 +129,24 @@ class _PassengerOffersState extends State<PassengerOffers> {
     setState(() => _responding = true);
     try {
       final result = await makeCloudCall('respondOrderOffer', {
-        'orderDocPath': widget.orderDocPath,
+        'orderDocPath': orderPath,
         'offerId': offer['id'],
         'accept': accept
       });
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       if (result['success'] == true) _decided.add(id);
       if (result['success'] != true)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(result['error']?.toString() ??
                 'Предложение больше недоступно. Обновите заказ.')));
     } catch (_) {
-      if (mounted)
+      if (mounted && generation == _generation)
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
                 'Ответ не получен. Проверяем состояние заказа; цена не считается принятой до подтверждения сервера.')));
     } finally {
-      if (mounted) setState(() => _responding = false);
+      if (mounted && generation == _generation)
+        setState(() => _responding = false);
     }
     await _refresh();
   }
@@ -137,6 +155,7 @@ class _PassengerOffersState extends State<PassengerOffers> {
   Widget build(BuildContext context) {
     String tr(String ru, String kk) =>
         FFLocalizations.of(context).getVariableText(ruText: ru, kkText: kk);
+    final orderPath = widget.orderDocPath;
     return MTaxiCard(
         padding: const EdgeInsets.all(8),
         child: Column(
@@ -176,8 +195,8 @@ class _PassengerOffersState extends State<PassengerOffers> {
                             offer: offer,
                             passengerPrice: widget.passengerPrice,
                             busy: _responding,
-                            onAccept: () => _respond(offer, true),
-                            onDecline: () => _respond(offer, false)),
+                            onAccept: () => _respond(offer, true, orderPath),
+                            onDecline: () => _respond(offer, false, orderPath)),
                     ]))),
             ]));
   }

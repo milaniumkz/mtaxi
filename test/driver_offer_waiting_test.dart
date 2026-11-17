@@ -9,6 +9,51 @@ import 'package:mtaxi/trips/driver_offer_waiting.dart';
 import 'design_flow_test.dart' show wrap;
 
 void main() {
+  for (var pass = 0; pass < 30; pass++) {
+    for (final seconds in [15, 30, 60, 120]) {
+      testWidgets('server-controlled deadline $seconds seconds, pass $pass',
+          (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        PackageInfo.setMockInitialValues(
+            appName: 'MTaxi',
+            packageName: 'test.mtaxi',
+            version: '1',
+            buildNumber: '1',
+            buildSignature: '');
+        final now = tester.binding.clock.now();
+        await http.runWithClient(() async {
+          await tester.pumpWidget(wrap(DriverOfferWaiting(
+              orderDocPath: 'order/test',
+              offer: {
+                'id': 'offer-1',
+                'price': 700,
+                'expiresAt':
+                    now.add(Duration(seconds: seconds)).toIso8601String()
+              },
+              now: () => tester.binding.clock.now())));
+          await tester.pump();
+          expect(find.text('$seconds'), findsOneWidget);
+          expect(
+              tester
+                  .widget<CircularProgressIndicator>(
+                      find.byType(CircularProgressIndicator))
+                  .value,
+              1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+        },
+            () => MockClient((_) async => http.Response(
+                jsonEncode({
+                  'success': true,
+                  'orderStatus': 0,
+                  'offers': [
+                    {'id': 'offer-1', 'status': 'pending'}
+                  ]
+                }),
+                200)));
+      });
+    }
+  }
   for (final outcome in ['accepted', 'declined', 'expired']) {
     testWidgets('driver waiting ends safely on $outcome', (tester) async {
       SharedPreferences.setMockInitialValues({});

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -13,6 +14,71 @@ import 'package:mtaxi/design/offer_card.dart';
 import 'package:mtaxi/trips/order_offers.dart';
 
 void main() {
+  for (var pass = 0; pass < 30; pass++) {
+    testWidgets('stale offer response cannot cross into next order, pass $pass',
+        (tester) async {
+      SharedPreferences.setMockInitialValues(
+          {mtaxiBackendAccessTokenPrefsKey: 'synthetic-token'});
+      PackageInfo.setMockInitialValues(
+          appName: 'MTaxi',
+          packageName: 'audit',
+          version: '1',
+          buildNumber: '1',
+          buildSignature: '');
+      final old = Completer<http.Response>();
+      final path = ValueNotifier<String>('order/old');
+      await http.runWithClient(() async {
+        await tester.pumpWidget(MaterialApp(
+            localizationsDelegates: const [
+              FFLocalizationsDelegate(),
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate
+            ],
+            supportedLocales: const [
+              Locale('ru'),
+              Locale('kk')
+            ],
+            locale: const Locale('ru'),
+            home: Scaffold(
+                body: ValueListenableBuilder<String>(
+                    valueListenable: path,
+                    builder: (_, value, __) =>
+                        PassengerOffers(orderDocPath: value)))));
+        await tester.pump(const Duration(milliseconds: 50));
+        path.value = 'order/new';
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.text('New driver'), findsOneWidget);
+        old.complete(http.Response(
+            jsonEncode({
+              'success': true,
+              'offers': [
+                {'id': 'old', 'driverName': 'Old driver', 'price': 700}
+              ]
+            }),
+            200));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.text('New driver'), findsOneWidget);
+        expect(find.text('Old driver'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+          () => MockClient((req) async {
+                final body = jsonDecode(req.body) as Map;
+                if (body['orderDocPath'] == 'order/old') return old.future;
+                return http.Response(
+                    jsonEncode({
+                      'success': true,
+                      'offers': [
+                        {'id': 'new', 'driverName': 'New driver', 'price': 800}
+                      ]
+                    }),
+                    200);
+              }));
+      path.dispose();
+    });
+  }
   for (final secondAccept in [true, false]) {
     testWidgets(
         'rapid offer decisions preserve passenger route, second accept: $secondAccept',

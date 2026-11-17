@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {acceptDriverPosition} = require('../src/driver_position');
 const {observeDriverPosition} = require('../src/trip_automation');
-test('twenty outlier/stale sequences preserve the last trustworthy position', () => {
-  for(let i=0;i<20;i++) {
+test('thirty outlier/stale sequences preserve the last trustworthy position', () => {
+  for(let i=0;i<30;i++) {
     const t=1700000000000+i*100000;
     const d={};const base={latitude:52.3,longitude:76.9,accuracy:10};
     assert.equal(acceptDriverPosition(d,base,t),true);

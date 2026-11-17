@@ -207,6 +207,14 @@ flutter:
   # list giving the asset and other descriptors for the font. For
   # example:
   fonts:
+    # Flutter's browser renderer also requests its default family on startup.
+    # Bundle it so a blocked Google Fonts CDN cannot cause a network dependency.
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
     - family: Noto Sans
       fonts:
         - asset: assets/fonts/NotoSans-Regular.ttf

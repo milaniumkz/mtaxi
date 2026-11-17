@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Deploy 1.3.2 (69) with owner-provided Firebase public Web Push VAPID key; no APK.
+# Deploy audit fixes and verify GPS/financial transactions on disposable PostgreSQL; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]
@@ -14,6 +14,20 @@ jobs:
   deploy:
     runs-on: ubuntu-22.04
     timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mtaxi_audit
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: mtaxi_audit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mtaxi_audit -d mtaxi_audit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       APP_URL: https://mtaxi.89.126.192.185.sslip.io
     steps:
@@ -29,6 +43,10 @@ jobs:
           git diff --exit-code -- web/legal
           npm ci --prefix server
           MTAXI_FCM_ENABLED=false npm test --prefix server
+          export DATABASE_URL=postgresql://mtaxi_audit:disposable-ci-only@127.0.0.1:5432/mtaxi_audit
+          node server/scripts/apply_schema.js
+          MTAXI_AUDIT_PG_URL="$DATABASE_URL" MTAXI_TEST_POSTGRES_URL="$DATABASE_URL" MTAXI_FCM_ENABLED=false node --test --test-force-exit --test-concurrency=1 server/test/postgres_account_deletion.test.js server/test/postgres_audit_regression.test.js server/test/postgres_scoped_store.test.js server/test/trip_economy.test.js
+          unset DATABASE_URL
           flutter pub get --enforce-lockfile
           flutter analyze --no-pub
           flutter test --no-pub

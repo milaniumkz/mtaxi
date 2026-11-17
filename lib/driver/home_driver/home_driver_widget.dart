@@ -674,6 +674,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
   Future<void> _resolveLocation() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!mounted) return;
       if (!serviceEnabled) {
         setState(() {
           _locationError = 'Включите геолокацию';
@@ -685,6 +686,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
+      if (!mounted) return;
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         setState(() {
@@ -706,6 +708,7 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
             LatLng(position.latitude, position.longitude);
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _locationError = 'Не удалось получить геолокацию';
         currentUserLocationValue = null;
@@ -1071,18 +1074,22 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
           padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              const Expanded(child: MTaxiBrand()),
-              Text(
-                  online
-                      ? tr('На линии', 'Желіде')
-                      : tr('Не на линии', 'Желіде емес'),
-                  style: TextStyle(
-                      color: online
-                          ? MTaxiDesign.teal
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700))
-            ]),
+            Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: 8,
+                children: [
+                  const MTaxiBrand(),
+                  Text(
+                      online
+                          ? tr('На линии', 'Желіде')
+                          : tr('Не на линии', 'Желіде емес'),
+                      style: TextStyle(
+                          color: online
+                              ? MTaxiDesign.teal
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700))
+                ]),
             const SizedBox(height: 12),
             FilledButton(
                 key: const ValueKey('driver-online-toggle'),
@@ -1185,16 +1192,22 @@ class _HomeDriverWidgetState extends State<HomeDriverWidget> {
         key: scaffoldKey,
         backgroundColor: pageBg,
         body: SafeArea(
-          top: true,
-          child: Center(
-            child: Text(
-              _locationError ?? 'Включите геолокацию',
-              style: FlutterFlowTheme.of(context)
-                  .bodyMedium
-                  .override(color: mutedColor),
-            ),
-          ),
-        ),
+            child: _driverFeedShell(Center(
+                child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(_locationError ?? 'Включите геолокацию',
+                textAlign: TextAlign.center,
+                style: FlutterFlowTheme.of(context)
+                    .bodyMedium
+                    .override(color: mutedColor)),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+                onPressed: _resolveLocation,
+                icon: const Icon(Icons.my_location),
+                label: const Text('Обновить геолокацию')),
+          ]),
+        )))),
       );
     }
 

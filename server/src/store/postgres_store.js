@@ -1199,7 +1199,7 @@ function assertScopedMutation(store, previous, scope) {
     }
   }
   const userFields = new Set(['city','soundEnabled','themeMode','language','photoUrl',
-    'lastActive','coords','coordsUpdatedAt','coordsAccuracy','updatedAt',
+    'lastActive','coords','coordsUpdatedAt','coordsAccuracy','coordsSampleAt','coordsCandidate','updatedAt',
     'roleState','activeMode','preferredClientMode','driverOnLine']);
   const tripFields = new Set(['status','updatedAt','driverArrivedAt','tripStartedAt',
     'pickupPresenceVerified','autoLastPosition','autoArrivalSince','autoDepartureSince',

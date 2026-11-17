@@ -435,12 +435,12 @@ test('driver waiting can observe acceptance without seeing competing driver offe
   assert.equal(state.offers.length,1);assert.equal(state.offers[0].id,result.offer.id);
 });
 
-test('trip chat is participant-only, idempotent under twenty retries and closes at completion', async () => {
+test('trip chat is participant-only, idempotent under thirty retries and closes at completion', async () => {
   const {sendTripChatAsync:send,listTripChatAsync:listChat}=require('../src/trip_chat');
   const o=await make();await accept(args(o),auth(d));
   const data={...args(o),requestId:'audit-chat-00000001',text:'Я на месте'};
   assert.equal((await send(data,auth(x))).code,'TRIP_CHAT_FORBIDDEN');
-  const replies=await Promise.all(Array.from({length:20},()=>send(data,auth(d))));
+  const replies=await Promise.all(Array.from({length:30},()=>send(data,auth(d))));
   assert.equal(replies.every(r=>r.success),true);
   assert.equal(new Set(replies.map(r=>r.messageId)).size,1);
   const history=await listChat(args(o),auth(p));

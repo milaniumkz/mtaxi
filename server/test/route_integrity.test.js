@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {routeLookup,forwardGeocodeLookup} = require('../src/geocoding');
-test('twenty route responses cannot replace a long journey with a short route in another place', async () => {
+test('thirty route responses cannot replace a long journey with a short route in another place', async () => {
  const original=global.fetch;
  try {
-  for(let i=0;i<20;i++){
+  for(let i=0;i<30;i++){
    global.fetch=async()=>({ok:true,json:async()=>({routes:[{distance:300,duration:60,geometry:{coordinates:[[76.9,52.3],[76.901,52.301]]}}]})});
    const response=await routeLookup({fromLat:52.3,fromLng:76.9,toLat:52.5,toLng:77.1});
    assert.equal(response.success,false);assert.equal(response.code,'ROUTE_ENDPOINT_MISMATCH');

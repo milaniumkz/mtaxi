@@ -17,6 +17,12 @@ class _KaspiPhoneFormatter extends TextInputFormatter {
   TextEditingValue formatEditUpdate(
       TextEditingValue oldValue, TextEditingValue newValue) {
     if (!newValue.composing.isCollapsed) return newValue;
+    // A browser may deliver deletion before its selection update. Deleting
+    // everything must clear the old number even if the cached caret collapsed.
+    if (newValue.text.isEmpty) {
+      return const TextEditingValue(
+          text: '+7', selection: TextSelection.collapsed(offset: 2));
+    }
     if (oldValue.text.startsWith('+7') &&
         oldValue.selection.isCollapsed &&
         newValue.text.length < oldValue.text.length &&

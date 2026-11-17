@@ -21,20 +21,24 @@ class _DriverOfferWaitingState extends State<DriverOfferWaiting> {
   late final DateTime _deadline;
   bool _busy = false, _finished = false;
   int _remaining = 30;
+  late final int _totalSeconds;
   @override
   void initState() {
     super.initState();
     _deadline =
         DateTime.tryParse(widget.offer['expiresAt']?.toString() ?? '') ??
             _now.add(const Duration(seconds: 30));
-    _remaining =
-        (_deadline.difference(_now).inMilliseconds / 1000).ceil().clamp(0, 30);
+    _totalSeconds =
+        (_deadline.difference(_now).inMilliseconds / 1000).ceil().clamp(1, 120);
+    _remaining = (_deadline.difference(_now).inMilliseconds / 1000)
+        .ceil()
+        .clamp(0, _totalSeconds);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _finished) return;
       setState(() => _remaining =
           (_deadline.difference(_now).inMilliseconds / 1000)
               .ceil()
-              .clamp(0, 30));
+              .clamp(0, _totalSeconds));
       if (_remaining % 2 == 0 || _remaining == 0) unawaited(_refresh());
     });
     unawaited(_refresh());
@@ -123,7 +127,7 @@ class _DriverOfferWaitingState extends State<DriverOfferWaiting> {
                       child: Stack(alignment: Alignment.center, children: [
                         SizedBox.expand(
                             child: CircularProgressIndicator(
-                                value: _remaining / 30,
+                                value: _remaining / _totalSeconds,
                                 color: MTaxiDesign.teal,
                                 strokeWidth: 6)),
                         Text('$_remaining',
@@ -145,8 +149,8 @@ class _DriverOfferWaitingState extends State<DriverOfferWaiting> {
                           fontSize: 32, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 16),
                   Text(
-                      tr('У пассажира 30 секунд на ответ. Если предложение не принято, вы автоматически вернётесь в ленту.',
-                          'Жолаушыға жауап беру үшін 30 секунд беріледі. Ұсыныс қабылданбаса, тізімге автоматты түрде ораласыз.'),
+                      tr('Срок ответа указан на таймере. Если предложение не принято, вы автоматически вернётесь в ленту.',
+                          'Жауап беру мерзімі таймерде көрсетілген. Ұсыныс қабылданбаса, тізімге автоматты түрде ораласыз.'),
                       textAlign: TextAlign.center),
                 ]))),
       ));

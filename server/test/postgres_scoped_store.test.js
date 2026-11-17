@@ -94,6 +94,16 @@ test('Scoped PostgreSQL preserves finance, GPS automation and concurrency contra
       assert.equal(after.users.find(u=>u.id===prefix+'d').balance,1123);
       assert.ok(after.users.find(u=>u.id===prefix+'x'));
     });
+    await t.test('rejected GPS candidates persist without moving the trusted point',async()=>{
+      const before=await store.lookupUserByIdAsync(prefix+'d');
+      const response=await updateUserPreferencesAsync({coords:{latitude:54.5,longitude:77.8,accuracy:10}},{user:{id:prefix+'d'}});
+      assert.equal(response.success,true);assert.equal(response.locationAccepted,false);
+      const after=await store.lookupUserByIdAsync(prefix+'d');
+      assert.deepEqual(after.coords,before.coords);
+      assert.equal(after.coordsSampleAt,before.coordsSampleAt);
+      assert.equal(after.coordsCandidate.latitude,54.5);
+      assert.equal(after.balance,before.balance);
+    });
     await t.test('GPS racing assignment and completion cannot deadlock or overwrite money',async()=>{
       const ordersApi=require('../src/orders');
       assert.equal((await ordersApi.cancelPassengerOrderAsync({orderDocPath:'order/'+prefix+'trip'},{user:{id:prefix+'p'}})).success,true);
