@@ -1,5 +1,5 @@
 name: Deploy web and backend without APK
-# Deploy 1.3.2 (69): current-trip routing, compact offers, GPS, chat and server rules; no APK.
+# Deploy 1.3.2 (69) with owner-provided Firebase public Web Push VAPID key; no APK.
 on:
   push:
     branches: [codex/full-audit-20261023]
